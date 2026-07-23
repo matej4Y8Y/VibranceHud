@@ -123,13 +123,15 @@ namespace VibranceHud.Pages
                 TextAlign = ContentAlignment.MiddleRight
             };
             gfx.Controls.Add(_fovValue);
+            // Rust clamps FOV to 60-90; offering more would be a setting the game ignores
+            // (and a competitive advantage, which is not what this tool is for).
             _fov = new FlatSlider
             {
                 Minimum = 60,
-                Maximum = 100,
+                Maximum = 90,
                 Location = new Point(16, 182),
                 Width = CardW - 32,
-                Value = Math.Clamp(ReadInt(current, "graphics.fov", 90), 60, 100)
+                Value = Math.Clamp(ReadInt(current, "graphics.fov", 90), 60, 90)
             };
             _fov.ValueChanged += (s, e) => _fovValue.Text = _fov.Value.ToString();
             gfx.Controls.Add(_fov);
@@ -310,7 +312,7 @@ namespace VibranceHud.Pages
         {
             SelectChip(_qualityChips, ReadInt(cfg, "graphics.quality", 3), v => _selectedQuality = v);
             SelectChip(_fpsChips, ReadInt(cfg, "fps.limit", 0), v => _selectedFps = v);
-            _fov.Value = Math.Clamp(ReadInt(cfg, "graphics.fov", 90), 60, 100);
+            _fov.Value = Math.Clamp(ReadInt(cfg, "graphics.fov", 90), 60, 90);
             foreach (var (tweak, chip) in _tweakChips) chip.Active = tweak.IsOn(cfg);
 
             _selectedRamTier = RustSystemBoost.TierIndexForBuffer(ReadInt(cfg, "gc.buffer", 2048));
