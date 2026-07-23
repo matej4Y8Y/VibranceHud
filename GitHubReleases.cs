@@ -4,7 +4,8 @@ using System.Text.Json;
 namespace VibranceHud
 {
     /// <summary>A published release on GitHub, as far as the updater cares.</summary>
-    public sealed record ReleaseInfo(Version Version, string Tag, string InstallerUrl, string PageUrl);
+    /// <param name="Notes">The release body ("what's new"), shown after updating.</param>
+    public sealed record ReleaseInfo(Version Version, string Tag, string InstallerUrl, string PageUrl, string Notes);
 
     /// <summary>
     /// Parses GitHub's "latest release" JSON and decides whether it's newer than what's
@@ -26,6 +27,7 @@ namespace VibranceHud
                 if (version == null) return null;
 
                 var page = root.TryGetProperty("html_url", out var p) ? p.GetString() ?? "" : "";
+                var notes = root.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "";
 
                 if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
                     return null;
@@ -44,7 +46,7 @@ namespace VibranceHud
                 }
                 if (url == null) return null;
 
-                return new ReleaseInfo(version, tag, url, page);
+                return new ReleaseInfo(version, tag, url, page, notes);
             }
             catch
             {

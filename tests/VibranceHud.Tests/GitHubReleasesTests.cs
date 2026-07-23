@@ -9,6 +9,7 @@ namespace VibranceHud.Tests
         private const string Json = @"{
             ""tag_name"": ""v0.3.0"",
             ""html_url"": ""https://github.com/matej4Y8Y/VibranceHud/releases/tag/v0.3.0"",
+            ""body"": ""- Added gamma slider\n- Faster startup"",
             ""assets"": [
                 { ""name"": ""notes.txt"", ""browser_download_url"": ""https://example.com/notes.txt"" },
                 { ""name"": ""PlexusX-Setup-0.3.0.exe"", ""browser_download_url"": ""https://example.com/PlexusX-Setup-0.3.0.exe"" }
@@ -24,6 +25,27 @@ namespace VibranceHud.Tests
             Assert.Equal(new Version(0, 3, 0), release!.Version);
             Assert.Equal("v0.3.0", release.Tag);
             Assert.Equal("https://example.com/PlexusX-Setup-0.3.0.exe", release.InstallerUrl);
+        }
+
+        [Fact]
+        public void ParseLatest_ReadsReleaseNotes()
+        {
+            var release = GitHubReleases.ParseLatest(Json);
+
+            Assert.Contains("gamma slider", release!.Notes);
+            Assert.Contains("Faster startup", release.Notes);
+        }
+
+        [Fact]
+        public void ParseLatest_ToleratesAMissingBody()
+        {
+            var json = @"{ ""tag_name"": ""v1.0.0"", ""assets"": [
+                { ""name"": ""PlexusX-Setup-1.0.0.exe"", ""browser_download_url"": ""https://example.com/s.exe"" } ] }";
+
+            var release = GitHubReleases.ParseLatest(json);
+
+            Assert.NotNull(release);
+            Assert.Equal("", release!.Notes);
         }
 
         [Fact]
