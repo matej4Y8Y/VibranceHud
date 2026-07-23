@@ -6,7 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>VibranceHud</AssemblyName>
+    <AssemblyName>PlexusX</AssemblyName>
     <RootNamespace>VibranceHud</RootNamespace>
     <!-- Bumped for every release; the running app compares this against the newest
          GitHub release to decide whether to update itself. -->

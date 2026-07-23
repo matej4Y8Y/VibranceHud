@@ -197,7 +197,7 @@ namespace VibranceHud.Pages
                 var proceed = MessageBox.Show(
                     "Rust is running and will overwrite these changes when it exits.\n\n" +
                     "Apply anyway? (Recommended: close Rust first.)",
-                    "Vibrance HUD", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
                 if (proceed != DialogResult.Yes) return;
             }
 

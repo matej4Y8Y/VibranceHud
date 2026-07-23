@@ -38,7 +38,7 @@ namespace VibranceHud
             _engine = new VibranceEngine(_controller, _overlay);
 
             _store = new SettingsStore(Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "VibranceHud"));
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX"));
             _settings = _store.Load();
 
             // Restore where the user left the slider last session.
@@ -58,7 +58,7 @@ namespace VibranceHud
                 MessageBox.Show(
                     "Couldn't register Ctrl+Alt+V (another app may already be using it). " +
                     "You can still open the slider from the tray icon.",
-                    "Vibrance HUD",
+                    "PlexusX",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
@@ -73,7 +73,7 @@ namespace VibranceHud
             _trayIcon = new NotifyIcon
             {
                 Icon = System.Drawing.SystemIcons.Application, // swap for a custom .ico whenever you like
-                Text = "Vibrance HUD",
+                Text = "PlexusX",
                 Visible = true,
                 ContextMenuStrip = menu
             };

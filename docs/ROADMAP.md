@@ -1,10 +1,10 @@
-# Vibrance HUD — Product Roadmap & Future Direction
+# PlexusX — Product Roadmap & Future Direction
 
 *Written 2026-07-23. A living document — revise as priorities shift.*
 
 ## Vision
 
-Vibrance HUD is growing from a single-purpose vibrance tool into a **premium, trustworthy
+PlexusX is growing from a single-purpose vibrance tool into a **premium, trustworthy
 "game visuals & optimization" utility for PC gamers**. The wedge is system-wide digital
 vibrance (0–200%); the expansion is a **Games Hub** that safely optimizes per-game
 settings. The whole thing is wrapped in a polished purple UI (animated plexus + frosted
