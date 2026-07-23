@@ -21,6 +21,11 @@ namespace VibranceHud.Pages
 
         private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY;
 
+        // Built once - OnPaint runs ~30x/sec, so never allocate fonts inside it.
+        private static readonly Font NumberFont = new(Theme.FontFamily, 46f, FontStyle.Bold);
+        private static readonly Font CaptionFont = new(Theme.FontFamily, 8f, FontStyle.Bold);
+        private static readonly Font SmallFont = new(Theme.FontFamily, 8f);
+
         public VibrancePage(VibranceEngine engine, AppSettings settings, SettingsStore store)
         {
             _engine = engine;
@@ -93,24 +98,18 @@ namespace VibranceHud.Pages
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-            using (var numFont = new Font(Theme.FontFamily, 46f, FontStyle.Bold))
-                TextRenderer.DrawText(g, $"{_slider.Value}%", numFont,
-                    new Rectangle(_cx, _numberY, _colW, 84), Theme.Text,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            TextRenderer.DrawText(g, $"{_slider.Value}%", NumberFont,
+                new Rectangle(_cx, _numberY, _colW, 84), Theme.Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            using (var capFont = new Font(Theme.FontFamily, 8f, FontStyle.Bold))
-                TextRenderer.DrawText(g, UiHelpers.Spaced("DIGITAL VIBRANCE"), capFont,
-                    new Rectangle(_cx, _captionY, _colW, 16), Theme.TextDim, TextFormatFlags.HorizontalCenter);
+            TextRenderer.DrawText(g, UiHelpers.Spaced("DIGITAL VIBRANCE"), CaptionFont,
+                new Rectangle(_cx, _captionY, _colW, 16), Theme.TextDim, TextFormatFlags.HorizontalCenter);
 
-            using (var small = new Font(Theme.FontFamily, 8f))
-            {
-                TextRenderer.DrawText(g, "0", small, new Rectangle(_cx, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Left);
-                TextRenderer.DrawText(g, "100", small, new Rectangle(_cx, _scaleY, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
-                TextRenderer.DrawText(g, "200", small, new Rectangle(_cx + _colW - 40, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Right);
-                TextRenderer.DrawText(g, UiHelpers.Spaced("PRESETS"),
-                    new Font(Theme.FontFamily, 8f, FontStyle.Bold),
-                    new Rectangle(_cx, _presetCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
-            }
+            TextRenderer.DrawText(g, "0", SmallFont, new Rectangle(_cx, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Left);
+            TextRenderer.DrawText(g, "100", SmallFont, new Rectangle(_cx, _scaleY, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
+            TextRenderer.DrawText(g, "200", SmallFont, new Rectangle(_cx + _colW - 40, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Right);
+            TextRenderer.DrawText(g, UiHelpers.Spaced("PRESETS"), CaptionFont,
+                new Rectangle(_cx, _presetCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
         }
 
         private void UpdateActiveChip()
