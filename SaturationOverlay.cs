@@ -56,19 +56,19 @@ namespace VibranceHud
             _initialized = MagInitialize();
         }
 
-        public void SetSaturation(float factor)
+        public void Apply(float[] matrix)
         {
             if (!_initialized) return;
-            Apply(SaturationMatrix.Build(factor));
+            Send(matrix);
         }
 
         public void Clear()
         {
             if (!_initialized) return;
-            Apply(Identity);
+            Send(Identity);
         }
 
-        private static void Apply(float[] transform)
+        private static void Send(float[] transform)
         {
             var effect = new MAGCOLOREFFECT { transform = transform };
             MagSetFullscreenColorEffect(ref effect);
@@ -77,7 +77,7 @@ namespace VibranceHud
         public void Dispose()
         {
             if (!_initialized) return;
-            Apply(Identity); // never leave the desktop oversaturated
+            Send(Identity); // never leave the desktop tinted or oversaturated
             MagUninitialize();
             _initialized = false;
         }

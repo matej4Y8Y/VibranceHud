@@ -16,10 +16,11 @@ namespace VibranceHud.Tests
 
         private sealed class FakeOverlay : ISaturationOverlay
         {
-            public readonly List<float> SaturationCalls = new();
+            public readonly List<float[]> Applied = new();
             public int ClearCalls;
-            public void SetSaturation(float factor) => SaturationCalls.Add(factor);
+            public void Apply(float[] matrix) => Applied.Add(matrix);
             public void Clear() => ClearCalls++;
+            public float[] Last => Applied[^1];
         }
 
         private static (VibranceEngine engine, FakeController ctrl, FakeOverlay ovl) NewEngine()
@@ -27,6 +28,11 @@ namespace VibranceHud.Tests
             var ctrl = new FakeController();
             var ovl = new FakeOverlay();
             return (new VibranceEngine(ctrl, ovl), ctrl, ovl);
+        }
+
+        private static void AssertMatrix(float[] expected, float[] actual)
+        {
+            for (int i = 0; i < 25; i++) Assert.Equal(expected[i], actual[i], 4);
         }
 
         [Fact]
@@ -43,7 +49,7 @@ namespace VibranceHud.Tests
             engine.SetLevel(80);
 
             Assert.Equal(80, ctrl.LastSet);
-            Assert.Empty(ovl.SaturationCalls);
+            Assert.Empty(ovl.Applied);
             Assert.Equal(1, ovl.ClearCalls);
         }
 
@@ -55,19 +61,18 @@ namespace VibranceHud.Tests
             engine.SetLevel(100);
 
             Assert.Equal(100, ctrl.LastSet);
-            Assert.Empty(ovl.SaturationCalls);
-            Assert.Equal(1, ovl.ClearCalls);
+            Assert.Empty(ovl.Applied);
         }
 
         [Fact]
-        public void AboveThreshold_PinsGpuAt100_AndSetsSaturation()
+        public void AboveThreshold_PinsGpuAt100_AndAppliesSaturationMatrix()
         {
             var (engine, ctrl, ovl) = NewEngine();
 
             engine.SetLevel(150);
 
             Assert.Equal(100, ctrl.LastSet);
-            Assert.Equal(new[] { 1.5f }, ovl.SaturationCalls.ToArray());
+            AssertMatrix(ColorAdjust.Build(1.5f, 1f, 0f), ovl.Last);
         }
 
         [Fact]
@@ -79,7 +84,7 @@ namespace VibranceHud.Tests
 
             Assert.Equal(200, engine.CurrentLevel);
             Assert.Equal(100, ctrl.LastSet);
-            Assert.Equal(new[] { 2.0f }, ovl.SaturationCalls.ToArray());
+            AssertMatrix(ColorAdjust.Build(2f, 1f, 0f), ovl.Last);
         }
 
         [Fact]
@@ -114,17 +119,72 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void Reset_AppliesDriverDefault_AndClearsOverlay()
+        public void Brightness_AppliesMatrix_EvenBelowVibranceThreshold()
+        {
+            var (engine, _, ovl) = NewEngine();
+            engine.SetLevel(80); // clears
+
+            engine.Brightness = 70;
+
+            Assert.Equal(70, engine.Brightness);
+            AssertMatrix(ColorAdjust.Build(1f, 0.7f, 0f), ovl.Last);
+        }
+
+        [Fact]
+        public void Brightness_IsClampedToSafeRange()
+        {
+            var (engine, _, _) = NewEngine();
+
+            engine.Brightness = 500;
+            Assert.Equal(VibranceEngine.MaxBrightness, engine.Brightness);
+
+            engine.Brightness = 0;
+            Assert.Equal(VibranceEngine.MinBrightness, engine.Brightness);
+        }
+
+        [Fact]
+        public void EyeCare_AppliesWarmMatrix_AndClearsWhenTurnedOff()
+        {
+            var (engine, _, ovl) = NewEngine();
+            engine.SetLevel(100);
+
+            engine.EyeCare = true;
+            AssertMatrix(ColorAdjust.Build(1f, 1f, VibranceEngine.EyeCareWarmth), ovl.Last);
+
+            int clearsBefore = ovl.ClearCalls;
+            engine.EyeCare = false;
+            Assert.Equal(clearsBefore + 1, ovl.ClearCalls); // back to identity
+        }
+
+        [Fact]
+        public void Combined_VibranceBrightnessAndEyeCare_ShareOneMatrix()
+        {
+            var (engine, ctrl, ovl) = NewEngine();
+
+            engine.SetLevel(160);
+            engine.Brightness = 90;
+            engine.EyeCare = true;
+
+            Assert.Equal(100, ctrl.LastSet); // driver still pinned
+            AssertMatrix(ColorAdjust.Build(1.6f, 0.9f, VibranceEngine.EyeCareWarmth), ovl.Last);
+        }
+
+        [Fact]
+        public void Reset_RestoresDriverDefault_AndNeutralAdjustments()
         {
             var (engine, ctrl, ovl) = NewEngine();
             ctrl.DefaultLevel = 50;
+            engine.SetLevel(200);
+            engine.Brightness = 60;
+            engine.EyeCare = true;
 
             engine.Reset();
 
             Assert.Equal(50, ctrl.LastSet);
             Assert.Equal(50, engine.CurrentLevel);
-            Assert.Empty(ovl.SaturationCalls);
-            Assert.True(ovl.ClearCalls >= 1);
+            Assert.Equal(100, engine.Brightness);
+            Assert.False(engine.EyeCare);
+            Assert.True(ovl.ClearCalls >= 1); // neutral again
         }
     }
 }

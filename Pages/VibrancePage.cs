@@ -6,9 +6,9 @@ using System.Windows.Forms;
 namespace VibranceHud.Pages
 {
     /// <summary>
-    /// The home page: the big vibrance readout and caption (drawn text), the 0-200% slider
-    /// (notch at 100 = driver max), and the presets - all over the shared particle-field
-    /// background from <see cref="GlowPage"/>.
+    /// The home page: the big vibrance readout, the 0-200% slider (notch at 100 = driver
+    /// max), the presets, and below them the brightness calibration slider and the eye-care
+    /// toggle - all over the shared particle-field background from <see cref="GlowPage"/>.
     /// </summary>
     public sealed class VibrancePage : GlowPage
     {
@@ -17,14 +17,17 @@ namespace VibranceHud.Pages
         private readonly SettingsStore _store;
 
         private readonly FlatSlider _slider;
+        private readonly FlatSlider _brightness;
+        private readonly ToggleSwitch _eyeCare;
         private readonly List<ChipButton> _chips = new();
 
-        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY;
+        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY, _brightCapY, _eyeY;
 
         // Built once - OnPaint runs ~30x/sec, so never allocate fonts inside it.
         private static readonly Font NumberFont = new(Theme.FontFamily, 46f, FontStyle.Bold);
         private static readonly Font CaptionFont = new(Theme.FontFamily, 8f, FontStyle.Bold);
         private static readonly Font SmallFont = new(Theme.FontFamily, 8f);
+        private static readonly Font RowFont = new(Theme.FontFamily, 9.5f);
 
         public VibrancePage(VibranceEngine engine, AppSettings settings, SettingsStore store)
         {
@@ -62,6 +65,30 @@ namespace VibranceHud.Pages
             }
             UpdateActiveChip();
 
+            _brightness = new FlatSlider
+            {
+                Minimum = VibranceEngine.MinBrightness,
+                Maximum = VibranceEngine.MaxBrightness,
+                Notch = 100,
+                Value = _engine.Brightness
+            };
+            _brightness.ValueChanged += (s, e) =>
+            {
+                _engine.Brightness = _brightness.Value;
+                _settings.BrightnessPercent = _brightness.Value;
+                Invalidate();
+            };
+            Controls.Add(_brightness);
+
+            _eyeCare = new ToggleSwitch { Checked = _engine.EyeCare };
+            _eyeCare.CheckedChanged += (s, e) =>
+            {
+                _engine.EyeCare = _eyeCare.Checked;
+                _settings.EyeCare = _eyeCare.Checked;
+                _store.Save(_settings);
+            };
+            Controls.Add(_eyeCare);
+
             Resize += (s, e) => LayoutContent();
             HandleCreated += (s, e) => LayoutContent();
         }
@@ -70,7 +97,7 @@ namespace VibranceHud.Pages
         {
             _colW = Math.Min(560, Width - 80);
             _cx = (Width - _colW) / 2;
-            int top = Math.Max(30, (Height - 380) / 2);
+            int top = Math.Max(24, (Height - 500) / 2);
 
             _numberY = top;
             _captionY = top + 90;
@@ -84,6 +111,12 @@ namespace VibranceHud.Pages
             for (int i = 0; i < _chips.Count; i++)
                 _chips[i].SetBounds(_cx + i * (chipW + 10), chipY, chipW, 36);
 
+            _brightCapY = chipY + 56;
+            _brightness.SetBounds(_cx, chipY + 78, _colW, 32);
+
+            _eyeY = chipY + 130;
+            _eyeCare.SetBounds(_cx + _colW - 44, _eyeY - 2, 44, 22);
+
             Invalidate();
         }
 
@@ -93,7 +126,7 @@ namespace VibranceHud.Pages
             var g = e.Graphics;
 
             // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
-            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 300);
+            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 448);
             Glass.PaintPanel(g, panel, 24, fillAlpha: 165);
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -110,6 +143,16 @@ namespace VibranceHud.Pages
             TextRenderer.DrawText(g, "200", SmallFont, new Rectangle(_cx + _colW - 40, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Right);
             TextRenderer.DrawText(g, UiHelpers.Spaced("PRESETS"), CaptionFont,
                 new Rectangle(_cx, _presetCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
+
+            // ---- Brightness calibration ----
+            TextRenderer.DrawText(g, UiHelpers.Spaced("BRIGHTNESS"), CaptionFont,
+                new Rectangle(_cx, _brightCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
+            TextRenderer.DrawText(g, $"{_brightness.Value}%", SmallFont,
+                new Rectangle(_cx + _colW - 50, _brightCapY, 50, 16), Theme.TextDim, TextFormatFlags.Right);
+
+            // ---- Eye care ----
+            TextRenderer.DrawText(g, "Eye care  (warm light)", RowFont,
+                new Rectangle(_cx, _eyeY, 300, 20), Theme.Text, TextFormatFlags.Left);
         }
 
         private void UpdateActiveChip()
@@ -121,6 +164,8 @@ namespace VibranceHud.Pages
         public void Refresh(int level)
         {
             _slider.Value = Math.Clamp(level, 0, VibranceEngine.Max);
+            _brightness.Value = _engine.Brightness;
+            _eyeCare.Checked = _engine.EyeCare;
             UpdateActiveChip();
             Invalidate();
         }
