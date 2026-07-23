@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>VibranceHud</AssemblyName>
+    <RootNamespace>VibranceHud</RootNamespace>
+  </PropertyGroup>
+
+  <!-- The test project lives under tests\ inside this folder; keep its sources out of
+       the app's compilation (they reference xUnit, which the app doesn't). -->
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <Content Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- .Net wrapper for NVIDIA's public NVAPI - LGPL licensed, fine for this kind of use.
+         https://github.com/falahati/NvAPIWrapper -->
+    <PackageReference Include="NvAPIWrapper.Net" Version="0.8.1.101" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,14 @@
+# Build output
+bin/
+obj/
+
+# Shareable packages (built on demand, not source)
+*.zip
+
+# IDE / user files
+.vs/
+*.user
+
+# OS cruft
+Thumbs.db
+.DS_Store
