@@ -8,7 +8,7 @@ namespace VibranceHud.Pages
     /// App-level settings: launch with Windows, the window's translucency, and the manual
     /// update check. Vibrance itself lives on the Vibrance page.
     /// </summary>
-    public sealed class SettingsPage : UserControl
+    public sealed class SettingsPage : GlowPage
     {
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;

@@ -8,14 +8,17 @@ using VibranceHud.Pages;
 namespace VibranceHud
 {
     /// <summary>
-    /// The main application window: a large matte-black panel with a custom title bar, a
-    /// left navigation column, and a content area that swaps pages. Replaces the old
-    /// cursor popup. Closing hides it to the tray; the app keeps running.
+    /// The main application window: a large matte panel with a custom title bar, a left
+    /// navigation column, and a content area that swaps pages - all sharing one animated
+    /// purple particle field that emanates from the window centre and fades to the edges.
+    /// The field animates only while this window is the foreground window, so it costs no
+    /// CPU when hidden, minimized, or while you're in a game.
     /// </summary>
     public sealed class MainWindow : Form
     {
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+        [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         private const int WM_NCLBUTTONDOWN = 0xA1;
         private const int HTCAPTION = 0x2;
 
@@ -26,7 +29,15 @@ namespace VibranceHud
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
 
+        private readonly ParticleField _field = new(240);
+        private readonly System.Windows.Forms.Timer _timer;
+        private DateTime _last = DateTime.UtcNow;
+
+        private readonly GlowPanel _titleBar;
+        private readonly GlowPanel _nav;
         private readonly Panel _contentHost;
+        private Control? _currentPage;
+
         private readonly VibrancePage _vibrancePage;
         private readonly SettingsPage _settingsPage;
         private readonly AccountPage _accountPage;
@@ -48,63 +59,85 @@ namespace VibranceHud
             Font = new Font(Theme.FontFamily, 9f);
             DoubleBuffered = true;
 
-            // ---- Title bar ----
-            var titleBar = new Panel { Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), BackColor = Theme.Background, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
-            titleBar.MouseDown += DragWindow;
+            _field.Resize(ClientSize.Width, ClientSize.Height);
+
+            // ---- Title bar (shares the field) ----
+            _titleBar = new GlowPanel { Field = _field, Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            _titleBar.MouseDown += DragWindow;
 
             var brand = new Label { Text = "VIBRANCE", ForeColor = Theme.Accent, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(20, 16), AutoSize = true, BackColor = Color.Transparent };
             brand.MouseDown += DragWindow;
             var brand2 = new Label { Text = "HUD", ForeColor = Theme.TextDim, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(107, 16), AutoSize = true, BackColor = Color.Transparent };
             brand2.MouseDown += DragWindow;
-            titleBar.Controls.Add(brand);
-            titleBar.Controls.Add(brand2);
-
             var close = TitleGlyph("✕", ClientSize.Width - 42);
             close.Click += (s, e) => Hide();
             var min = TitleGlyph("─", ClientSize.Width - 78);
             min.Click += (s, e) => WindowState = FormWindowState.Minimized;
-            titleBar.Controls.Add(close);
-            titleBar.Controls.Add(min);
-            Controls.Add(titleBar);
+            _titleBar.Controls.AddRange(new Control[] { brand, brand2, close, min });
+            Controls.Add(_titleBar);
 
-            // Pages are created before the nav wires its click handlers to them.
+            // Pages exist before the nav wires click handlers to them.
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
             _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity);
             _accountPage = new AccountPage();
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage })
+                AttachField(page);
 
-            // ---- Left nav ----
-            var nav = new Panel { Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), BackColor = Theme.Background, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
-
-            _navVibrance = MakeNav("", "Vibrance", 0);
-            _navGames = MakeNav("", "Games", 1);
-            _navSettings = MakeNav("", "Settings", 2);
-            _navAccount = MakeNav("", "Account", 3);
+            // ---- Left nav (shares the field) ----
+            _nav = new GlowPanel { Field = _field, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
+            _navVibrance = MakeNav("Vibrance", 0);
+            _navGames = MakeNav("Games", 1);
+            _navSettings = MakeNav("Settings", 2);
+            _navAccount = MakeNav("Account", 3);
             _navVibrance.Click += (s, e) => ShowVibrance();
             _navGames.Click += (s, e) => ShowGames();
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navSettings, _navAccount });
-            Controls.Add(nav);
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navSettings, _navAccount });
+            Controls.Add(_nav);
 
-            // ---- Content host ----
             _contentHost = new Panel { Location = new Point(NavW, TitleH), Size = new Size(ClientSize.Width - NavW, ClientSize.Height - TitleH), BackColor = Theme.Background, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
             Controls.Add(_contentHost);
+
+            AddDivider(new Point(0, TitleH), new Size(ClientSize.Width, 1), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right);
+            AddDivider(new Point(NavW, TitleH), new Size(1, ClientSize.Height - TitleH), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom);
+
+            Resize += (s, e) => _field.Resize(ClientSize.Width, ClientSize.Height);
+
+            _timer = new System.Windows.Forms.Timer { Interval = 33 };
+            _timer.Tick += OnAnimationTick;
+            _timer.Start();
 
             ShowVibrance();
         }
 
-        private NavButton MakeNav(string glyph, string label, int index)
+        private void AttachField(GlowPage page)
         {
-            // Segoe MDL2 Assets glyphs by nav slot: brightness, game, gear, contact.
-            string[] glyphs = { "", "", "", "" };
-            return new NavButton
-            {
-                IconKind = index,
-                Text = label,
-                Location = new Point(0, 16 + index * 48),
-                Size = new Size(NavW, 46)
-            };
+            page.Field = _field;
+            page.FieldOffset = new Point(NavW, TitleH);
         }
+
+        private void OnAnimationTick(object? sender, EventArgs e)
+        {
+            var foreground = GetForegroundWindow() == Handle && Visible && WindowState != FormWindowState.Minimized;
+            if (!foreground) { _last = DateTime.UtcNow; return; }
+
+            var now = DateTime.UtcNow;
+            _field.Update(Math.Min((now - _last).TotalSeconds, 0.1));
+            _last = now;
+
+            _titleBar.Invalidate();
+            _nav.Invalidate();
+            _currentPage?.Invalidate();
+        }
+
+        private NavButton MakeNav(string label, int index) => new()
+        {
+            IconKind = index, // 0 vibrance, 1 games, 2 settings, 3 account
+            Text = label,
+            Location = new Point(0, 16 + index * 48),
+            Size = new Size(NavW, 46)
+        };
 
         private Label TitleGlyph(string text, int x) => new()
         {
@@ -119,6 +152,13 @@ namespace VibranceHud
             Anchor = AnchorStyles.Top | AnchorStyles.Right
         };
 
+        private void AddDivider(Point loc, Size size, AnchorStyles anchor)
+        {
+            var d = new Panel { Location = loc, Size = size, BackColor = Theme.Border, Anchor = anchor };
+            Controls.Add(d);
+            d.BringToFront();
+        }
+
         private void SetWindowOpacity(int percent) => Opacity = Math.Clamp(percent, 50, 100) / 100.0;
 
         private void ShowVibrance()
@@ -130,14 +170,16 @@ namespace VibranceHud
         private void ShowGames()
         {
             var page = new GamesHubPage(OnConfigureGame);
+            AttachField(page);
             Select(_navGames, page);
         }
 
         private void OnConfigureGame(DetectedGame game)
         {
             var page = new RustSettingsPage(game, onBack: ShowGames);
+            AttachField(page);
             SetContent(page);
-            SetActive(_navGames); // stay under the Games section
+            SetActive(_navGames);
         }
 
         private void Select(NavButton button, Control page)
@@ -154,14 +196,20 @@ namespace VibranceHud
 
         private void SetContent(Control page)
         {
+            var old = _currentPage;
             _contentHost.SuspendLayout();
             _contentHost.Controls.Clear();
             page.Dock = DockStyle.Fill;
             _contentHost.Controls.Add(page);
             _contentHost.ResumeLayout();
+            _currentPage = page;
+
+            // Dispose transient pages (Games/Rust are rebuilt each visit); keep persistent ones.
+            if (old != null && old != page &&
+                old != _vibrancePage && old != _settingsPage && old != _accountPage)
+                old.Dispose();
         }
 
-        /// <summary>Bring the window to the front (used by the tray/hotkey).</summary>
         public void ShowAndFocus()
         {
             Show();
@@ -178,21 +226,8 @@ namespace VibranceHud
             SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         }
 
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            // Subtle grey, semi-transparent frame + dividers under the title bar and beside
-            // the nav - the whole window is already translucent via Opacity.
-            using var pen = new Pen(Theme.GlassEdge, 1f);
-            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
-            using var divider = new Pen(Theme.Border, 1f);
-            e.Graphics.DrawLine(divider, 0, TitleH, Width, TitleH);
-            e.Graphics.DrawLine(divider, NavW, TitleH, NavW, Height);
-        }
-
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // The window hides to tray instead of closing while the app runs.
             if (e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true;
@@ -201,6 +236,12 @@ namespace VibranceHud
                 return;
             }
             base.OnFormClosing(e);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _timer?.Dispose();
+            base.Dispose(disposing);
         }
     }
 }

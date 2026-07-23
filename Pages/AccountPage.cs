@@ -8,7 +8,7 @@ namespace VibranceHud.Pages
     /// up for real in the licensing/payments phase; for now it just states the plan so the
     /// nav slot exists.
     /// </summary>
-    public sealed class AccountPage : UserControl
+    public sealed class AccountPage : GlowPage
     {
         public AccountPage()
         {
