@@ -32,7 +32,6 @@
     <!-- .Net wrapper for NVIDIA's public NVAPI - LGPL licensed, fine for this kind of use.
          https://github.com/falahati/NvAPIWrapper -->
     <PackageReference Include="NvAPIWrapper.Net" Version="0.8.1.101" />
-    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
 </Project>

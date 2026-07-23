@@ -1,41 +1,62 @@
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Velopack;
-using Velopack.Sources;
 
 namespace VibranceHud
 {
     /// <summary>
-    /// Self-update against GitHub Releases. Every installed copy checks the repo for a
-    /// newer release; if one exists it downloads and applies it, then restarts into the
-    /// new version. Only works for copies installed via the Velopack Setup.exe (a plain
-    /// unzipped exe has nowhere to update into) - which is exactly why we ship an
-    /// installer.
+    /// Self-update against GitHub Releases, built for the Inno Setup installer we ship:
+    /// ask GitHub for the newest release, compare versions, and - if there's a newer one -
+    /// download that installer and run it. Because the installer keeps the same AppId it
+    /// upgrades the existing install in place; we exit so it can replace our files.
+    ///
+    /// No account or token needed: it only reads the public releases endpoint.
     /// </summary>
     public static class UpdateService
     {
-        private const string RepoUrl = "https://github.com/matej4Y8Y/VibranceHud";
+        private const string LatestApi =
+            "https://api.github.com/repos/matej4Y8Y/VibranceHud/releases/latest";
 
-        private static UpdateManager NewManager() =>
-            new(new GithubSource(RepoUrl, accessToken: null, prerelease: false));
+        /// <summary>The running app's version, normalised to major.minor.build.</summary>
+        public static Version CurrentVersion
+        {
+            get
+            {
+                var v = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+                return new Version(v.Major, v.Minor, Math.Max(v.Build, 0));
+            }
+        }
+
+        private static HttpClient NewClient()
+        {
+            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+            // GitHub rejects requests without a User-Agent.
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("PlexusX-Updater");
+            return client;
+        }
+
+        private static async Task<ReleaseInfo?> FetchLatestAsync()
+        {
+            using var client = NewClient();
+            var json = await client.GetStringAsync(LatestApi);
+            return GitHubReleases.ParseLatest(json);
+        }
 
         /// <summary>
-        /// Silent background check used on startup: if an update exists, fetch and stage
-        /// it so it installs on next launch. Never interrupts the user, never throws.
+        /// Runs on every launch. Stays silent unless there's genuinely a newer release,
+        /// and never interrupts startup if the machine is offline.
         /// </summary>
-        public static async Task CheckInBackgroundAsync()
+        public static async Task CheckOnStartupAsync()
         {
             try
             {
-                var mgr = NewManager();
-                if (!mgr.IsInstalled) return;
-
-                var update = await mgr.CheckForUpdatesAsync();
-                if (update == null) return;
-
-                await mgr.DownloadUpdatesAsync(update);
-                mgr.ApplyUpdatesAndRestart(update);
+                var latest = await FetchLatestAsync();
+                if (latest == null || !GitHubReleases.IsNewer(latest.Version, CurrentVersion)) return;
+                PromptAndInstall(latest);
             }
             catch
             {
@@ -43,46 +64,68 @@ namespace VibranceHud
             }
         }
 
-        /// <summary>
-        /// Manual check from the tray menu: tells the user the result either way, and
-        /// asks before restarting to apply.
-        /// </summary>
+        /// <summary>Manual check from Settings / the tray: reports either way.</summary>
         public static async Task CheckManuallyAsync()
         {
             try
             {
-                var mgr = NewManager();
-                if (!mgr.IsInstalled)
+                var latest = await FetchLatestAsync();
+                if (latest == null)
                 {
-                    MessageBox.Show(
-                        "Updates are only available in the installed version. This looks " +
-                        "like a portable copy - grab the installer to get automatic updates.",
-                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Info("Couldn't read the release list. Try again later.");
                     return;
                 }
-
-                var update = await mgr.CheckForUpdatesAsync();
-                if (update == null)
+                if (!GitHubReleases.IsNewer(latest.Version, CurrentVersion))
                 {
-                    MessageBox.Show("You're on the latest version.",
-                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    Info($"You're on the latest version ({CurrentVersion}).");
                     return;
                 }
-
-                var choice = MessageBox.Show(
-                    $"Version {update.TargetFullRelease.Version} is available. " +
-                    "Download and restart to update now?",
-                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                if (choice != DialogResult.Yes) return;
-
-                await mgr.DownloadUpdatesAsync(update);
-                mgr.ApplyUpdatesAndRestart(update);
+                PromptAndInstall(latest);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Couldn't check for updates:\n\n{ex.Message}",
+                Info("Couldn't check for updates:\n\n" + ex.Message);
+            }
+        }
+
+        private static void PromptAndInstall(ReleaseInfo latest)
+        {
+            var choice = MessageBox.Show(
+                $"PlexusX {latest.Version} is available (you have {CurrentVersion}).\n\n" +
+                "Download and install it now? PlexusX will close while it updates.",
+                "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+            if (choice != DialogResult.Yes) return;
+
+            _ = DownloadAndRunAsync(latest);
+        }
+
+        private static async Task DownloadAndRunAsync(ReleaseInfo latest)
+        {
+            try
+            {
+                var file = Path.Combine(Path.GetTempPath(),
+                    $"PlexusX-Setup-{latest.Version}.exe");
+
+                using (var client = NewClient())
+                using (var stream = await client.GetStreamAsync(latest.InstallerUrl))
+                using (var target = File.Create(file))
+                {
+                    await stream.CopyToAsync(target);
+                }
+
+                Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+                Application.Exit(); // let the installer replace our files
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "The update couldn't be downloaded:\n\n" + ex.Message +
+                    "\n\nYou can grab it manually from the releases page.",
                     "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
+
+        private static void Info(string text) =>
+            MessageBox.Show(text, "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 }

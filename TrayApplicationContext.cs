@@ -89,7 +89,7 @@ namespace VibranceHud
 
             // Silently look for a newer release in the background, so an update is ready
             // to install the next time the app launches. Fire-and-forget by design.
-            _ = UpdateService.CheckInBackgroundAsync();
+            _ = UpdateService.CheckOnStartupAsync();
         }
 
         /// <summary>
