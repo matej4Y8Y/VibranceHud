@@ -18,6 +18,9 @@ PrivilegesRequired=lowest
 OutputDir=installer
 OutputBaseFilename=PlexusX-Setup-{#AppVersion}
 SetupIconFile=brand\PlexusX.ico
+; Let the installer close a running PlexusX so in-place updates don't fail on locked files.
+CloseApplications=yes
+RestartApplications=no
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
