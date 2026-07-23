@@ -135,7 +135,7 @@ namespace VibranceHud.Pages
                 {
                     Text = t.Label,
                     ForeColor = Theme.Text,
-                    BackColor = Theme.Surface,
+                    BackColor = Color.Transparent,
                     Location = new Point(cx, cy + 2),
                     AutoSize = true
                 });

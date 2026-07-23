@@ -86,6 +86,11 @@ namespace VibranceHud.Pages
         {
             base.OnPaint(e); // particle-field background
             var g = e.Graphics;
+
+            // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
+            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 300);
+            Glass.PaintPanel(g, panel, 24, baseAlpha: 104, sheenTop: 24);
+
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             using (var numFont = new Font(Theme.FontFamily, 46f, FontStyle.Bold))
