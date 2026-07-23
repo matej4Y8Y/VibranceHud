@@ -28,10 +28,6 @@ namespace VibranceHud
             public Segment(float x1, float y1, float x2, float y2, int a) { X1 = x1; Y1 = y1; X2 = x2; Y2 = y2; Alpha = a; }
         }
 
-        private static readonly Color Violet = Color.FromArgb(167, 139, 250);
-        private static readonly Color Magenta = Color.FromArgb(232, 96, 214);
-        private static readonly Color LineColor = Color.FromArgb(150, 130, 240);
-
         private readonly Node[] _nodes;
         private readonly List<Segment> _segments = new();
         private readonly Random _rng = new();
@@ -66,7 +62,7 @@ namespace VibranceHud
             n.Phase = (float)(_rng.NextDouble() * Math.PI * 2);
             n.Big = _rng.NextDouble() < 0.4;
             n.Size = n.Big ? 3f + (float)_rng.NextDouble() * 2f : 1.8f + (float)_rng.NextDouble() * 1.2f;
-            n.Color = _rng.NextDouble() < 0.5 ? Violet : Magenta;
+            n.Color = _rng.NextDouble() < 0.5 ? Theme.PlexusNodeA : Theme.PlexusNodeB;
         }
 
         public void Update(double dtSeconds)
@@ -121,11 +117,12 @@ namespace VibranceHud
             if (_w <= 1 || _h <= 1) return;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            using (var pen = new Pen(LineColor, 1f))
+            var lineColor = Theme.PlexusLine;
+            using (var pen = new Pen(lineColor, 1f))
             {
                 foreach (var s in _segments)
                 {
-                    pen.Color = Color.FromArgb(s.Alpha, LineColor);
+                    pen.Color = Color.FromArgb(s.Alpha, lineColor);
                     g.DrawLine(pen, s.X1, s.Y1, s.X2, s.Y2);
                 }
             }

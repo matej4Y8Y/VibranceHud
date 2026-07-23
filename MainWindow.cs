@@ -28,6 +28,7 @@ namespace VibranceHud
         private readonly VibranceEngine _engine;
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
+        private readonly Action<bool> _onThemeChanged;
 
         private readonly ParticleField _field = new(65);
         private readonly System.Windows.Forms.Timer _timer;
@@ -43,11 +44,13 @@ namespace VibranceHud
         private readonly AccountPage _accountPage;
         private readonly NavButton _navVibrance, _navGames, _navSettings, _navAccount;
 
-        public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store)
+        public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
+            Action<bool> onThemeChanged)
         {
             _engine = engine;
             _settings = settings;
             _store = store;
+            _onThemeChanged = onThemeChanged;
 
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
@@ -78,7 +81,7 @@ namespace VibranceHud
 
             // Pages exist before the nav wires click handlers to them.
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
-            _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity);
+            _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged);
             _accountPage = new AccountPage();
             foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage })
                 AttachField(page);
