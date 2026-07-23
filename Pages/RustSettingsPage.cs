@@ -10,14 +10,15 @@ using VibranceHud.Rust;
 namespace VibranceHud.Pages
 {
     /// <summary>
-    /// Per-game optimization page for Rust (Focused v1): graphics quality + FPS limit,
-    /// a grid of effect toggles, and tools. Reads the current client.cfg to seed the
-    /// controls and writes changes back through <see cref="RustSettingsService"/>, which
-    /// backs up the original first.
+    /// Per-game optimization page for Rust: graphics quality, FPS limit, field of view, a
+    /// grid of one-click optimization tweaks, and tools. Everything is written to Rust's
+    /// own client.cfg through <see cref="RustSettingsService"/>, which backs up the
+    /// original first.
     /// </summary>
     public sealed class RustSettingsPage : GlowPage
     {
-        private sealed record Tweak(string Label, string Convar, string On, string Off);
+        private const int CardW = 720;
+        private const int Pad = 40;
 
         private static readonly (string name, int value)[] QualityLevels =
         {
@@ -29,132 +30,135 @@ namespace VibranceHud.Pages
             ("60", 60), ("120", 120), ("144", 144), ("240", 240), ("Max", 0)
         };
 
-        // Only convars confirmed present in a real Rust client.cfg. On = effect enabled.
-        private static readonly Tweak[] Tweaks =
-        {
-            new("Motion Blur", "effects.motionblur", "True", "False"),
-            new("Bloom", "effects.bloom", "True", "False"),
-            new("Ambient Occlusion", "effects.ao", "True", "False"),
-            new("Lens Dirt", "effects.lensdirt", "True", "False"),
-            new("Sun Shafts", "effects.shafts", "True", "False"),
-            new("Sharpen", "effects.sharpen", "True", "False"),
-            new("Anti-aliasing", "effects.antialiasing", "2", "0"),
-        };
-
         private readonly RustSettingsService _service;
+        private readonly DetectedGame _game;
         private readonly List<ChipButton> _qualityChips = new();
         private readonly List<ChipButton> _fpsChips = new();
-        private readonly Dictionary<string, ToggleSwitch> _tweakToggles = new();
+        private readonly Dictionary<Tweak, ChipButton> _tweakChips = new();
+        private readonly FlatSlider _fov;
         private int _selectedQuality;
         private int _selectedFps;
+        private Label _fovValue = null!;
         private Label _status = null!;
 
         public RustSettingsPage(DetectedGame game, Action onBack)
         {
+            _game = game;
             _service = new RustSettingsService(Path.Combine(game.InstallDir, "cfg", "client.cfg"));
-
-            Dock = DockStyle.Fill;
-            BackColor = Theme.Background;
             AutoScroll = true;
             Font = new Font(Theme.FontFamily, 9.5f);
-            Padding = new Padding(0, 0, 0, 24);
+            Padding = new Padding(0, 0, 0, 28);
 
             var current = _service.ReadCurrent();
-            int width = 720;
-            int y = 28;
+            int y = 26;
 
-            // ---- Header ----
+            // ---------- Header ----------
             var back = new LinkLabel
             {
                 Text = "‹ Games",
                 LinkColor = Theme.TextDim,
                 ActiveLinkColor = Theme.Accent,
                 LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(40, y),
+                Location = new Point(Pad, y),
                 AutoSize = true,
                 BackColor = Color.Transparent
             };
             back.Click += (s, e) => onBack();
             Controls.Add(back);
 
-            var title = new Label
+            Controls.Add(new Label
             {
                 Text = "Rust",
                 ForeColor = Theme.Text,
                 Font = new Font(Theme.FontFamily, 18f, FontStyle.Bold),
-                Location = new Point(38, y + 22),
+                Location = new Point(Pad - 2, y + 22),
                 AutoSize = true,
                 BackColor = Color.Transparent
-            };
-            Controls.Add(title);
+            });
 
-            var launch = SettingsPage.FlatButton("▶  Launch", width - 60, y + 24, 130);
+            var launch = SettingsPage.FlatButton("▶  Launch Rust", Pad + CardW - 150, y + 24, 150);
             launch.BackColor = Theme.AccentDim;
             launch.Click += (s, e) => Shell($"steam://run/{game.Game.SteamAppId}");
             Controls.Add(launch);
+            y += 82;
 
-            y += 84;
-
-            // ---- Rust-running warning ----
-            var warn = new Label
+            if (RustSettingsService.IsRustRunning())
             {
-                Text = "⚠  Rust is running. Close it before applying — it rewrites its config on exit.",
-                ForeColor = Color.FromArgb(240, 180, 90),
-                BackColor = Color.Transparent,
-                Location = new Point(40, y),
-                AutoSize = true,
-                Visible = RustSettingsService.IsRustRunning()
-            };
-            Controls.Add(warn);
-            if (warn.Visible) y += 28;
+                Controls.Add(new Label
+                {
+                    Text = "⚠  Rust is running. Close it before applying — it rewrites its config on exit.",
+                    ForeColor = Color.FromArgb(240, 180, 90),
+                    BackColor = Color.Transparent,
+                    Location = new Point(Pad, y),
+                    AutoSize = true
+                });
+                y += 28;
+            }
 
-            // ---- Graphics card ----
-            var gfx = new CardPanel { Location = new Point(40, y), Size = new Size(width, 150) };
-            gfx.Controls.Add(UiHelpers.Caption("GRAPHICS QUALITY", 18, 16, 240));
+            // ---------- Graphics ----------
+            var gfx = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 214) };
+            gfx.Controls.Add(UiHelpers.Caption("GRAPHICS QUALITY", 18, 16, 260));
             _selectedQuality = ReadInt(current, "graphics.quality", 3);
             BuildChipRow(gfx, QualityLevels, 18, 42, _qualityChips, _selectedQuality, v => _selectedQuality = v);
 
             gfx.Controls.Add(UiHelpers.Caption("FPS LIMIT", 18, 92, 240));
             _selectedFps = ReadInt(current, "fps.limit", 0);
-            BuildChipRow(gfx, FpsLevels, 18, 116, _fpsChips, _selectedFps, v => _selectedFps = v);
-            Controls.Add(gfx);
-            y += 166;
+            BuildChipRow(gfx, FpsLevels, 18, 118, _fpsChips, _selectedFps, v => _selectedFps = v);
 
-            // ---- Tweaks card ----
-            int tweakRows = (Tweaks.Length + 1) / 2;
-            var tw = new CardPanel { Location = new Point(40, y), Size = new Size(width, 52 + tweakRows * 40) };
-            tw.Controls.Add(UiHelpers.Caption("EFFECTS  (on / off)", 18, 16, 260));
-            for (int i = 0; i < Tweaks.Length; i++)
+            gfx.Controls.Add(UiHelpers.Caption("FIELD OF VIEW", 18, 164, 240));
+            _fovValue = new Label
             {
-                var t = Tweaks[i];
-                int col = i % 2, row = i / 2;
-                int cx = 18 + col * ((width - 36) / 2);
-                int cy = 46 + row * 40;
+                Text = ReadInt(current, "graphics.fov", 90).ToString(),
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(CardW - 60, 164),
+                Size = new Size(42, 16),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+            gfx.Controls.Add(_fovValue);
+            _fov = new FlatSlider
+            {
+                Minimum = 60,
+                Maximum = 100,
+                Location = new Point(16, 182),
+                Width = CardW - 32,
+                Value = Math.Clamp(ReadInt(current, "graphics.fov", 90), 60, 100)
+            };
+            _fov.ValueChanged += (s, e) => _fovValue.Text = _fov.Value.ToString();
+            gfx.Controls.Add(_fov);
+            Controls.Add(gfx);
+            y += 230;
 
-                tw.Controls.Add(new Label
+            // ---------- Optimization & tweaks ----------
+            var tweaks = RustTweaks.All;
+            int cols = 3, chipW = (CardW - 36 - (cols - 1) * 10) / cols, chipH = 34;
+            int rows = (tweaks.Count + cols - 1) / cols;
+            var tw = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 56 + rows * (chipH + 10)) };
+            tw.Controls.Add(UiHelpers.Caption("OPTIMIZATION & TWEAKS", 18, 16, 300));
+            for (int i = 0; i < tweaks.Count; i++)
+            {
+                var tweak = tweaks[i];
+                var chip = new ChipButton
                 {
-                    Text = t.Label,
-                    ForeColor = Theme.Text,
-                    BackColor = Color.Transparent,
-                    Location = new Point(cx, cy + 2),
-                    AutoSize = true
-                });
-                var toggle = new ToggleSwitch
-                {
-                    Location = new Point(cx + (width - 36) / 2 - 60, cy),
-                    Checked = string.Equals(current.Get(t.Convar), t.On, StringComparison.OrdinalIgnoreCase)
+                    Text = tweak.Label,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Size = new Size(chipW, chipH),
+                    Location = new Point(18 + (i % cols) * (chipW + 10), 46 + (i / cols) * (chipH + 10)),
+                    Active = tweak.IsOn(current)
                 };
-                _tweakToggles[t.Convar] = toggle;
-                tw.Controls.Add(toggle);
+                chip.Click += (s, e) => chip.Active = !chip.Active;
+                _tweakChips[tweak] = chip;
+                tw.Controls.Add(chip);
             }
             Controls.Add(tw);
             y += tw.Height + 16;
 
-            // ---- Tools card ----
-            var tools = new CardPanel { Location = new Point(40, y), Size = new Size(width, 92) };
+            // ---------- Tools ----------
+            var tools = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 92) };
             tools.Controls.Add(UiHelpers.Caption("TOOLS", 18, 16, 200));
             var openFolder = SettingsPage.FlatButton("Game Folder", 18, 44, 150);
-            openFolder.Click += (s, e) => Shell(Path.GetDirectoryName(Path.GetDirectoryName(_service.ClientCfgPath))!);
+            openFolder.Click += (s, e) => Shell(_game.InstallDir);
             tools.Controls.Add(openFolder);
             var verify = SettingsPage.FlatButton("Verify / Repair", 180, 44, 150);
             verify.Click += (s, e) => Shell($"steam://validate/{game.Game.SteamAppId}");
@@ -165,14 +169,14 @@ namespace VibranceHud.Pages
                 if (!_service.HasBackup) { SetStatus("No backup to restore yet.", Theme.TextDim); return; }
                 _service.Restore();
                 ReloadFrom(_service.ReadCurrent());
-                SetStatus("Restored original config.", Theme.TextDim);
+                SetStatus("Restored your original config.", Theme.TextDim);
             };
             tools.Controls.Add(restore);
             Controls.Add(tools);
             y += 108;
 
-            // ---- Apply bar ----
-            var apply = SettingsPage.FlatButton("Apply Changes", 40, y, 180);
+            // ---------- Apply ----------
+            var apply = SettingsPage.FlatButton("Apply Changes", Pad, y, 180);
             apply.BackColor = Theme.AccentDim;
             apply.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
             apply.Height = 38;
@@ -183,7 +187,7 @@ namespace VibranceHud.Pages
             {
                 Text = "Changes are written to client.cfg. A backup is saved automatically.",
                 ForeColor = Theme.TextDim,
-                Location = new Point(232, y + 10),
+                Location = new Point(Pad + 194, y + 10),
                 AutoSize = true,
                 BackColor = Color.Transparent
             };
@@ -205,14 +209,15 @@ namespace VibranceHud.Pages
             {
                 ["graphics.quality"] = _selectedQuality.ToString(),
                 ["fps.limit"] = _selectedFps.ToString(),
+                ["graphics.fov"] = _fov.Value.ToString(),
             };
-            foreach (var t in Tweaks)
-                changes[t.Convar] = _tweakToggles[t.Convar].Checked ? t.On : t.Off;
+            foreach (var (tweak, chip) in _tweakChips)
+                tweak.Write(changes, chip.Active);
 
             try
             {
                 _service.Apply(changes);
-                SetStatus("Applied ✓  (backup saved)", Theme.Accent);
+                SetStatus($"Applied ✓  {changes.Count} settings written (backup saved)", Theme.Accent);
             }
             catch (Exception ex)
             {
@@ -224,9 +229,8 @@ namespace VibranceHud.Pages
         {
             SelectChip(_qualityChips, ReadInt(cfg, "graphics.quality", 3), v => _selectedQuality = v);
             SelectChip(_fpsChips, ReadInt(cfg, "fps.limit", 0), v => _selectedFps = v);
-            foreach (var t in Tweaks)
-                _tweakToggles[t.Convar].Checked =
-                    string.Equals(cfg.Get(t.Convar), t.On, StringComparison.OrdinalIgnoreCase);
+            _fov.Value = Math.Clamp(ReadInt(cfg, "graphics.fov", 90), 60, 100);
+            foreach (var (tweak, chip) in _tweakChips) chip.Active = tweak.IsOn(cfg);
         }
 
         private void BuildChipRow(Control parent, (string name, int value)[] items, int x, int y,
