@@ -37,6 +37,8 @@ namespace VibranceHud.Pages
         private readonly List<ChipButton> _qualityChips = new();
         private readonly List<ChipButton> _fpsChips = new();
         private readonly List<ChipButton> _ramChips = new();
+        private readonly List<ChipButton> _resChips = new();
+        private int _selectedResW, _selectedResH;
         private readonly Dictionary<Tweak, ChipButton> _tweakChips = new();
         private readonly FlatSlider _fov;
         private int _selectedQuality;
@@ -100,6 +102,58 @@ namespace VibranceHud.Pages
                 });
                 y += 28;
             }
+
+            // ---------- Monitor resolution ----------
+            // Built from what this monitor actually reports, so it can never offer a mode
+            // that would black-screen someone.
+            var supported = DisplayModes.BestPerResolution(DisplayController.SupportedModes());
+            var offered = supported.Take(11).ToList();
+            int resCols = 3, resW = (CardW - 36 - (resCols - 1) * 10) / resCols, resH = 32;
+            int resRows = (offered.Count + 1 + resCols - 1) / resCols;
+            var resCard = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 74 + resRows * (resH + 10)) };
+            resCard.Controls.Add(UiHelpers.Caption("MONITOR RESOLUTION", 18, 16, 300));
+            resCard.Controls.Add(new Label
+            {
+                Text = "Switches your desktop to this on launch, at your monitor's highest refresh rate. Restored when Rust closes.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8f),
+                Location = new Point(18, 36),
+                AutoSize = true
+            });
+
+            _selectedResW = _settings.RustResolutionWidth;
+            _selectedResH = _settings.RustResolutionHeight;
+
+            // "Native" first, then the monitor's resolutions.
+            var choices = new List<(string label, int w, int h)> { ("Native", 0, 0) };
+            foreach (var m in offered) choices.Add(($"{m.Width}x{m.Height}", m.Width, m.Height));
+
+            for (int i = 0; i < choices.Count; i++)
+            {
+                var (label, cw, ch) = choices[i];
+                var chip = new ChipButton
+                {
+                    Text = label,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Size = new Size(resW, resH),
+                    Location = new Point(18 + (i % resCols) * (resW + 10), 62 + (i / resCols) * (resH + 10)),
+                    Active = cw == _selectedResW && ch == _selectedResH
+                };
+                chip.Click += (s, e) =>
+                {
+                    _selectedResW = cw;
+                    _selectedResH = ch;
+                    _settings.RustResolutionWidth = cw;
+                    _settings.RustResolutionHeight = ch;
+                    _store.Save(_settings);
+                    foreach (var c in _resChips) c.Active = ReferenceEquals(c, chip);
+                };
+                _resChips.Add(chip);
+                resCard.Controls.Add(chip);
+            }
+            Controls.Add(resCard);
+            y += resCard.Height + 16;
 
             // ---------- Graphics ----------
             var gfx = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 214) };
@@ -281,12 +335,32 @@ namespace VibranceHud.Pages
             if (_settings.RustTrimLauncher)
                 RustSystemBoost.TrimLauncherMemory();
 
+            string extra = "";
+            if (_selectedResW > 0 && _selectedResH > 0 && DisplayController.Current() is DisplayMode original)
+            {
+                if (original.Width != _selectedResW || original.Height != _selectedResH)
+                {
+                    if (DisplayController.Apply(_selectedResW, _selectedResH))
+                    {
+                        // Put the desktop back once Rust closes so nobody is left stretched.
+                        DisplayController.RestoreWhenRustExits(original, TimeSpan.FromMinutes(5));
+                        extra = $"  ({_selectedResW}x{_selectedResH})";
+                    }
+                    else
+                    {
+                        SetStatus($"Your monitor didn't accept {_selectedResW}x{_selectedResH}.",
+                            Color.FromArgb(240, 180, 90));
+                    }
+                }
+            }
+
             Shell($"steam://run/{_game.Game.SteamAppId}");
 
             if (_settings.RustHighPriority)
                 RustSystemBoost.RaisePriorityWhenRustStarts(TimeSpan.FromMinutes(3));
 
-            SetStatus("Launching Rust…", Theme.TextDim);
+            if (extra.Length > 0 || _status.ForeColor != Color.FromArgb(240, 180, 90))
+                SetStatus("Launching Rust…" + extra, Theme.TextDim);
         }
 
         private static Label RowLabel(string text, int x, int y) => new()

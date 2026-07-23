@@ -20,5 +20,9 @@ namespace VibranceHud
         // Rust launch boosts
         public bool RustHighPriority { get; set; } = true;
         public bool RustTrimLauncher { get; set; }
+
+        /// <summary>Desktop resolution to switch to when launching Rust (0 = leave it alone).</summary>
+        public int RustResolutionWidth { get; set; }
+        public int RustResolutionHeight { get; set; }
     }
 }
