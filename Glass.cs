@@ -4,12 +4,15 @@ using System.Drawing.Drawing2D;
 namespace VibranceHud
 {
     /// <summary>
-    /// Shared "frosted glass" painting: a rounded panel with a faint dark base (dims the
-    /// plexus behind it for readability), a soft top-down light sheen, and a light rim -
-    /// the iOS-style translucent-glass look, adapted for a dark theme over GDI.
+    /// Shared "matte glass" painting: a rounded, translucent matte-black panel with a soft
+    /// grey rounded edge. Translucent so the plexus shows faintly through it; matte (no
+    /// white gloss) so it reads as dark frosted glass, not shiny plastic.
     /// </summary>
     public static class Glass
     {
+        private static readonly Color Fill = Color.FromArgb(10, 10, 12);   // matte black
+        private static readonly Color Edge = Color.FromArgb(148, 148, 158); // grey rim
+
         public static GraphicsPath RoundedPath(RectangleF rect, float radius)
         {
             var path = new GraphicsPath();
@@ -23,35 +26,26 @@ namespace VibranceHud
         }
 
         public static void PaintPanel(Graphics g, RectangleF rect, float radius,
-            int baseAlpha = 70, int rimAlpha = 48, int sheenTop = 30)
+            int fillAlpha = 140, int rimAlpha = 105)
         {
             if (rect.Width < 2 || rect.Height < 2) return;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             using var path = RoundedPath(rect, radius);
-
-            using (var basefill = new SolidBrush(Color.FromArgb(baseAlpha, 14, 14, 20)))
-                g.FillPath(basefill, path);
-
-            using (var sheen = new LinearGradientBrush(
-                       new RectangleF(rect.X, rect.Y, rect.Width, rect.Height),
-                       Color.FromArgb(sheenTop, 255, 255, 255),
-                       Color.FromArgb(4, 255, 255, 255),
-                       LinearGradientMode.Vertical) { WrapMode = WrapMode.TileFlipXY })
-                g.FillPath(sheen, path);
-
-            using (var rim = new Pen(Color.FromArgb(rimAlpha, 255, 255, 255), 1f))
+            using (var fill = new SolidBrush(Color.FromArgb(fillAlpha, Fill)))
+                g.FillPath(fill, path);
+            using (var rim = new Pen(Color.FromArgb(rimAlpha, Edge), 1.2f))
                 g.DrawPath(rim, path);
         }
 
-        /// <summary>An accent-tinted glass fill (for selected/active pills).</summary>
-        public static void PaintAccent(Graphics g, RectangleF rect, float radius, Color accent, int alpha = 205)
+        /// <summary>Accent-tinted fill for a selected/active pill (keeps the purple pop).</summary>
+        public static void PaintAccent(Graphics g, RectangleF rect, float radius, Color accent, int alpha = 210)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
             using var path = RoundedPath(rect, radius);
             using (var fill = new SolidBrush(Color.FromArgb(alpha, accent)))
                 g.FillPath(fill, path);
-            using (var rim = new Pen(Color.FromArgb(90, 255, 255, 255), 1f))
+            using (var rim = new Pen(Color.FromArgb(120, Edge), 1.2f))
                 g.DrawPath(rim, path);
         }
     }

@@ -16,8 +16,9 @@ namespace VibranceHud
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
+                   | ControlStyles.SupportsTransparentBackColor
                    | ControlStyles.ResizeRedraw, true);
-            BackColor = Theme.Background;
+            BackColor = Color.Transparent;
         }
 
         protected override void OnPaint(PaintEventArgs e)

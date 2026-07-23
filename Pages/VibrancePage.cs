@@ -89,7 +89,7 @@ namespace VibranceHud.Pages
 
             // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
             var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 300);
-            Glass.PaintPanel(g, panel, 24, baseAlpha: 104, sheenTop: 24);
+            Glass.PaintPanel(g, panel, 24, fillAlpha: 165);
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
