@@ -13,5 +13,9 @@ namespace VibranceHud
         public int BrightnessPercent { get; set; } = 100;
         public int GammaPercent { get; set; } = 100;
         public bool EyeCare { get; set; }
+
+        // Rust launch boosts
+        public bool RustHighPriority { get; set; } = true;
+        public bool RustTrimLauncher { get; set; }
     }
 }

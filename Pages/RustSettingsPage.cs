@@ -32,18 +32,24 @@ namespace VibranceHud.Pages
 
         private readonly RustSettingsService _service;
         private readonly DetectedGame _game;
+        private readonly AppSettings _settings;
+        private readonly SettingsStore _store;
         private readonly List<ChipButton> _qualityChips = new();
         private readonly List<ChipButton> _fpsChips = new();
+        private readonly List<ChipButton> _ramChips = new();
         private readonly Dictionary<Tweak, ChipButton> _tweakChips = new();
         private readonly FlatSlider _fov;
         private int _selectedQuality;
         private int _selectedFps;
+        private int _selectedRamTier;
         private Label _fovValue = null!;
         private Label _status = null!;
 
-        public RustSettingsPage(DetectedGame game, Action onBack)
+        public RustSettingsPage(DetectedGame game, AppSettings settings, SettingsStore store, Action onBack)
         {
             _game = game;
+            _settings = settings;
+            _store = store;
             _service = new RustSettingsService(Path.Combine(game.InstallDir, "cfg", "client.cfg"));
             AutoScroll = true;
             Font = new Font(Theme.FontFamily, 9.5f);
@@ -78,7 +84,7 @@ namespace VibranceHud.Pages
 
             var launch = SettingsPage.FlatButton("▶  Launch Rust", Pad + CardW - 150, y + 24, 150);
             launch.BackColor = Theme.AccentDim;
-            launch.Click += (s, e) => Shell($"steam://run/{game.Game.SteamAppId}");
+            launch.Click += (s, e) => LaunchRust();
             Controls.Add(launch);
             y += 82;
 
@@ -154,6 +160,47 @@ namespace VibranceHud.Pages
             Controls.Add(tw);
             y += tw.Height + 16;
 
+            // ---------- System boost ----------
+            var sys = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 210) };
+            sys.Controls.Add(UiHelpers.Caption("SYSTEM BOOST", 18, 16, 260));
+
+            sys.Controls.Add(RowLabel("Auto High CPU Priority", 18, 46));
+            sys.Controls.Add(RowHint("Raises Rust's scheduling priority once it starts, to reduce micro-stutter.", 18, 64));
+            var prio = new ToggleSwitch { Location = new Point(CardW - 62, 48), Checked = _settings.RustHighPriority };
+            prio.CheckedChanged += (s, e) => { _settings.RustHighPriority = prio.Checked; _store.Save(_settings); };
+            sys.Controls.Add(prio);
+
+            sys.Controls.Add(RowLabel("Auto RAM Cleaner", 18, 96));
+            sys.Controls.Add(RowHint("Releases PlexusX's own memory back to Windows before the game starts.", 18, 114));
+            var ram = new ToggleSwitch { Location = new Point(CardW - 62, 98), Checked = _settings.RustTrimLauncher };
+            ram.CheckedChanged += (s, e) => { _settings.RustTrimLauncher = ram.Checked; _store.Save(_settings); };
+            sys.Controls.Add(ram);
+
+            sys.Controls.Add(UiHelpers.Caption("GC OPTIMIZER  (SYSTEM RAM)", 18, 146, 320));
+            _selectedRamTier = RustSystemBoost.TierIndexForBuffer(ReadInt(current, "gc.buffer", 2048));
+            var tiers = RustSystemBoost.RamTiers;
+            for (int i = 0; i < tiers.Length; i++)
+            {
+                int index = i;
+                var chip = new ChipButton
+                {
+                    Text = tiers[i].Label,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Size = new Size(110, 30),
+                    Location = new Point(18 + i * 118, 168),
+                    Active = i == _selectedRamTier
+                };
+                chip.Click += (s, e) =>
+                {
+                    _selectedRamTier = index;
+                    foreach (var c in _ramChips) c.Active = ReferenceEquals(c, chip);
+                };
+                _ramChips.Add(chip);
+                sys.Controls.Add(chip);
+            }
+            Controls.Add(sys);
+            y += 226;
+
             // ---------- Tools ----------
             var tools = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 92) };
             tools.Controls.Add(UiHelpers.Caption("TOOLS", 18, 16, 200));
@@ -210,6 +257,7 @@ namespace VibranceHud.Pages
                 ["graphics.quality"] = _selectedQuality.ToString(),
                 ["fps.limit"] = _selectedFps.ToString(),
                 ["graphics.fov"] = _fov.Value.ToString(),
+                ["gc.buffer"] = RustSystemBoost.RamTiers[_selectedRamTier].GcBuffer.ToString(),
             };
             foreach (var (tweak, chip) in _tweakChips)
                 tweak.Write(changes, chip.Active);
@@ -225,12 +273,48 @@ namespace VibranceHud.Pages
             }
         }
 
+        /// <summary>Launch Rust, applying whichever system boosts are switched on.</summary>
+        private void LaunchRust()
+        {
+            if (_settings.RustTrimLauncher)
+                RustSystemBoost.TrimLauncherMemory();
+
+            Shell($"steam://run/{_game.Game.SteamAppId}");
+
+            if (_settings.RustHighPriority)
+                RustSystemBoost.RaisePriorityWhenRustStarts(TimeSpan.FromMinutes(3));
+
+            SetStatus("Launching Rust…", Theme.TextDim);
+        }
+
+        private static Label RowLabel(string text, int x, int y) => new()
+        {
+            Text = text,
+            ForeColor = Theme.Text,
+            BackColor = Color.Transparent,
+            Location = new Point(x, y),
+            AutoSize = true
+        };
+
+        private static Label RowHint(string text, int x, int y) => new()
+        {
+            Text = text,
+            ForeColor = Theme.TextDim,
+            BackColor = Color.Transparent,
+            Font = new Font(Theme.FontFamily, 8f),
+            Location = new Point(x, y),
+            AutoSize = true
+        };
+
         private void ReloadFrom(RustConfig cfg)
         {
             SelectChip(_qualityChips, ReadInt(cfg, "graphics.quality", 3), v => _selectedQuality = v);
             SelectChip(_fpsChips, ReadInt(cfg, "fps.limit", 0), v => _selectedFps = v);
             _fov.Value = Math.Clamp(ReadInt(cfg, "graphics.fov", 90), 60, 100);
             foreach (var (tweak, chip) in _tweakChips) chip.Active = tweak.IsOn(cfg);
+
+            _selectedRamTier = RustSystemBoost.TierIndexForBuffer(ReadInt(cfg, "gc.buffer", 2048));
+            for (int i = 0; i < _ramChips.Count; i++) _ramChips[i].Active = i == _selectedRamTier;
         }
 
         private void BuildChipRow(Control parent, (string name, int value)[] items, int x, int y,
