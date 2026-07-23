@@ -17,6 +17,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=installer
 OutputBaseFilename=PlexusX-Setup-{#AppVersion}
+SetupIconFile=brand\PlexusX.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

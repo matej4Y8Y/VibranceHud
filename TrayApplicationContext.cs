@@ -72,7 +72,7 @@ namespace VibranceHud
 
             _trayIcon = new NotifyIcon
             {
-                Icon = System.Drawing.SystemIcons.Application, // swap for a custom .ico whenever you like
+                Icon = AppIcon.Value,
                 Text = "PlexusX",
                 Visible = true,
                 ContextMenuStrip = menu
