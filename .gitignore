@@ -1,6 +1,8 @@
 # Build output
 bin/
 obj/
+publish/
+Releases/
 
 # Shareable packages (built on demand, not source)
 *.zip

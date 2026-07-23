@@ -65,6 +65,7 @@ namespace VibranceHud
             menu.Items.Add("Open HUD  (Ctrl+Alt+V)", null, (s, e) => _popup.ShowNearCursor());
             menu.Items.Add("Reset to default", null, (s, e) => _engine.Reset());
             menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("Check for updates", null, async (s, e) => await UpdateService.CheckManuallyAsync());
             menu.Items.Add("Exit", null, (s, e) => ExitThread());
 
             _trayIcon = new NotifyIcon
@@ -75,6 +76,10 @@ namespace VibranceHud
                 ContextMenuStrip = menu
             };
             _trayIcon.DoubleClick += (s, e) => _popup.ShowNearCursor();
+
+            // Silently look for a newer release in the background, so an update is ready
+            // to install the next time the app launches. Fire-and-forget by design.
+            _ = UpdateService.CheckInBackgroundAsync();
         }
 
         protected override void ExitThreadCore()

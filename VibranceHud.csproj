@@ -8,6 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>VibranceHud</AssemblyName>
     <RootNamespace>VibranceHud</RootNamespace>
+    <!-- Bumped for every release; the running app compares this against the newest
+         GitHub release to decide whether to update itself. -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <!-- The test project lives under tests\ inside this folder; keep its sources out of
@@ -23,6 +26,7 @@
     <!-- .Net wrapper for NVIDIA's public NVAPI - LGPL licensed, fine for this kind of use.
          https://github.com/falahati/NvAPIWrapper -->
     <PackageReference Include="NvAPIWrapper.Net" Version="0.8.1.101" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
 </Project>
