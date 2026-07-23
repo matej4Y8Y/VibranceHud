@@ -57,7 +57,7 @@ namespace VibranceHud
                     MessageBox.Show(
                         "Updates are only available in the installed version. This looks " +
                         "like a portable copy - grab the installer to get automatic updates.",
-                        "Vibrance HUD", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
@@ -65,14 +65,14 @@ namespace VibranceHud
                 if (update == null)
                 {
                     MessageBox.Show("You're on the latest version.",
-                        "Vibrance HUD", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
                 var choice = MessageBox.Show(
                     $"Version {update.TargetFullRelease.Version} is available. " +
                     "Download and restart to update now?",
-                    "Vibrance HUD", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (choice != DialogResult.Yes) return;
 
                 await mgr.DownloadUpdatesAsync(update);
@@ -81,7 +81,7 @@ namespace VibranceHud
             catch (Exception ex)
             {
                 MessageBox.Show($"Couldn't check for updates:\n\n{ex.Message}",
-                    "Vibrance HUD", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
     }

@@ -54,7 +54,7 @@ namespace VibranceHud
 
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
-            Text = "Vibrance HUD";
+            Text = "PlexusX";
             BackColor = Theme.Background;
             ClientSize = new Size(1040, 680);
             MinimumSize = new Size(900, 600);
@@ -68,9 +68,9 @@ namespace VibranceHud
             _titleBar = new GlowPanel { Field = _field, Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             _titleBar.MouseDown += DragWindow;
 
-            var brand = new Label { Text = "VIBRANCE", ForeColor = Theme.Accent, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(20, 16), AutoSize = true, BackColor = Color.Transparent };
+            var brand = new Label { Text = "PLEXUS", ForeColor = Theme.Accent, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(20, 16), AutoSize = true, BackColor = Color.Transparent };
             brand.MouseDown += DragWindow;
-            var brand2 = new Label { Text = "HUD", ForeColor = Theme.TextDim, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(107, 16), AutoSize = true, BackColor = Color.Transparent };
+            var brand2 = new Label { Text = "X", ForeColor = Theme.TextDim, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(88, 16), AutoSize = true, BackColor = Color.Transparent };
             brand2.MouseDown += DragWindow;
             var close = TitleGlyph("✕", ClientSize.Width - 42);
             close.Click += (s, e) => Hide();

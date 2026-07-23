@@ -28,7 +28,7 @@ namespace VibranceHud
                     $"Vibrance HUD couldn't start:\n\n{ex.Message}\n\n" +
                     "Make sure you're on an NVIDIA GPU with the driver installed, " +
                     "and that at least one monitor is connected to it.",
-                    "Vibrance HUD",
+                    "PlexusX",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }

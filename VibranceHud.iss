@@ -1,4 +1,4 @@
-; Inno Setup script for Vibrance HUD - builds a classic install wizard
+; Inno Setup script for PlexusX - builds a classic install wizard
 ; (welcome -> choose folder -> shortcuts -> install -> finish).
 ; Compile with: ISCC.exe VibranceHud.iss   (after `dotnet publish ... -o publish`)
 
@@ -6,19 +6,19 @@
 
 [Setup]
 AppId={{8F3A1C2B-4D5E-4F6A-9B7C-1234567890AB}}
-AppName=Vibrance HUD
+AppName=PlexusX
 AppVersion={#AppVersion}
-AppPublisher=Vibrance HUD
-DefaultDirName={localappdata}\Programs\Vibrance HUD
+AppPublisher=PlexusX
+DefaultDirName={localappdata}\Programs\PlexusX
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=installer
-OutputBaseFilename=VibranceHUD-Setup-{#AppVersion}
+OutputBaseFilename=PlexusX-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayName=Vibrance HUD
-UninstallDisplayIcon={app}\VibranceHud.exe
+UninstallDisplayName=PlexusX
+UninstallDisplayIcon={app}\PlexusX.exe
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
@@ -27,8 +27,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "publish\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Vibrance HUD"; Filename: "{app}\VibranceHud.exe"
-Name: "{autodesktop}\Vibrance HUD"; Filename: "{app}\VibranceHud.exe"; Tasks: desktopicon
+Name: "{autoprograms}\PlexusX"; Filename: "{app}\PlexusX.exe"
+Name: "{autodesktop}\PlexusX"; Filename: "{app}\PlexusX.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\VibranceHud.exe"; Description: "Launch Vibrance HUD now"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\PlexusX.exe"; Description: "Launch PlexusX now"; Flags: nowait postinstall skipifsilent

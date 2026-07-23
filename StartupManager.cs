@@ -10,7 +10,7 @@ namespace VibranceHud
     public static class StartupManager
     {
         private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string ValueName = "VibranceHud";
+        private const string ValueName = "PlexusX";
 
         public static bool IsEnabled()
         {

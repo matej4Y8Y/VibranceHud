@@ -1,4 +1,4 @@
-# Vibrance HUD
+# PlexusX
 
 A lightweight Windows tray app that puts NVIDIA's Digital Vibrance control behind a
 global hotkey, instead of three menus deep in NVIDIA Control Panel - and lets you push
