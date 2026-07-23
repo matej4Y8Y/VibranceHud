@@ -10,7 +10,7 @@
     <RootNamespace>VibranceHud</RootNamespace>
     <!-- Bumped for every release; the running app compares this against the newest
          GitHub release to decide whether to update itself. -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <!-- The test project lives under tests\ inside this folder; keep its sources out of
