@@ -3,6 +3,7 @@ bin/
 obj/
 publish/
 Releases/
+installer/
 
 # Shareable packages (built on demand, not source)
 *.zip
