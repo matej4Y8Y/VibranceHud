@@ -15,21 +15,26 @@ namespace VibranceHud
         public const int Max = 200;
         public const int MinBrightness = 50;
         public const int MaxBrightness = 150;
+        public const int MinGamma = 50;
+        public const int MaxGamma = 150;
 
         /// <summary>Warmth used when the eye-care toggle is on (0-1).</summary>
         public const float EyeCareWarmth = 0.5f;
 
         private readonly IVibranceController _controller;
         private readonly ISaturationOverlay _overlay;
+        private readonly IGammaRamp _gammaRamp;
 
         private int _level;
         private int _brightness = 100;
+        private int _gamma = 100;
         private bool _eyeCare;
 
-        public VibranceEngine(IVibranceController controller, ISaturationOverlay overlay)
+        public VibranceEngine(IVibranceController controller, ISaturationOverlay overlay, IGammaRamp gammaRamp)
         {
             _controller = controller;
             _overlay = overlay;
+            _gammaRamp = gammaRamp;
             _level = Math.Clamp(controller.CurrentLevel, 0, Max);
         }
 
@@ -42,6 +47,19 @@ namespace VibranceHud
         {
             get => _brightness;
             set { _brightness = Math.Clamp(value, MinBrightness, MaxBrightness); ApplyAll(); }
+        }
+
+        /// <summary>Screen gamma, 50-150 (100 = untouched). Uses the display's gamma ramp,
+        /// since gamma is non-linear and can't be folded into the color matrix.</summary>
+        public int Gamma
+        {
+            get => _gamma;
+            set
+            {
+                _gamma = Math.Clamp(value, MinGamma, MaxGamma);
+                if (_gamma == 100) _gammaRamp.Reset();
+                else _gammaRamp.Apply(GammaCurve.Build(_gamma / 100f));
+            }
         }
 
         /// <summary>Blue-light reduction (warm tint) for comfortable late-night use.</summary>
@@ -61,6 +79,8 @@ namespace VibranceHud
         {
             _brightness = 100;
             _eyeCare = false;
+            _gamma = 100;
+            _gammaRamp.Reset();
             SetLevel(DefaultLevel);
         }
 
