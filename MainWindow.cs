@@ -182,7 +182,7 @@ namespace VibranceHud
 
         private void OnConfigureGame(DetectedGame game)
         {
-            var page = new RustSettingsPage(game, onBack: ShowGames);
+            var page = new RustSettingsPage(game, _settings, _store, onBack: ShowGames);
             AttachField(page);
             SetContent(page);
             SetActive(_navGames);
