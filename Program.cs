@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using Velopack;
 
 namespace VibranceHud
 {
@@ -8,6 +9,11 @@ namespace VibranceHud
         [STAThread]
         private static void Main()
         {
+            // Must be the very first thing that runs: during an install/update Velopack
+            // launches the app with special hooks, handles them, and exits before any
+            // UI appears. On a normal launch it does nothing and returns immediately.
+            VelopackApp.Build().Run();
+
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
