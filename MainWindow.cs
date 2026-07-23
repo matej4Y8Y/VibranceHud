@@ -126,9 +126,11 @@ namespace VibranceHud
             _field.Update(Math.Min((now - _last).TotalSeconds, 0.1));
             _last = now;
 
-            _titleBar.Invalidate();
-            _nav.Invalidate();
-            _currentPage?.Invalidate();
+            // invalidateChildren: true so transparent children (title labels, chips, slider)
+            // re-sample the moving plexus instead of freezing the patch behind them.
+            _titleBar.Invalidate(true);
+            _nav.Invalidate(true);
+            _currentPage?.Invalidate(true);
         }
 
         private NavButton MakeNav(string label, int index) => new()

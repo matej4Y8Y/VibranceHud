@@ -16,13 +16,13 @@ namespace VibranceHud.Pages
             BackColor = Theme.Background;
             Font = new Font(Theme.FontFamily, 9.5f);
 
-            var card = new CardPanel { Size = new Size(560, 200) };
+            var card = new CardPanel { Location = new Point(40, 40), Size = new Size(560, 200) };
             card.Controls.Add(UiHelpers.Caption("ACCOUNT & LICENSE", 20, 20, 300));
             card.Controls.Add(new Label
             {
                 Text = "Coming soon",
                 ForeColor = Theme.Accent,
-                BackColor = Theme.Surface,
+                BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 15f, FontStyle.Bold),
                 Location = new Point(20, 52),
                 AutoSize = true
@@ -32,7 +32,7 @@ namespace VibranceHud.Pages
                 Text = "Vibrance HUD will offer a free trial, then a low monthly\n" +
                        "subscription. Your license and trial status will live here.",
                 ForeColor = Theme.TextDim,
-                BackColor = Theme.Surface,
+                BackColor = Color.Transparent,
                 Location = new Point(20, 96),
                 Size = new Size(520, 60)
             });
