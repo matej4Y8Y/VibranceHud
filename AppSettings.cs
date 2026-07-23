@@ -14,6 +14,9 @@ namespace VibranceHud
         public int GammaPercent { get; set; } = 100;
         public bool EyeCare { get; set; }
 
+        /// <summary>Last version that showed its "what's new" notes.</summary>
+        public string LastSeenVersion { get; set; } = "";
+
         // Rust launch boosts
         public bool RustHighPriority { get; set; } = true;
         public bool RustTrimLauncher { get; set; }

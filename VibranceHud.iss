@@ -38,4 +38,5 @@ Name: "{autoprograms}\PlexusX"; Filename: "{app}\PlexusX.exe"
 Name: "{autodesktop}\PlexusX"; Filename: "{app}\PlexusX.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\PlexusX.exe"; Description: "Launch PlexusX now"; Flags: nowait postinstall skipifsilent
+; No "skipifsilent": a silent auto-update must relaunch PlexusX afterwards.
+Filename: "{app}\PlexusX.exe"; Description: "Launch PlexusX now"; Flags: nowait postinstall

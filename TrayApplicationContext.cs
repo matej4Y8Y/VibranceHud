@@ -30,6 +30,7 @@ namespace VibranceHud
         private readonly VibranceEngine _engine;
         private readonly SettingsStore _store;
         private readonly AppSettings _settings;
+        private readonly SplashForm _splash;
         private MainWindow _window;
 
         public TrayApplicationContext()
@@ -84,12 +85,78 @@ namespace VibranceHud
             };
             _trayIcon.DoubleClick += (s, e) => _window.ShowAndFocus();
 
-            // Show the window on launch so the app opens to something visible.
-            _window.ShowAndFocus();
+            // The splash drives startup: check for updates, install one if there is one,
+            // then hand over to the main window.
+            _splash = new SplashForm();
+            _splash.Shown += async (s, e) => await RunStartupAsync();
+            _splash.Show();
+        }
 
-            // Silently look for a newer release in the background, so an update is ready
-            // to install the next time the app launches. Fire-and-forget by design.
-            _ = UpdateService.CheckOnStartupAsync();
+        /// <summary>
+        /// Loading sequence: check for an update and, if there is one, download and install
+        /// it silently (the installer relaunches us). Otherwise show "what's new" if we just
+        /// updated, then open the app.
+        /// </summary>
+        private async Task RunStartupAsync()
+        {
+            var startedAt = DateTime.UtcNow;
+
+            _splash.SetStatus("Checking for updates…");
+            var update = await UpdateService.TryGetUpdateAsync();
+
+            if (update != null && await InstallUpdateAsync(update))
+                return; // the installer took over and will relaunch PlexusX
+
+            _splash.SetStatus("Starting…");
+            var notes = await WhatsNewNotesAsync();
+
+            // Keep the splash up briefly so it never flashes past on a fast machine.
+            var shown = DateTime.UtcNow - startedAt;
+            var minimum = TimeSpan.FromMilliseconds(1400);
+            if (shown < minimum) await Task.Delay(minimum - shown);
+
+            _splash.Close();
+
+            if (notes != null)
+            {
+                using var whatsNew = new WhatsNewWindow(UpdateService.CurrentVersion, notes);
+                whatsNew.ShowDialog();
+            }
+
+            _window.ShowAndFocus();
+        }
+
+        /// <summary>Returns true when the installer started and this instance should quit.</summary>
+        private async Task<bool> InstallUpdateAsync(ReleaseInfo update)
+        {
+            string label = $"Downloading update {update.Version}…";
+            _splash.SetStatus(label, 0);
+
+            var file = await UpdateService.DownloadAsync(update, p => _splash.SetStatus(label, p));
+            if (file == null) return false; // download failed - carry on into the app
+
+            _splash.SetStatus("Installing update…");
+            if (!UpdateService.RunInstallerSilently(file)) return false;
+
+            ExitThread();
+            return true;
+        }
+
+        /// <summary>
+        /// The notes to show once after an update, or null when there's nothing to show
+        /// (same version as last run, or a brand-new install).
+        /// </summary>
+        private async Task<string?> WhatsNewNotesAsync()
+        {
+            var current = UpdateService.CurrentVersion.ToString();
+            if (_settings.LastSeenVersion == current) return null;
+
+            bool firstEverRun = string.IsNullOrEmpty(_settings.LastSeenVersion);
+            _settings.LastSeenVersion = current;
+            _store.Save(_settings);
+            if (firstEverRun) return null; // a fresh install doesn't need a changelog
+
+            return await UpdateService.GetNotesForVersionAsync(UpdateService.CurrentVersion);
         }
 
         /// <summary>
