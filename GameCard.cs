@@ -37,14 +37,12 @@ namespace VibranceHud
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = Rounded(rect, 12))
-            {
-                using var fill = new SolidBrush(_hover ? Theme.SurfaceHover : Theme.Surface);
-                g.FillPath(fill, path);
-                using var pen = new Pen(_hover ? Theme.Accent : Theme.Border, 1f);
-                g.DrawPath(pen, path);
-            }
+            var rectF = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+            Glass.PaintPanel(g, rectF, 12, baseAlpha: _hover ? 100 : 74, sheenTop: _hover ? 44 : 30);
+            if (_hover)
+                using (var pen = new Pen(Theme.Accent, 1f))
+                using (var path = Glass.RoundedPath(rectF, 12))
+                    g.DrawPath(pen, path);
 
             // Logo tile: accent-tinted rounded square with the game's initial.
             var tile = new Rectangle(20, 20, 52, 52);

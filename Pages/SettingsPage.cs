@@ -34,7 +34,7 @@ namespace VibranceHud.Pages
             {
                 Text = "Launch with Windows",
                 ForeColor = Theme.Text,
-                BackColor = Theme.Surface,
+                BackColor = Color.Transparent,
                 Location = new Point(18, 46),
                 AutoSize = true
             });
@@ -58,7 +58,7 @@ namespace VibranceHud.Pages
             {
                 Text = $"{Clamp(settings.OpacityPercent)}%",
                 ForeColor = Theme.TextDim,
-                BackColor = Theme.Surface,
+                BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 8.5f),
                 Location = new Point(width - 60, 16),
                 Size = new Size(42, 16),
