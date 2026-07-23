@@ -10,6 +10,9 @@ AppName=PlexusX
 AppVersion={#AppVersion}
 AppPublisher=PlexusX
 DefaultDirName={localappdata}\Programs\PlexusX
+; Always install into the app's own folder - do NOT let the user pick a folder
+; like the Desktop, which would scatter hundreds of .NET files loose.
+DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=installer
