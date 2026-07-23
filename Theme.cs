@@ -18,8 +18,9 @@ namespace VibranceHud
         public static readonly Color SurfaceHover = Color.FromArgb(34, 33, 42);
         public static readonly Color Border = Color.FromArgb(48, 47, 58);
 
-        /// <summary>Glass rim: white at ~50% opacity, drawn 1px around the card.</summary>
-        public static readonly Color GlassEdge = Color.FromArgb(128, 255, 255, 255);
+        /// <summary>Glass rim: grey at low opacity, drawn 1px around the card/window -
+        /// a soft, barely-there edge rather than the old bright white line.</summary>
+        public static readonly Color GlassEdge = Color.FromArgb(64, 150, 150, 150);
 
         public static readonly Color Text = Color.FromArgb(240, 240, 246);
         public static readonly Color TextDim = Color.FromArgb(128, 128, 142);

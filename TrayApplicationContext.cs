@@ -6,8 +6,8 @@ using System.Windows.Forms;
 namespace VibranceHud
 {
     /// <summary>
-    /// Keeps the app alive as a tray icon with no visible main window, and listens
-    /// for the global hotkey (Ctrl+Alt+V) to pop the vibrance slider up.
+    /// Keeps the app alive as a tray icon and owns the main window, opening/focusing it on
+    /// the global hotkey (Ctrl+Alt+V), the tray double-click, and startup.
     /// </summary>
     public sealed class TrayApplicationContext : ApplicationContext
     {
@@ -29,7 +29,7 @@ namespace VibranceHud
         private readonly VibranceEngine _engine;
         private readonly SettingsStore _store;
         private readonly AppSettings _settings;
-        private readonly HudForm _popup;
+        private readonly MainWindow _window;
 
         public TrayApplicationContext()
         {
@@ -44,10 +44,10 @@ namespace VibranceHud
             // Restore where the user left the slider last session.
             _engine.SetLevel(_settings.Level);
 
-            _popup = new HudForm(_engine, _settings, _store);
+            _window = new MainWindow(_engine, _settings, _store);
 
             _hotkeyWindow = new HotkeyWindow();
-            _hotkeyWindow.HotkeyPressed += (s, e) => _popup.ShowNearCursor();
+            _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
 
             if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, MOD_CONTROL | MOD_ALT, VK_V))
             {
@@ -62,8 +62,8 @@ namespace VibranceHud
             }
 
             var menu = new ContextMenuStrip();
-            menu.Items.Add("Open HUD  (Ctrl+Alt+V)", null, (s, e) => _popup.ShowNearCursor());
-            menu.Items.Add("Reset to default", null, (s, e) => _engine.Reset());
+            menu.Items.Add("Open  (Ctrl+Alt+V)", null, (s, e) => _window.ShowAndFocus());
+            menu.Items.Add("Reset vibrance", null, (s, e) => _engine.Reset());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Check for updates", null, async (s, e) => await UpdateService.CheckManuallyAsync());
             menu.Items.Add("Exit", null, (s, e) => ExitThread());
@@ -75,7 +75,10 @@ namespace VibranceHud
                 Visible = true,
                 ContextMenuStrip = menu
             };
-            _trayIcon.DoubleClick += (s, e) => _popup.ShowNearCursor();
+            _trayIcon.DoubleClick += (s, e) => _window.ShowAndFocus();
+
+            // Show the window on launch so the app opens to something visible.
+            _window.ShowAndFocus();
 
             // Silently look for a newer release in the background, so an update is ready
             // to install the next time the app launches. Fire-and-forget by design.
