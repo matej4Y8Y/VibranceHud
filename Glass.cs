@@ -10,9 +10,6 @@ namespace VibranceHud
     /// </summary>
     public static class Glass
     {
-        private static readonly Color Fill = Color.FromArgb(10, 10, 12);   // matte black
-        private static readonly Color Edge = Color.FromArgb(148, 148, 158); // grey rim
-
         public static GraphicsPath RoundedPath(RectangleF rect, float radius)
         {
             var path = new GraphicsPath();
@@ -32,9 +29,9 @@ namespace VibranceHud
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             using var path = RoundedPath(rect, radius);
-            using (var fill = new SolidBrush(Color.FromArgb(fillAlpha, Fill)))
+            using (var fill = new SolidBrush(Color.FromArgb(fillAlpha, Theme.GlassFill)))
                 g.FillPath(fill, path);
-            using (var rim = new Pen(Color.FromArgb(rimAlpha, Edge), 1.2f))
+            using (var rim = new Pen(Color.FromArgb(rimAlpha, Theme.GlassEdge), 1.2f))
                 g.DrawPath(rim, path);
         }
 
@@ -45,7 +42,7 @@ namespace VibranceHud
             using var path = RoundedPath(rect, radius);
             using (var fill = new SolidBrush(Color.FromArgb(alpha, accent)))
                 g.FillPath(fill, path);
-            using (var rim = new Pen(Color.FromArgb(120, Edge), 1.2f))
+            using (var rim = new Pen(Color.FromArgb(120, Theme.GlassEdge), 1.2f))
                 g.DrawPath(rim, path);
         }
     }

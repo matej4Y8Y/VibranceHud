@@ -29,7 +29,7 @@ namespace VibranceHud
         private readonly VibranceEngine _engine;
         private readonly SettingsStore _store;
         private readonly AppSettings _settings;
-        private readonly MainWindow _window;
+        private MainWindow _window;
 
         public TrayApplicationContext()
         {
@@ -44,7 +44,9 @@ namespace VibranceHud
             // Restore where the user left the slider last session.
             _engine.SetLevel(_settings.Level);
 
-            _window = new MainWindow(_engine, _settings, _store);
+            Theme.Apply(_settings.LightTheme); // before building the window
+
+            _window = new MainWindow(_engine, _settings, _store, ApplyTheme);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
@@ -83,6 +85,35 @@ namespace VibranceHud
             // Silently look for a newer release in the background, so an update is ready
             // to install the next time the app launches. Fire-and-forget by design.
             _ = UpdateService.CheckInBackgroundAsync();
+        }
+
+        /// <summary>
+        /// Switch the palette and rebuild the window so every control repaints in the new
+        /// theme. The rebuild is deferred by a one-shot timer so we don't dispose the window
+        /// while it's still handling the toggle's event.
+        /// </summary>
+        private void ApplyTheme(bool light)
+        {
+            _settings.LightTheme = light;
+            _store.Save(_settings);
+            Theme.Apply(light);
+
+            var deferred = new System.Windows.Forms.Timer { Interval = 1 };
+            deferred.Tick += (s, e) =>
+            {
+                deferred.Stop();
+                deferred.Dispose();
+                RebuildWindow();
+            };
+            deferred.Start();
+        }
+
+        private void RebuildWindow()
+        {
+            var old = _window;
+            _window = new MainWindow(_engine, _settings, _store, ApplyTheme);
+            _window.ShowAndFocus();
+            old.Dispose();
         }
 
         protected override void ExitThreadCore()
