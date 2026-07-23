@@ -1,35 +1,46 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 
 namespace VibranceHud
 {
     /// <summary>
-    /// An animated purple/magenta particle field that emanates from the centre and fades
-    /// out toward the edges - recreating the reference video's look procedurally, so it
-    /// stays sharp at any size and costs almost nothing. Pure drawing; the hosting control
-    /// owns the timer and decides when to run it.
+    /// An animated purple "plexus": glowing nodes drift slowly around the window (bouncing
+    /// softly off the edges so they float), and thin lines web between any two nodes closer
+    /// than a threshold - the lines fade with distance, so the web constantly forms and
+    /// dissolves. Recreates the reference network animation procedurally. Pure drawing; the
+    /// hosting window owns the timer and decides when to run it.
     /// </summary>
     public sealed class ParticleField
     {
-        private struct Particle
+        private struct Node
         {
-            public float Ang, Rad, Speed, Bright, Phase, Size;
-            public bool Node;
+            public float X, Y, Vx, Vy, Phase, Size;
+            public bool Big;
             public Color Color;
+        }
+
+        private readonly struct Segment
+        {
+            public readonly float X1, Y1, X2, Y2;
+            public readonly int Alpha;
+            public Segment(float x1, float y1, float x2, float y2, int a) { X1 = x1; Y1 = y1; X2 = x2; Y2 = y2; Alpha = a; }
         }
 
         private static readonly Color Violet = Color.FromArgb(167, 139, 250);
         private static readonly Color Magenta = Color.FromArgb(232, 96, 214);
+        private static readonly Color LineColor = Color.FromArgb(150, 130, 240);
 
-        private readonly Particle[] _ps;
+        private readonly Node[] _nodes;
+        private readonly List<Segment> _segments = new();
         private readonly Random _rng = new();
         private int _w, _h;
         private double _t;
 
-        public ParticleField(int count) => _ps = new Particle[count];
+        public ParticleField(int count) => _nodes = new Node[count];
 
-        private float MaxR => (float)Math.Sqrt(_w * (double)_w + _h * (double)_h) * 0.55f;
+        private float Threshold => Math.Clamp(Math.Min(_w, _h) * 0.26f, 120f, 220f);
 
         public void Resize(int w, int h)
         {
@@ -37,40 +48,66 @@ namespace VibranceHud
             _w = Math.Max(1, w);
             _h = Math.Max(1, h);
             if (first)
-                for (int i = 0; i < _ps.Length; i++)
-                    Spawn(ref _ps[i], anywhere: true);
+            {
+                for (int i = 0; i < _nodes.Length; i++)
+                    Spawn(ref _nodes[i]);
+                BuildSegments(); // so the web is present on the very first paint
+            }
         }
 
-        private void Spawn(ref Particle p, bool anywhere)
+        private void Spawn(ref Node n)
         {
-            p.Ang = (float)(_rng.NextDouble() * Math.PI * 2);
-            // Bias toward the centre (dense core, sparse rim) via a power curve.
-            p.Rad = anywhere
-                ? (float)(MaxR * Math.Pow(_rng.NextDouble(), 1.7))
-                : (float)(MaxR * 0.05 * _rng.NextDouble());
-            p.Speed = 5f + (float)_rng.NextDouble() * 12f; // slow outward drift (px/s)
-            p.Bright = 0.35f + (float)_rng.NextDouble() * 0.65f;
-            p.Phase = (float)(_rng.NextDouble() * Math.PI * 2);
-            p.Node = _rng.NextDouble() < 0.12; // ~12% are bright, haloed "nodes"
-            p.Size = p.Node ? 3f + (float)_rng.NextDouble() * 2.5f : 1.5f + (float)_rng.NextDouble() * 1.5f;
-            p.Color = _rng.NextDouble() < 0.5 ? Violet : Magenta;
+            n.X = (float)(_rng.NextDouble() * _w);
+            n.Y = (float)(_rng.NextDouble() * _h);
+            double ang = _rng.NextDouble() * Math.PI * 2;
+            float speed = 8f + (float)_rng.NextDouble() * 15f; // slow float (px/s)
+            n.Vx = (float)Math.Cos(ang) * speed;
+            n.Vy = (float)Math.Sin(ang) * speed;
+            n.Phase = (float)(_rng.NextDouble() * Math.PI * 2);
+            n.Big = _rng.NextDouble() < 0.4;
+            n.Size = n.Big ? 3f + (float)_rng.NextDouble() * 2f : 1.8f + (float)_rng.NextDouble() * 1.2f;
+            n.Color = _rng.NextDouble() < 0.5 ? Violet : Magenta;
         }
 
         public void Update(double dtSeconds)
         {
             _t += dtSeconds;
-            float maxR = MaxR;
-            for (int i = 0; i < _ps.Length; i++)
+            float dt = (float)dtSeconds;
+
+            for (int i = 0; i < _nodes.Length; i++)
             {
-                _ps[i].Rad += _ps[i].Speed * (float)dtSeconds;
-                if (_ps[i].Rad > maxR)
-                    Spawn(ref _ps[i], anywhere: false); // recycle back near the centre
+                ref var n = ref _nodes[i];
+                n.X += n.Vx * dt;
+                n.Y += n.Vy * dt;
+                if (n.X < 0) { n.X = 0; n.Vx = -n.Vx; }
+                else if (n.X > _w) { n.X = _w; n.Vx = -n.Vx; }
+                if (n.Y < 0) { n.Y = 0; n.Vy = -n.Vy; }
+                else if (n.Y > _h) { n.Y = _h; n.Vy = -n.Vy; }
+            }
+
+            BuildSegments();
+        }
+
+        // Rebuild the web once per frame; the surfaces then just draw these segments.
+        private void BuildSegments()
+        {
+            _segments.Clear();
+            float thr = Threshold, thr2 = thr * thr;
+            for (int i = 0; i < _nodes.Length; i++)
+            {
+                for (int j = i + 1; j < _nodes.Length; j++)
+                {
+                    float dx = _nodes[i].X - _nodes[j].X, dy = _nodes[i].Y - _nodes[j].Y;
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 >= thr2) continue;
+                    float d = (float)Math.Sqrt(d2);
+                    int a = (int)((1f - d / thr) * 95f);
+                    if (a <= 3) continue;
+                    _segments.Add(new Segment(_nodes[i].X, _nodes[i].Y, _nodes[j].X, _nodes[j].Y, a));
+                }
             }
         }
 
-        /// <summary>Paints the field into a surface whose top-left sits at (offsetX,
-        /// offsetY) in window coordinates, so several surfaces share one continuous field
-        /// centred on the window.</summary>
         public void Paint(Graphics g, int offsetX, int offsetY)
         {
             var state = g.Save();
@@ -84,43 +121,30 @@ namespace VibranceHud
             if (_w <= 1 || _h <= 1) return;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            float cx = _w / 2f, cy = _h / 2f, maxR = MaxR;
-
-            // Soft central bloom.
-            using (var bloomPath = new GraphicsPath())
+            using (var pen = new Pen(LineColor, 1f))
             {
-                float rw = maxR * 1.6f;
-                var bounds = new RectangleF(cx - rw, cy - rw * 0.62f, rw * 2, rw * 1.24f);
-                bloomPath.AddEllipse(bounds);
-                using var bloom = new PathGradientBrush(bloomPath)
+                foreach (var s in _segments)
                 {
-                    CenterColor = Color.FromArgb(38, Violet),
-                    SurroundColors = new[] { Color.FromArgb(0, Violet) }
-                };
-                g.FillPath(bloom, bloomPath);
+                    pen.Color = Color.FromArgb(s.Alpha, LineColor);
+                    g.DrawLine(pen, s.X1, s.Y1, s.X2, s.Y2);
+                }
             }
 
             using var brush = new SolidBrush(Color.White);
-            foreach (var p in _ps)
+            foreach (var n in _nodes)
             {
-                float rf = 1f - p.Rad / maxR; // brighter near the centre
-                if (rf <= 0) continue;
+                float twinkle = 0.7f + 0.3f * (float)Math.Sin(_t * 2 + n.Phase);
+                int alpha = (int)(twinkle * 230);
 
-                float x = cx + (float)Math.Cos(p.Ang) * p.Rad;
-                float y = cy + (float)Math.Sin(p.Ang) * p.Rad;
-                float twinkle = 0.65f + 0.35f * (float)Math.Sin(_t * 2 + p.Phase);
-                int alpha = (int)(p.Bright * rf * twinkle * 205);
-                if (alpha <= 3) continue;
-
-                if (p.Node)
+                if (n.Big)
                 {
-                    brush.Color = Color.FromArgb(Math.Min(55, alpha / 3), p.Color);
-                    float hs = p.Size * 4.5f;
-                    g.FillEllipse(brush, x - hs / 2, y - hs / 2, hs, hs);
+                    brush.Color = Color.FromArgb(Math.Min(60, alpha / 3), n.Color);
+                    float hs = n.Size * 4.5f;
+                    g.FillEllipse(brush, n.X - hs / 2, n.Y - hs / 2, hs, hs);
                 }
 
-                brush.Color = Color.FromArgb(Math.Min(235, alpha), p.Color);
-                g.FillEllipse(brush, x - p.Size / 2, y - p.Size / 2, p.Size, p.Size);
+                brush.Color = Color.FromArgb(Math.Min(240, alpha), n.Color);
+                g.FillEllipse(brush, n.X - n.Size / 2, n.Y - n.Size / 2, n.Size, n.Size);
             }
         }
     }
