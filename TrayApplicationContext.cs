@@ -41,7 +41,9 @@ namespace VibranceHud
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX"));
             _settings = _store.Load();
 
-            // Restore where the user left the slider last session.
+            // Restore where the user left things last session.
+            _engine.Brightness = _settings.BrightnessPercent;
+            _engine.EyeCare = _settings.EyeCare;
             _engine.SetLevel(_settings.Level);
 
             Theme.Apply(_settings.LightTheme); // before building the window
