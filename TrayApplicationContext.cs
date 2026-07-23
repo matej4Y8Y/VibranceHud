@@ -26,6 +26,7 @@ namespace VibranceHud
         private readonly HotkeyWindow _hotkeyWindow;
         private readonly VibranceController _controller;
         private readonly SaturationOverlay _overlay;
+        private readonly DisplayGammaRamp _gammaRamp;
         private readonly VibranceEngine _engine;
         private readonly SettingsStore _store;
         private readonly AppSettings _settings;
@@ -35,7 +36,8 @@ namespace VibranceHud
         {
             _controller = new VibranceController();
             _overlay = new SaturationOverlay();
-            _engine = new VibranceEngine(_controller, _overlay);
+            _gammaRamp = new DisplayGammaRamp();
+            _engine = new VibranceEngine(_controller, _overlay, _gammaRamp);
 
             _store = new SettingsStore(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX"));
@@ -43,6 +45,7 @@ namespace VibranceHud
 
             // Restore where the user left things last session.
             _engine.Brightness = _settings.BrightnessPercent;
+            _engine.Gamma = _settings.GammaPercent;
             _engine.EyeCare = _settings.EyeCare;
             _engine.SetLevel(_settings.Level);
 
@@ -122,7 +125,8 @@ namespace VibranceHud
         {
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
             _store.Save(_settings);
-            _overlay.Dispose(); // clears any oversaturation and releases the Magnification runtime
+            _overlay.Dispose();    // clears any oversaturation and releases the Magnification runtime
+            _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _hotkeyWindow.DestroyHandle();

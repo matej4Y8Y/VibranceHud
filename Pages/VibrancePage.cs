@@ -18,10 +18,11 @@ namespace VibranceHud.Pages
 
         private readonly FlatSlider _slider;
         private readonly FlatSlider _brightness;
+        private readonly FlatSlider _gamma;
         private readonly ToggleSwitch _eyeCare;
         private readonly List<ChipButton> _chips = new();
 
-        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY, _brightCapY, _eyeY;
+        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY, _brightCapY, _gammaCapY, _eyeY;
 
         // Built once - OnPaint runs ~30x/sec, so never allocate fonts inside it.
         private static readonly Font NumberFont = new(Theme.FontFamily, 46f, FontStyle.Bold);
@@ -80,6 +81,21 @@ namespace VibranceHud.Pages
             };
             Controls.Add(_brightness);
 
+            _gamma = new FlatSlider
+            {
+                Minimum = VibranceEngine.MinGamma,
+                Maximum = VibranceEngine.MaxGamma,
+                Notch = 100,
+                Value = _engine.Gamma
+            };
+            _gamma.ValueChanged += (s, e) =>
+            {
+                _engine.Gamma = _gamma.Value;
+                _settings.GammaPercent = _gamma.Value;
+                Invalidate();
+            };
+            Controls.Add(_gamma);
+
             _eyeCare = new ToggleSwitch { Checked = _engine.EyeCare };
             _eyeCare.CheckedChanged += (s, e) =>
             {
@@ -97,7 +113,7 @@ namespace VibranceHud.Pages
         {
             _colW = Math.Min(560, Width - 80);
             _cx = (Width - _colW) / 2;
-            int top = Math.Max(24, (Height - 500) / 2);
+            int top = Math.Max(20, (Height - 560) / 2);
 
             _numberY = top;
             _captionY = top + 90;
@@ -114,7 +130,10 @@ namespace VibranceHud.Pages
             _brightCapY = chipY + 56;
             _brightness.SetBounds(_cx, chipY + 78, _colW, 32);
 
-            _eyeY = chipY + 130;
+            _gammaCapY = chipY + 122;
+            _gamma.SetBounds(_cx, chipY + 144, _colW, 32);
+
+            _eyeY = chipY + 196;
             _eyeCare.SetBounds(_cx + _colW - 44, _eyeY - 2, 44, 22);
 
             Invalidate();
@@ -126,7 +145,7 @@ namespace VibranceHud.Pages
             var g = e.Graphics;
 
             // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
-            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 448);
+            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 514);
             Glass.PaintPanel(g, panel, 24, fillAlpha: 165);
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -150,6 +169,12 @@ namespace VibranceHud.Pages
             TextRenderer.DrawText(g, $"{_brightness.Value}%", SmallFont,
                 new Rectangle(_cx + _colW - 50, _brightCapY, 50, 16), Theme.TextDim, TextFormatFlags.Right);
 
+            // ---- Gamma ----
+            TextRenderer.DrawText(g, UiHelpers.Spaced("GAMMA"), CaptionFont,
+                new Rectangle(_cx, _gammaCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
+            TextRenderer.DrawText(g, $"{_gamma.Value / 100f:0.00}", SmallFont,
+                new Rectangle(_cx + _colW - 50, _gammaCapY, 50, 16), Theme.TextDim, TextFormatFlags.Right);
+
             // ---- Eye care ----
             TextRenderer.DrawText(g, "Eye care  (warm light)", RowFont,
                 new Rectangle(_cx, _eyeY, 300, 20), Theme.Text, TextFormatFlags.Left);
@@ -165,6 +190,7 @@ namespace VibranceHud.Pages
         {
             _slider.Value = Math.Clamp(level, 0, VibranceEngine.Max);
             _brightness.Value = _engine.Brightness;
+            _gamma.Value = _engine.Gamma;
             _eyeCare.Checked = _engine.EyeCare;
             UpdateActiveChip();
             Invalidate();

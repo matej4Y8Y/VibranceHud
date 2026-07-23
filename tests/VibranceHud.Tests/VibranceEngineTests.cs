@@ -23,11 +23,27 @@ namespace VibranceHud.Tests
             public float[] Last => Applied[^1];
         }
 
+        private sealed class FakeGamma : IGammaRamp
+        {
+            public readonly List<ushort[]> Applied = new();
+            public int ResetCalls;
+            public void Apply(ushort[] ramp) => Applied.Add(ramp);
+            public void Reset() => ResetCalls++;
+            public ushort[] Last => Applied[^1];
+        }
+
         private static (VibranceEngine engine, FakeController ctrl, FakeOverlay ovl) NewEngine()
+        {
+            var (e, c, o, _) = NewEngineFull();
+            return (e, c, o);
+        }
+
+        private static (VibranceEngine engine, FakeController ctrl, FakeOverlay ovl, FakeGamma gamma) NewEngineFull()
         {
             var ctrl = new FakeController();
             var ovl = new FakeOverlay();
-            return (new VibranceEngine(ctrl, ovl), ctrl, ovl);
+            var gamma = new FakeGamma();
+            return (new VibranceEngine(ctrl, ovl, gamma), ctrl, ovl, gamma);
         }
 
         private static void AssertMatrix(float[] expected, float[] actual)
@@ -167,6 +183,55 @@ namespace VibranceHud.Tests
 
             Assert.Equal(100, ctrl.LastSet); // driver still pinned
             AssertMatrix(ColorAdjust.Build(1.6f, 0.9f, VibranceEngine.EyeCareWarmth), ovl.Last);
+        }
+
+        [Fact]
+        public void Gamma_AppliesRamp_AndResetsAt100()
+        {
+            var (engine, _, _, gamma) = NewEngineFull();
+
+            engine.Gamma = 130;
+
+            Assert.Equal(130, engine.Gamma);
+            Assert.Equal(GammaCurve.Build(1.3f), gamma.Last);
+
+            int resetsBefore = gamma.ResetCalls;
+            engine.Gamma = 100;
+            Assert.Equal(resetsBefore + 1, gamma.ResetCalls); // neutral uses the linear ramp
+        }
+
+        [Fact]
+        public void Gamma_IsClampedToSafeRange()
+        {
+            var (engine, _, _, _) = NewEngineFull();
+
+            engine.Gamma = 900;
+            Assert.Equal(VibranceEngine.MaxGamma, engine.Gamma);
+
+            engine.Gamma = 1;
+            Assert.Equal(VibranceEngine.MinGamma, engine.Gamma);
+        }
+
+        [Fact]
+        public void Gamma_DoesNotTouchTheColorMatrix()
+        {
+            var (engine, _, ovl, _) = NewEngineFull();
+
+            engine.Gamma = 120; // gamma lives in the ramp, not the matrix
+
+            Assert.Empty(ovl.Applied);
+        }
+
+        [Fact]
+        public void Reset_AlsoRestoresGamma()
+        {
+            var (engine, _, _, gamma) = NewEngineFull();
+            engine.Gamma = 60;
+
+            engine.Reset();
+
+            Assert.Equal(100, engine.Gamma);
+            Assert.True(gamma.ResetCalls >= 1);
         }
 
         [Fact]

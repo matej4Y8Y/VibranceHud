@@ -11,6 +11,7 @@ namespace VibranceHud
         public int OpacityPercent { get; set; } = 85;
         public bool LightTheme { get; set; }
         public int BrightnessPercent { get; set; } = 100;
+        public int GammaPercent { get; set; } = 100;
         public bool EyeCare { get; set; }
     }
 }
