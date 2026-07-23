@@ -29,7 +29,7 @@ namespace VibranceHud
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
 
-        private readonly ParticleField _field = new(240);
+        private readonly ParticleField _field = new(65);
         private readonly System.Windows.Forms.Timer _timer;
         private DateTime _last = DateTime.UtcNow;
 
