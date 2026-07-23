@@ -15,7 +15,7 @@ namespace VibranceHud.Pages
     /// controls and writes changes back through <see cref="RustSettingsService"/>, which
     /// backs up the original first.
     /// </summary>
-    public sealed class RustSettingsPage : UserControl
+    public sealed class RustSettingsPage : GlowPage
     {
         private sealed record Tweak(string Label, string Convar, string On, string Off);
 

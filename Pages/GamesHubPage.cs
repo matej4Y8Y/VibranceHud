@@ -10,7 +10,7 @@ namespace VibranceHud.Pages
     /// Clicking a card opens that game's optimization page. v1 supports Rust; more games
     /// slot in as the catalog grows.
     /// </summary>
-    public sealed class GamesHubPage : UserControl
+    public sealed class GamesHubPage : GlowPage
     {
         public GamesHubPage(Action<DetectedGame> onConfigure)
         {
