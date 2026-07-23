@@ -55,6 +55,7 @@ namespace VibranceHud
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
             Text = "PlexusX";
+            Icon = AppIcon.Value;
             BackColor = Theme.Background;
             ClientSize = new Size(1040, 680);
             MinimumSize = new Size(900, 600);

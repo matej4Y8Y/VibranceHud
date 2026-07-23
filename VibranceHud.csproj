@@ -11,7 +11,13 @@
     <!-- Bumped for every release; the running app compares this against the newest
          GitHub release to decide whether to update itself. -->
     <Version>0.2.0</Version>
+    <ApplicationIcon>brand\PlexusX.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- The PlexusX app icon, embedded so the tray and window can load it at runtime. -->
+  <ItemGroup>
+    <EmbeddedResource Include="brand\PlexusX.ico" LogicalName="PlexusX.ico" />
+  </ItemGroup>
 
   <!-- The test project lives under tests\ inside this folder; keep its sources out of
        the app's compilation (they reference xUnit, which the app doesn't). -->
