@@ -23,7 +23,9 @@ namespace VibranceHud
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
+                   | ControlStyles.SupportsTransparentBackColor
                    | ControlStyles.ResizeRedraw, true);
+            BackColor = Color.Transparent;
             Size = new Size(200, 160);
             Cursor = Cursors.Hand;
             Margin = new Padding(0, 0, 16, 16);
@@ -38,7 +40,7 @@ namespace VibranceHud
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             var rectF = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Glass.PaintPanel(g, rectF, 12, baseAlpha: _hover ? 100 : 74, sheenTop: _hover ? 44 : 30);
+            Glass.PaintPanel(g, rectF, 12, fillAlpha: _hover ? 170 : 145);
             if (_hover)
                 using (var pen = new Pen(Theme.Accent, 1f))
                 using (var path = Glass.RoundedPath(rectF, 12))

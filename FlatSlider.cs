@@ -32,7 +32,9 @@ namespace VibranceHud
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
+                   | ControlStyles.SupportsTransparentBackColor
                    | ControlStyles.ResizeRedraw, true);
+            BackColor = Color.Transparent;
             Height = 32;
             Cursor = Cursors.Hand;
         }

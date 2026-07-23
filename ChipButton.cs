@@ -29,7 +29,9 @@ namespace VibranceHud
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
+                   | ControlStyles.SupportsTransparentBackColor
                    | ControlStyles.ResizeRedraw, true);
+            BackColor = Color.Transparent;
             Cursor = Cursors.Hand;
             Height = 32;
         }
@@ -57,7 +59,7 @@ namespace VibranceHud
             if (_active)
                 Glass.PaintAccent(g, rect, radius, Theme.Accent);
             else
-                Glass.PaintPanel(g, rect, radius, baseAlpha: _hover ? 90 : 60, sheenTop: _hover ? 42 : 26);
+                Glass.PaintPanel(g, rect, radius, fillAlpha: _hover ? 180 : 148);
 
             var textColor = _active ? Theme.Background : Theme.Accent;
             TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width, Height), textColor,
