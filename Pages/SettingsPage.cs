@@ -126,6 +126,47 @@ namespace VibranceHud.Pages
             checkBtn.Click += async (s, e) => await UpdateService.CheckManuallyAsync();
             updates.Controls.Add(checkBtn);
             Controls.Add(updates);
+
+            // ---- About ----
+            var about = new CardPanel { Location = new Point(40, 512), Size = new Size(width, 150) };
+            about.Controls.Add(new LogoBox
+            {
+                Image = BrandAssets.HorizontalLogo(Theme.IsLight),
+                Location = new Point(18, 18),
+                Size = new Size(190, 26)
+            });
+            about.Controls.Add(new Label
+            {
+                Text = AppInfo.Tagline,
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 9f),
+                Location = new Point(18, 54),
+                AutoSize = true
+            });
+            about.Controls.Add(new Label
+            {
+                Text = $"{AppInfo.ProductName}  {AppInfo.VersionText}",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(18, 78),
+                AutoSize = true
+            });
+            var discordBtn = FlatButton("Join our Discord", 18, 104, 170);
+            discordBtn.Click += (s, e) =>
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(AppInfo.DiscordUrl)
+                    {
+                        UseShellExecute = true
+                    });
+                }
+                catch { /* no browser / blocked - nothing we can do */ }
+            };
+            about.Controls.Add(discordBtn);
+            Controls.Add(about);
         }
 
         private static int Clamp(int pct) => Math.Clamp(pct, 50, 100);

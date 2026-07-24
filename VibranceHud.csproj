@@ -24,9 +24,11 @@
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
-  <!-- The PlexusX app icon, embedded so the tray and window can load it at runtime. -->
+  <!-- The PlexusX app icon + logo lockups, embedded so the window can load them at runtime. -->
   <ItemGroup>
     <EmbeddedResource Include="brand\PlexusX.ico" LogicalName="PlexusX.ico" />
+    <EmbeddedResource Include="brand\png\logo-horizontal-white.png" LogicalName="logo-horizontal-white.png" />
+    <EmbeddedResource Include="brand\png\logo-horizontal-black.png" LogicalName="logo-horizontal-black.png" />
   </ItemGroup>
 
   <!-- The test project lives under tests\ inside this folder; keep its sources out of

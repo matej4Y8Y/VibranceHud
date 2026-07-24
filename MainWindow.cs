@@ -72,15 +72,18 @@ namespace VibranceHud
             _titleBar = new GlowPanel { Field = _field, Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             _titleBar.MouseDown += DragWindow;
 
-            var brand = new Label { Text = "PLEXUS", ForeColor = Theme.Accent, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(20, 16), AutoSize = true, BackColor = Color.Transparent };
-            brand.MouseDown += DragWindow;
-            var brand2 = new Label { Text = "X", ForeColor = Theme.TextDim, Font = new Font(Theme.FontFamily, 11f, FontStyle.Bold), Location = new Point(88, 16), AutoSize = true, BackColor = Color.Transparent };
-            brand2.MouseDown += DragWindow;
+            var logo = new LogoBox
+            {
+                Image = BrandAssets.HorizontalLogo(Theme.IsLight),
+                Location = new Point(20, (TitleH - 24) / 2),
+                Size = new Size(180, 24)
+            };
+            logo.MouseDown += DragWindow;
             var close = TitleGlyph("✕", ClientSize.Width - 42);
             close.Click += (s, e) => Hide();
             var min = TitleGlyph("─", ClientSize.Width - 78);
             min.Click += (s, e) => WindowState = FormWindowState.Minimized;
-            _titleBar.Controls.AddRange(new Control[] { brand, brand2, close, min });
+            _titleBar.Controls.AddRange(new Control[] { logo, close, min });
             Controls.Add(_titleBar);
 
             // Pages exist before the nav wires click handlers to them.
@@ -104,6 +107,20 @@ namespace VibranceHud
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
             _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navSettings, _navAccount });
+
+            // Version pinned faint in the bottom-left corner - makes it feel like a real build.
+            var version = new Label
+            {
+                Text = AppInfo.VersionText,
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8f),
+                Location = new Point(22, _nav.Height - 30),
+                AutoSize = true,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
+            version.MouseDown += DragWindow;
+            _nav.Controls.Add(version);
             Controls.Add(_nav);
 
             _contentHost = new Panel { Location = new Point(NavW, TitleH), Size = new Size(ClientSize.Width - NavW, ClientSize.Height - TitleH), BackColor = Theme.Background, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
