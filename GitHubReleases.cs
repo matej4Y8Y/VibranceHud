@@ -75,8 +75,10 @@ namespace VibranceHud
         /// "PlexusX-Setup-0.2.2.exe". Null when there's no version-looking part.</summary>
         public static Version? ParseVersionFromFilename(string filename)
         {
-            var match = System.Text.RegularExpressions.Regex.Match(filename, @"(\d+)\.(\d+)(?:\.(\d+))?");
-            return match.Success ? ParseVersion(match.Value) : null;
+            // Take the LAST version-looking token so a product number in the name
+            // (e.g. "PlexusX2-Setup-0.2.2.exe") doesn't get mistaken for the version.
+            var matches = System.Text.RegularExpressions.Regex.Matches(filename, @"\d+\.\d+(?:\.\d+)?");
+            return matches.Count > 0 ? ParseVersion(matches[^1].Value) : null;
         }
 
         public static bool IsNewer(Version latest, Version current) =>

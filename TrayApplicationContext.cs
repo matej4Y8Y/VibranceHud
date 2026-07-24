@@ -50,9 +50,14 @@ namespace VibranceHud
             _engine.EyeCare = _settings.EyeCare;
             _engine.SetLevel(_settings.Level);
 
-            // Resolve the theme (migrating the old light/dark bool) and pin the name back.
+            // Resolve the theme (migrating the old light/dark bool) and pin the name back,
+            // persisting once so the migration doesn't re-run every launch.
             var palette = ThemeCatalog.Resolve(_settings.ThemeName, _settings.LightTheme);
-            _settings.ThemeName = palette.Name;
+            if (_settings.ThemeName != palette.Name)
+            {
+                _settings.ThemeName = palette.Name;
+                _store.Save(_settings);
+            }
             Theme.Apply(palette); // before building the window
 
             _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), ApplyTheme);

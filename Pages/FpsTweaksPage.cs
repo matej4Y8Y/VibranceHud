@@ -113,24 +113,25 @@ namespace VibranceHud.Pages
                 Location = new Point(width - 62, y + 10),
                 Checked = tweak.IsApplied()
             };
-            toggle.CheckedChanged += (s, e) =>
+            toggle.CheckedChanged += async (s, e) =>
             {
                 if (_syncing) return;
-                var result = _service.Toggle(tweak.Id, toggle.Checked);
+                bool desired = toggle.Checked;
 
-                if (result == null && toggle.Checked)
-                {
-                    // Failed or the user declined UAC - snap the toggle back.
-                    _syncing = true;
-                    toggle.Checked = false;
-                    _syncing = false;
-                }
+                // Admin tweaks relaunch an elevated helper and block on it - do that off the
+                // UI thread so the window (and its animation) never freezes / says "Not
+                // Responding" while the UAC prompt is up. Disable the row meanwhile.
+                toggle.Enabled = false;
+                await System.Threading.Tasks.Task.Run(() => _service.Toggle(tweak.Id, desired));
+                toggle.Enabled = true;
 
-                // Re-read the real state so the row always reflects the machine.
+                // Re-read the real machine state so the row always reflects reality (whether
+                // the write succeeded, failed, or the user declined UAC).
+                bool applied = tweak.IsApplied();
                 _syncing = true;
-                toggle.Checked = tweak.IsApplied();
+                toggle.Checked = applied;
                 _syncing = false;
-                status.Text = tweak.IsApplied() ? StatusLine(tweak) : "";
+                status.Text = applied ? StatusLine(tweak) : "";
                 Invalidate();
             };
             card.Controls.Add(toggle);
