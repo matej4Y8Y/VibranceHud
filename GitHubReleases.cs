@@ -34,6 +34,7 @@ namespace VibranceHud
 
                 // The installer is the .exe asset (prefer one that looks like a Setup).
                 string? url = null;
+                string installerName = "";
                 foreach (var asset in assets.EnumerateArray())
                 {
                     var name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
@@ -42,9 +43,16 @@ namespace VibranceHud
                     if (link == null) continue;
 
                     url = link;
+                    installerName = name;
                     if (name.Contains("setup", StringComparison.OrdinalIgnoreCase)) break;
                 }
                 if (url == null) return null;
+
+                // Guard against a mistagged release: if the installer file is a newer version
+                // than the tag (e.g. Setup-0.2.2.exe uploaded into the v0.2.1 release), trust
+                // the file so users on the old version still get the update instead of stalling.
+                var fileVersion = ParseVersionFromFilename(installerName);
+                if (fileVersion != null && fileVersion > version) version = fileVersion;
 
                 return new ReleaseInfo(version, tag, url, page, notes);
             }
@@ -61,6 +69,14 @@ namespace VibranceHud
             var text = tag.Trim().TrimStart('v', 'V');
             if (!Version.TryParse(text, out var parsed)) return null;
             return Normalize(parsed);
+        }
+
+        /// <summary>Pull an "x.y[.z]" version out of an installer filename like
+        /// "PlexusX-Setup-0.2.2.exe". Null when there's no version-looking part.</summary>
+        public static Version? ParseVersionFromFilename(string filename)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(filename, @"(\d+)\.(\d+)(?:\.(\d+))?");
+            return match.Success ? ParseVersion(match.Value) : null;
         }
 
         public static bool IsNewer(Version latest, Version current) =>
