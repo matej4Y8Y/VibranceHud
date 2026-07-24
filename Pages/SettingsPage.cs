@@ -13,10 +13,11 @@ namespace VibranceHud.Pages
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
         private readonly Action<int> _onOpacityChanged;
-        private readonly Action<bool> _onThemeChanged;
+        private readonly Action<string> _onThemeChanged;
+        private readonly System.Collections.Generic.List<SwatchButton> _swatches = new();
 
         public SettingsPage(AppSettings settings, SettingsStore store,
-            Action<int> onOpacityChanged, Action<bool> onThemeChanged)
+            Action<int> onOpacityChanged, Action<string> onThemeChanged)
         {
             _settings = settings;
             _store = store;
@@ -31,7 +32,7 @@ namespace VibranceHud.Pages
 
             int width = 620;
 
-            var general = new CardPanel { Location = new Point(40, 40), Size = new Size(width, 132) };
+            var general = new CardPanel { Location = new Point(40, 40), Size = new Size(width, 88) };
             general.Controls.Add(UiHelpers.Caption("GENERAL", 18, 16, 200));
             general.Controls.Add(new Label
             {
@@ -53,25 +54,42 @@ namespace VibranceHud.Pages
                 _store.Save(_settings);
             };
             general.Controls.Add(startupToggle);
-
-            general.Controls.Add(new Label
-            {
-                Text = "Light theme (black & white)",
-                ForeColor = Theme.Text,
-                BackColor = Color.Transparent,
-                Location = new Point(18, 88),
-                AutoSize = true
-            });
-            var themeToggle = new ToggleSwitch
-            {
-                Location = new Point(width - 62, 86),
-                Checked = _settings.LightTheme
-            };
-            themeToggle.CheckedChanged += (s, e) => _onThemeChanged(themeToggle.Checked);
-            general.Controls.Add(themeToggle);
             Controls.Add(general);
 
-            var appearance = new CardPanel { Location = new Point(40, 192), Size = new Size(width, 108) };
+            // ---- Theme picker (colour swatches) ----
+            var themeCard = new CardPanel { Location = new Point(40, 148), Size = new Size(width, 120) };
+            themeCard.Controls.Add(UiHelpers.Caption("THEME", 18, 16, 200));
+            int sx = 18;
+            foreach (var palette in ThemeCatalog.All)
+            {
+                var swatch = new SwatchButton(palette)
+                {
+                    Location = new Point(sx, 48),
+                    Active = palette.Name == Theme.CurrentName
+                };
+                swatch.Click += (s, e) =>
+                {
+                    foreach (var b in _swatches) b.Active = ReferenceEquals(b, swatch);
+                    _onThemeChanged(swatch.Palette.Name);
+                };
+                _swatches.Add(swatch);
+                themeCard.Controls.Add(swatch);
+
+                themeCard.Controls.Add(new Label
+                {
+                    Text = palette.Name,
+                    ForeColor = palette.Name == Theme.CurrentName ? Theme.Text : Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8f),
+                    Location = new Point(sx - 8, 84),
+                    Size = new Size(46, 16),
+                    TextAlign = ContentAlignment.MiddleCenter
+                });
+                sx += 92;
+            }
+            Controls.Add(themeCard);
+
+            var appearance = new CardPanel { Location = new Point(40, 288), Size = new Size(width, 108) };
             appearance.Controls.Add(UiHelpers.Caption("WINDOW OPACITY", 18, 16, 240));
             var opacityValue = new Label
             {
@@ -102,7 +120,7 @@ namespace VibranceHud.Pages
             appearance.Controls.Add(opacitySlider);
             Controls.Add(appearance);
 
-            var updates = new CardPanel { Location = new Point(40, 320), Size = new Size(width, 92) };
+            var updates = new CardPanel { Location = new Point(40, 408), Size = new Size(width, 92) };
             updates.Controls.Add(UiHelpers.Caption("UPDATES", 18, 16, 200));
             var checkBtn = FlatButton("Check for updates", 18, 44, 180);
             checkBtn.Click += async (s, e) => await UpdateService.CheckManuallyAsync();

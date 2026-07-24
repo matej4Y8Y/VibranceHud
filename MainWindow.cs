@@ -28,7 +28,7 @@ namespace VibranceHud
         private readonly VibranceEngine _engine;
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
-        private readonly Action<bool> _onThemeChanged;
+        private readonly Action<string> _onThemeChanged;
 
         private readonly ParticleField _field = new(65);
         private readonly System.Windows.Forms.Timer _timer;
@@ -47,7 +47,7 @@ namespace VibranceHud
         private readonly SystemTweaks.SystemTweakService _tweaks;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
-            SystemTweaks.SystemTweakService tweaks, Action<bool> onThemeChanged)
+            SystemTweaks.SystemTweakService tweaks, Action<string> onThemeChanged)
         {
             _engine = engine;
             _settings = settings;
