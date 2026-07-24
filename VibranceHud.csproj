@@ -10,7 +10,7 @@
     <RootNamespace>VibranceHud</RootNamespace>
     <!-- Bumped for every release; the running app compares this against the newest
          GitHub release to decide whether to update itself. -->
-    <Version>0.2.3</Version>
+    <Version>0.2.4</Version>
     <ApplicationIcon>brand\PlexusX.ico</ApplicationIcon>
 
     <!-- Self-contained so a friend's PC needs nothing pre-installed (no .NET Desktop
