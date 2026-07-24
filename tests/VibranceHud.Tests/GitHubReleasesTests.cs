@@ -49,6 +49,33 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
+        public void ParseLatest_UsesTheInstallerFilenameVersion_WhenItBeatsAMistaggedRelease()
+        {
+            // Real-world slip: the new installer got uploaded into the OLD release, so the
+            // tag says v0.2.1 but the file is Setup-0.2.2. The updater must still see 0.2.2,
+            // otherwise everyone on 0.2.1 is stuck forever.
+            var json = @"{ ""tag_name"": ""v0.2.1"", ""assets"": [
+                { ""name"": ""PlexusX-Setup-0.2.2.exe"", ""browser_download_url"": ""https://example.com/s.exe"" } ] }";
+
+            var release = GitHubReleases.ParseLatest(json);
+
+            Assert.NotNull(release);
+            Assert.Equal(new Version(0, 2, 2), release!.Version);
+        }
+
+        [Fact]
+        public void ParseLatest_KeepsTheTagVersion_WhenItIsNewerThanTheFilename()
+        {
+            // Don't let a stale/odd filename drag the version backwards below the tag.
+            var json = @"{ ""tag_name"": ""v0.4.0"", ""assets"": [
+                { ""name"": ""PlexusX-Setup-0.2.2.exe"", ""browser_download_url"": ""https://example.com/s.exe"" } ] }";
+
+            var release = GitHubReleases.ParseLatest(json);
+
+            Assert.Equal(new Version(0, 4, 0), release!.Version);
+        }
+
+        [Fact]
         public void ParseLatest_IgnoresNonInstallerAssets()
         {
             var release = GitHubReleases.ParseLatest(Json);
