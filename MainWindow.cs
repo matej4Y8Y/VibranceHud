@@ -205,7 +205,11 @@ namespace VibranceHud
 
         private void OnConfigureGame(DetectedGame game)
         {
-            var page = new RustSettingsPage(game, _settings, _store, onBack: ShowGames);
+            GlowPage page = game.Game.Id switch
+            {
+                "cs2" => new Cs2SettingsPage(game, onBack: ShowGames),
+                _ => new RustSettingsPage(game, _settings, _store, onBack: ShowGames),
+            };
             AttachField(page);
             SetContent(page);
             SetActive(_navGames);

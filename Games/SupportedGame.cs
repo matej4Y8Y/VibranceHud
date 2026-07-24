@@ -8,11 +8,13 @@ namespace VibranceHud.Games
     /// <summary>A supported game found installed on this PC, with its resolved folder.</summary>
     public sealed record DetectedGame(SupportedGame Game, string InstallDir);
 
-    /// <summary>The catalog of games the hub supports. v1: Rust only.</summary>
+    /// <summary>The catalog of games the hub supports.</summary>
     public static class SupportedGames
     {
         public static readonly SupportedGame Rust = new("rust", "Rust", 252490, "Rust");
+        public static readonly SupportedGame Cs2 =
+            new("cs2", "Counter-Strike 2", 730, "Counter-Strike Global Offensive");
 
-        public static readonly IReadOnlyList<SupportedGame> All = new[] { Rust };
+        public static readonly IReadOnlyList<SupportedGame> All = new[] { Rust, Cs2 };
     }
 }
