@@ -46,8 +46,8 @@ namespace VibranceHud.Pages
 
         private int BuildCard(int top, int width, string title, string subtitle, IReadOnlyList<ISystemTweak> tweaks)
         {
-            const int rowH = 66;
-            int headerH = 60;
+            const int rowH = 76;
+            int headerH = 64;
             var card = new CardPanel
             {
                 Location = new Point(40, top),
@@ -77,6 +77,7 @@ namespace VibranceHud.Pages
 
         private void AddRow(CardPanel card, ISystemTweak tweak, int y, int width)
         {
+            // Three stacked, non-overlapping bands: title, description, status line.
             card.Controls.Add(new Label
             {
                 Text = tweak.Label + (tweak.RequiresAdmin ? "   (admin)" : ""),
@@ -92,8 +93,8 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = DescFont,
-                Location = new Point(18, y + 20),
-                Size = new Size(width - 90, 30)
+                Location = new Point(18, y + 22),
+                Size = new Size(width - 90, 18)
             });
 
             var status = new Label
@@ -109,7 +110,7 @@ namespace VibranceHud.Pages
 
             var toggle = new ToggleSwitch
             {
-                Location = new Point(width - 62, y + 6),
+                Location = new Point(width - 62, y + 10),
                 Checked = tweak.IsApplied()
             };
             toggle.CheckedChanged += (s, e) =>
