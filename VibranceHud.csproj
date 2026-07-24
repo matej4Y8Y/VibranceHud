@@ -10,8 +10,18 @@
     <RootNamespace>VibranceHud</RootNamespace>
     <!-- Bumped for every release; the running app compares this against the newest
          GitHub release to decide whether to update itself. -->
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <ApplicationIcon>brand\PlexusX.ico</ApplicationIcon>
+
+    <!-- Self-contained so a friend's PC needs nothing pre-installed (no .NET Desktop
+         Runtime download/prompt) - the app carries its own runtime. Without this, a plain
+         `dotnet publish` produces a framework-dependent build that fails to launch with
+         "missing files" on any machine that doesn't already have .NET 8 installed. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
   <!-- The PlexusX app icon, embedded so the tray and window can load it at runtime. -->

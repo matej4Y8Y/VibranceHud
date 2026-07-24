@@ -1,8 +1,13 @@
 ; Inno Setup script for PlexusX - builds a classic install wizard
 ; (welcome -> choose folder -> shortcuts -> install -> finish).
-; Compile with: ISCC.exe VibranceHud.iss   (after `dotnet publish ... -o publish`)
+;
+; Compile with: ISCC.exe VibranceHud.iss
+; ...after publishing a self-contained build (no .NET runtime needed on the target PC):
+;   dotnet publish -c Release -o publish
+; The self-contained/single-file settings live in VibranceHud.csproj, so this plain
+; command is enough - no easy-to-forget -r/--self-contained flags to remember by hand.
 
-#define AppVersion "0.2.0"
+#define AppVersion "0.2.1"
 
 [Setup]
 AppId={{8F3A1C2B-4D5E-4F6A-9B7C-1234567890AB}}

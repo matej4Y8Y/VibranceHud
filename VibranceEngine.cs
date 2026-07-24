@@ -42,6 +42,9 @@ namespace VibranceHud
 
         public int DefaultLevel => _controller.DefaultLevel;
 
+        /// <summary>False when the 0-100 driver range has no NVIDIA driver to apply to.</summary>
+        public bool DriverAvailable => _controller.IsAvailable;
+
         /// <summary>Screen brightness calibration, 50-150 (100 = untouched).</summary>
         public int Brightness
         {

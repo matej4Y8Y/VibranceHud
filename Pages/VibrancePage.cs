@@ -160,6 +160,13 @@ namespace VibranceHud.Pages
             TextRenderer.DrawText(g, "0", SmallFont, new Rectangle(_cx, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Left);
             TextRenderer.DrawText(g, "100", SmallFont, new Rectangle(_cx, _scaleY, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
             TextRenderer.DrawText(g, "200", SmallFont, new Rectangle(_cx + _colW - 40, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Right);
+
+            if (!_engine.DriverAvailable)
+            {
+                TextRenderer.DrawText(g, "0-100% needs an NVIDIA GPU · boost above 100% still works", SmallFont,
+                    new Rectangle(_cx, _scaleY + 16, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
+            }
+
             TextRenderer.DrawText(g, UiHelpers.Spaced("PRESETS"), CaptionFont,
                 new Rectangle(_cx, _presetCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
 

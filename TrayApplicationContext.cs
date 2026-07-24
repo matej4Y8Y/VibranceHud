@@ -24,7 +24,7 @@ namespace VibranceHud
 
         private readonly NotifyIcon _trayIcon;
         private readonly HotkeyWindow _hotkeyWindow;
-        private readonly VibranceController _controller;
+        private readonly IVibranceController _controller;
         private readonly SaturationOverlay _overlay;
         private readonly DisplayGammaRamp _gammaRamp;
         private readonly VibranceEngine _engine;
@@ -35,7 +35,7 @@ namespace VibranceHud
 
         public TrayApplicationContext()
         {
-            _controller = new VibranceController();
+            _controller = CreateVibranceController();
             _overlay = new SaturationOverlay();
             _gammaRamp = new DisplayGammaRamp();
             _engine = new VibranceEngine(_controller, _overlay, _gammaRamp);
@@ -90,6 +90,24 @@ namespace VibranceHud
             _splash = new SplashForm();
             _splash.Shown += async (s, e) => await RunStartupAsync();
             _splash.Show();
+        }
+
+        /// <summary>
+        /// NVIDIA's driver vibrance (NVAPI) only exists on NVIDIA hardware with the driver
+        /// installed - on anything else this throws. That must never take down the whole
+        /// app: falling back to <see cref="NullVibranceController"/> keeps Games Hub, Rust
+        /// tweaks, and the 100-200% software vibrance boost working on every PC.
+        /// </summary>
+        private static IVibranceController CreateVibranceController()
+        {
+            try
+            {
+                return new VibranceController();
+            }
+            catch
+            {
+                return new NullVibranceController();
+            }
         }
 
         /// <summary>
