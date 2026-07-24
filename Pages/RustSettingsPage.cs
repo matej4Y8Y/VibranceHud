@@ -103,6 +103,30 @@ namespace VibranceHud.Pages
                 y += 28;
             }
 
+            // ---------- Quick presets ----------
+            var presetCard = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 96) };
+            presetCard.Controls.Add(UiHelpers.Caption("QUICK PRESETS", 18, 16, 260));
+            presetCard.Controls.Add(new Label
+            {
+                Text = "One click to configure the settings below - then Apply.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8f),
+                Location = new Point(18, 34),
+                AutoSize = true
+            });
+            int ppx = 18;
+            foreach (var preset in RustPresets.All)
+            {
+                var btn = SettingsPage.FlatButton(preset.Name, ppx, 56, 160);
+                var p = preset;
+                btn.Click += (s, e) => ApplyPreset(p);
+                presetCard.Controls.Add(btn);
+                ppx += 172;
+            }
+            Controls.Add(presetCard);
+            y += presetCard.Height + 16;
+
             // ---------- Monitor resolution ----------
             // Built from what this monitor actually reports, so it can never offer a mode
             // that would black-screen someone.
@@ -295,6 +319,17 @@ namespace VibranceHud.Pages
                 BackColor = Color.Transparent
             };
             Controls.Add(_status);
+        }
+
+        /// <summary>Set every control to the preset's loadout and write it in one click.</summary>
+        private void ApplyPreset(RustPreset preset)
+        {
+            SelectChip(_qualityChips, preset.Quality, v => _selectedQuality = v);
+            SelectChip(_fpsChips, preset.Fps, v => _selectedFps = v);
+            _fov.Value = Math.Clamp(preset.Fov, 60, 90);
+            foreach (var (tweak, chip) in _tweakChips)
+                chip.Active = preset.TweaksOn.Contains(tweak.Label);
+            Apply();
         }
 
         private void Apply()

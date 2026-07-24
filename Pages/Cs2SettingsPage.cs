@@ -78,6 +78,30 @@ namespace VibranceHud.Pages
                 y += 28;
             }
 
+            // ---------- Quick presets ----------
+            var presets = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 96) };
+            presets.Controls.Add(UiHelpers.Caption("QUICK PRESETS", 18, 16, 260));
+            presets.Controls.Add(new Label
+            {
+                Text = "One click to set the tweaks below - then Apply.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8f),
+                Location = new Point(18, 34),
+                AutoSize = true
+            });
+            int px = 18;
+            foreach (var preset in Cs2Presets.All)
+            {
+                var btn = SettingsPage.FlatButton(preset.Name, px, 56, 160);
+                var p = preset;
+                btn.Click += (s, e) => ApplyPreset(p);
+                presets.Controls.Add(btn);
+                px += 172;
+            }
+            Controls.Add(presets);
+            y += presets.Height + 16;
+
             // ---------- Tweaks ----------
             var tweaks = Cs2Tweaks.All;
             var tw = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 60 + tweaks.Count * 60) };
@@ -184,6 +208,13 @@ namespace VibranceHud.Pages
                 BackColor = Color.Transparent
             };
             Controls.Add(_status);
+        }
+
+        /// <summary>Set every toggle to the preset and write it in one click.</summary>
+        private void ApplyPreset(Cs2Preset preset)
+        {
+            foreach (var toggle in _toggles.Values) toggle.Checked = preset.AllTweaksOn;
+            Apply();
         }
 
         private void Apply()
