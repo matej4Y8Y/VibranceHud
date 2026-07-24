@@ -42,14 +42,17 @@ namespace VibranceHud
         private readonly VibrancePage _vibrancePage;
         private readonly SettingsPage _settingsPage;
         private readonly AccountPage _accountPage;
-        private readonly NavButton _navVibrance, _navGames, _navSettings, _navAccount;
+        private readonly FpsTweaksPage _fpsPage;
+        private readonly NavButton _navVibrance, _navGames, _navFps, _navSettings, _navAccount;
+        private readonly SystemTweaks.SystemTweakService _tweaks;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
-            Action<bool> onThemeChanged)
+            SystemTweaks.SystemTweakService tweaks, Action<bool> onThemeChanged)
         {
             _engine = engine;
             _settings = settings;
             _store = store;
+            _tweaks = tweaks;
             _onThemeChanged = onThemeChanged;
 
             FormBorderStyle = FormBorderStyle.None;
@@ -84,20 +87,23 @@ namespace VibranceHud
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
             _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged);
             _accountPage = new AccountPage();
-            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage })
+            _fpsPage = new FpsTweaksPage(_tweaks);
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage })
                 AttachField(page);
 
             // ---- Left nav (shares the field) ----
             _nav = new GlowPanel { Field = _field, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
-            _navVibrance = MakeNav("Vibrance", 0);
-            _navGames = MakeNav("Games", 1);
-            _navSettings = MakeNav("Settings", 2);
-            _navAccount = MakeNav("Account", 3);
+            _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
+            _navGames = MakeNav("Games", position: 1, iconKind: 1);
+            _navFps = MakeNav("FPS Tweaks", position: 2, iconKind: 4);
+            _navSettings = MakeNav("Settings", position: 3, iconKind: 2);
+            _navAccount = MakeNav("Account", position: 4, iconKind: 3);
             _navVibrance.Click += (s, e) => ShowVibrance();
             _navGames.Click += (s, e) => ShowGames();
+            _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navSettings, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navSettings, _navAccount });
             Controls.Add(_nav);
 
             _contentHost = new Panel { Location = new Point(NavW, TitleH), Size = new Size(ClientSize.Width - NavW, ClientSize.Height - TitleH), BackColor = Theme.Background, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
@@ -137,11 +143,11 @@ namespace VibranceHud
             _currentPage?.Invalidate(true);
         }
 
-        private NavButton MakeNav(string label, int index) => new()
+        private NavButton MakeNav(string label, int position, int iconKind) => new()
         {
-            IconKind = index, // 0 vibrance, 1 games, 2 settings, 3 account
+            IconKind = iconKind,
             Text = label,
-            Location = new Point(0, 16 + index * 48),
+            Location = new Point(0, 16 + position * 48),
             Size = new Size(NavW, 46)
         };
 
@@ -196,7 +202,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navGames, _navSettings, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navGames, _navFps, _navSettings, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
@@ -212,7 +218,7 @@ namespace VibranceHud
 
             // Dispose transient pages (Games/Rust are rebuilt each visit); keep persistent ones.
             if (old != null && old != page &&
-                old != _vibrancePage && old != _settingsPage && old != _accountPage)
+                old != _vibrancePage && old != _settingsPage && old != _accountPage && old != _fpsPage)
                 old.Dispose();
         }
 

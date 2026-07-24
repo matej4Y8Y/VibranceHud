@@ -15,7 +15,7 @@ namespace VibranceHud
         private bool _active;
         private bool _hover;
 
-        /// <summary>0 = vibrance, 1 = games, 2 = settings, 3 = account.</summary>
+        /// <summary>0 = vibrance, 1 = games, 2 = settings, 3 = account, 4 = fps (lightning).</summary>
         public int IconKind { get; init; }
 
         public bool Active
@@ -86,6 +86,19 @@ namespace VibranceHud
                         int kx = r.X + (i == 1 ? r.Width - 8 : 4);
                         g.FillEllipse(brush, kx, y - 2, 4, 4);
                     }
+                    break;
+
+                case 4: // fps boost: lightning bolt
+                    var bolt = new[]
+                    {
+                        new PointF(r.X + r.Width * 0.55f, r.Y),
+                        new PointF(r.X + r.Width * 0.15f, r.Y + r.Height * 0.55f),
+                        new PointF(r.X + r.Width * 0.45f, r.Y + r.Height * 0.55f),
+                        new PointF(r.X + r.Width * 0.40f, r.Y + r.Height),
+                        new PointF(r.X + r.Width * 0.85f, r.Y + r.Height * 0.40f),
+                        new PointF(r.X + r.Width * 0.55f, r.Y + r.Height * 0.40f),
+                    };
+                    g.FillPolygon(brush, bolt);
                     break;
 
                 default: // account: head + shoulders

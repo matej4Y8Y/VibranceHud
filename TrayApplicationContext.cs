@@ -52,7 +52,7 @@ namespace VibranceHud
 
             Theme.Apply(_settings.LightTheme); // before building the window
 
-            _window = new MainWindow(_engine, _settings, _store, ApplyTheme);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), ApplyTheme);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
@@ -201,7 +201,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, ApplyTheme);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), ApplyTheme);
             _window.ShowAndFocus();
             old.Dispose();
         }
