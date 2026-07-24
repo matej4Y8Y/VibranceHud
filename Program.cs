@@ -1,13 +1,18 @@
 using System;
 using System.Windows.Forms;
+using VibranceHud.SystemTweaks;
 
 namespace VibranceHud
 {
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static int Main(string[] args)
         {
+            // Elevated relaunch to apply one admin-only FPS tweak, then exit - no UI, no tray.
+            if (SystemTweakService.IsHeadlessTweakInvocation(args))
+                return SystemTweakService.RunHeadless(args);
+
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -26,6 +31,7 @@ namespace VibranceHud
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
+            return 0;
         }
     }
 }
