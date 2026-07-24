@@ -23,6 +23,12 @@ namespace VibranceHud
         /// <summary>Last version that showed its "what's new" notes.</summary>
         public string LastSeenVersion { get; set; } = "";
 
+        /// <summary>False until the first-run onboarding has been completed once.</summary>
+        public bool OnboardingComplete { get; set; }
+
+        /// <summary>What the user said they play during onboarding (for light personalization).</summary>
+        public string FavoriteGame { get; set; } = "";
+
         // Rust launch boosts
         public bool RustHighPriority { get; set; } = true;
         public bool RustTrimLauncher { get; set; }

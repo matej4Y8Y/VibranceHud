@@ -143,6 +143,24 @@ namespace VibranceHud
 
             _splash.Close();
 
+            // First run: the cinematic onboarding (which also lets them pick a theme),
+            // shown instead of "what's new". A theme change there means we rebuild the
+            // already-constructed window so it repaints in the chosen colours.
+            if (!_settings.OnboardingComplete)
+            {
+                var themeBefore = Theme.CurrentName;
+                using (var onboarding = new OnboardingForm(_settings, _store))
+                    onboarding.ShowDialog();
+
+                // Don't also pop "what's new" on a brand-new install.
+                _settings.LastSeenVersion = UpdateService.CurrentVersion.ToString();
+                _store.Save(_settings);
+
+                if (Theme.CurrentName != themeBefore) RebuildWindow();
+                else _window.ShowAndFocus();
+                return;
+            }
+
             if (notes != null)
             {
                 using var whatsNew = new WhatsNewWindow(UpdateService.CurrentVersion, notes);
