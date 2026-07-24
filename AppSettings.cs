@@ -9,7 +9,13 @@ namespace VibranceHud
         public int Level { get; set; } = 100;
         public bool StartWithWindows { get; set; }
         public int OpacityPercent { get; set; } = 85;
+        /// <summary>Legacy light/dark flag. Kept only to migrate old saved settings into
+        /// <see cref="ThemeName"/>; new code reads ThemeName.</summary>
         public bool LightTheme { get; set; }
+
+        /// <summary>Selected theme name (e.g. "Violet", "Emerald"). Empty on old/fresh
+        /// installs, resolved via <see cref="ThemeCatalog.Resolve"/>.</summary>
+        public string ThemeName { get; set; } = "";
         public int BrightnessPercent { get; set; } = 100;
         public int GammaPercent { get; set; } = 100;
         public bool EyeCare { get; set; }

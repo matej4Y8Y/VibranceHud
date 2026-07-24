@@ -15,7 +15,7 @@ namespace VibranceHud.Tests
         [Fact]
         public void Dark_IsLightTextOnDarkBackground_WithColoredAccent()
         {
-            Theme.Apply(light: false);
+            Theme.Apply("Violet");
 
             Assert.False(Theme.IsLight);
             Assert.True(Brightness(Theme.Background) < Brightness(Theme.Text));
@@ -25,7 +25,7 @@ namespace VibranceHud.Tests
         [Fact]
         public void Light_IsDarkTextOnLightBackground_AndMonochrome()
         {
-            Theme.Apply(light: true);
+            Theme.Apply("Light");
             try
             {
                 Assert.True(Theme.IsLight);
@@ -37,7 +37,22 @@ namespace VibranceHud.Tests
             }
             finally
             {
-                Theme.Apply(light: false); // restore the default for any other tests
+                Theme.Apply("Violet"); // restore the default for any other tests
+            }
+        }
+
+        [Fact]
+        public void Apply_ByName_SwitchesTheAccentColour()
+        {
+            Theme.Apply("Emerald");
+            try
+            {
+                Assert.Equal("Emerald", Theme.CurrentName);
+                Assert.True(Theme.Accent.G > Theme.Accent.R); // green-dominant
+            }
+            finally
+            {
+                Theme.Apply("Violet");
             }
         }
     }

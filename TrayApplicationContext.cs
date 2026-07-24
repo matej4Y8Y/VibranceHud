@@ -50,7 +50,10 @@ namespace VibranceHud
             _engine.EyeCare = _settings.EyeCare;
             _engine.SetLevel(_settings.Level);
 
-            Theme.Apply(_settings.LightTheme); // before building the window
+            // Resolve the theme (migrating the old light/dark bool) and pin the name back.
+            var palette = ThemeCatalog.Resolve(_settings.ThemeName, _settings.LightTheme);
+            _settings.ThemeName = palette.Name;
+            Theme.Apply(palette); // before building the window
 
             _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), ApplyTheme);
 
@@ -182,11 +185,12 @@ namespace VibranceHud
         /// theme. The rebuild is deferred by a one-shot timer so we don't dispose the window
         /// while it's still handling the toggle's event.
         /// </summary>
-        private void ApplyTheme(bool light)
+        private void ApplyTheme(string themeName)
         {
-            _settings.LightTheme = light;
+            _settings.ThemeName = themeName;
+            _settings.LightTheme = ThemeCatalog.ByName(themeName).IsLight; // keep legacy flag consistent
             _store.Save(_settings);
-            Theme.Apply(light);
+            Theme.Apply(themeName);
 
             var deferred = new System.Windows.Forms.Timer { Interval = 1 };
             deferred.Tick += (s, e) =>

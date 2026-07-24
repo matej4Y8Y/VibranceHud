@@ -13,6 +13,9 @@ namespace VibranceHud
 
         public static bool IsLight { get; private set; }
 
+        /// <summary>The name of the currently applied theme (e.g. "Violet", "Emerald").</summary>
+        public static string CurrentName { get; private set; } = ThemeCatalog.DefaultName;
+
         public static Color Background { get; private set; }
         public static Color Surface { get; private set; }
         public static Color SurfaceHover { get; private set; }
@@ -35,47 +38,29 @@ namespace VibranceHud
         public static Color PlexusNodeB { get; private set; }
         public static Color PlexusLine { get; private set; }
 
-        static Theme() => Apply(light: false);
+        static Theme() => Apply(ThemeCatalog.ByName(ThemeCatalog.DefaultName));
 
-        public static void Apply(bool light)
-        {
-            IsLight = light;
-            if (light) ApplyLight();
-            else ApplyDark();
-        }
+        /// <summary>Apply a theme by name (falls back to the default if unknown).</summary>
+        public static void Apply(string name) => Apply(ThemeCatalog.ByName(name));
 
-        private static void ApplyDark()
+        /// <summary>Copy a palette into the live theme so every control repaints in it.</summary>
+        public static void Apply(ThemePalette p)
         {
-            Background = Color.FromArgb(10, 10, 12);
-            Surface = Color.FromArgb(22, 22, 27);
-            SurfaceHover = Color.FromArgb(34, 33, 42);
-            Border = Color.FromArgb(48, 47, 58);
-            GlassFill = Color.FromArgb(10, 10, 12);
-            GlassEdge = Color.FromArgb(148, 148, 158);
-            Text = Color.FromArgb(240, 240, 246);
-            TextDim = Color.FromArgb(128, 128, 142);
-            Accent = Color.FromArgb(167, 139, 250);   // violet
-            AccentDim = Color.FromArgb(109, 84, 190);
-            PlexusNodeA = Color.FromArgb(167, 139, 250);
-            PlexusNodeB = Color.FromArgb(232, 96, 214);
-            PlexusLine = Color.FromArgb(150, 130, 240);
-        }
-
-        private static void ApplyLight()
-        {
-            Background = Color.FromArgb(244, 244, 247);
-            Surface = Color.FromArgb(255, 255, 255);
-            SurfaceHover = Color.FromArgb(230, 230, 236);
-            Border = Color.FromArgb(203, 203, 212);
-            GlassFill = Color.FromArgb(255, 255, 255);
-            GlassEdge = Color.FromArgb(120, 120, 132);
-            Text = Color.FromArgb(20, 20, 26);
-            TextDim = Color.FromArgb(108, 108, 120);
-            Accent = Color.FromArgb(26, 26, 32);       // near-black selection (monochrome)
-            AccentDim = Color.FromArgb(66, 66, 76);
-            PlexusNodeA = Color.FromArgb(70, 70, 80);   // dark grey nodes
-            PlexusNodeB = Color.FromArgb(120, 120, 132);
-            PlexusLine = Color.FromArgb(95, 95, 106);
+            CurrentName = p.Name;
+            IsLight = p.IsLight;
+            Background = p.Background;
+            Surface = p.Surface;
+            SurfaceHover = p.SurfaceHover;
+            Border = p.Border;
+            GlassFill = p.GlassFill;
+            GlassEdge = p.GlassEdge;
+            Text = p.Text;
+            TextDim = p.TextDim;
+            Accent = p.Accent;
+            AccentDim = p.AccentDim;
+            PlexusNodeA = p.PlexusNodeA;
+            PlexusNodeB = p.PlexusNodeB;
+            PlexusLine = p.PlexusLine;
         }
     }
 }
