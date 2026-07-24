@@ -33,9 +33,9 @@ namespace VibranceHud
             }
         }
 
-        private static HttpClient NewClient()
+        private static HttpClient NewClient(TimeSpan? timeout = null)
         {
-            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var client = new HttpClient { Timeout = timeout ?? TimeSpan.FromSeconds(30) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("PlexusX-Updater"); // GitHub requires one
             return client;
         }
@@ -81,7 +81,10 @@ namespace VibranceHud
             {
                 var file = Path.Combine(Path.GetTempPath(), $"PlexusX-Setup-{release.Version}.exe");
 
-                using var client = NewClient();
+                // The installer now bundles the .NET runtime (self-contained build), so it's
+                // well over 100MB - the 30s timeout used for the tiny metadata calls above
+                // would truncate a download on anything but a fast connection.
+                using var client = NewClient(TimeSpan.FromMinutes(15));
                 using var response = await client.GetAsync(release.InstallerUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
 

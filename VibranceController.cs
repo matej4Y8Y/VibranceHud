@@ -39,6 +39,8 @@ namespace VibranceHud
 
         public int DefaultLevel => DisplayApi.GetDVCInfoEx(_display).DefaultLevel;
 
+        public bool IsAvailable => true;
+
         public void SetLevel(int level)
         {
             level = Math.Clamp(level, 0, 100);

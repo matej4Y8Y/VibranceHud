@@ -11,6 +11,7 @@ namespace VibranceHud.Tests
             public int LastSet = -1;
             public int CurrentLevel { get; set; }
             public int DefaultLevel { get; set; } = 50;
+            public bool IsAvailable { get; set; } = true;
             public void SetLevel(int level) { LastSet = level; CurrentLevel = level; }
         }
 
@@ -55,6 +56,30 @@ namespace VibranceHud.Tests
         public void Max_Is200()
         {
             Assert.Equal(200, VibranceEngine.Max);
+        }
+
+        [Fact]
+        public void DriverAvailable_ReflectsController()
+        {
+            var (available, _, _) = NewEngine();
+            Assert.True(available.DriverAvailable);
+
+            var ctrl = new FakeController { IsAvailable = false };
+            var unavailable = new VibranceEngine(ctrl, new FakeOverlay(), new FakeGamma());
+            Assert.False(unavailable.DriverAvailable);
+        }
+
+        [Fact]
+        public void NoDriver_AboveThreshold_StillAppliesSoftwareSaturation()
+        {
+            var ctrl = new FakeController { IsAvailable = false };
+            var ovl = new FakeOverlay();
+            var engine = new VibranceEngine(ctrl, ovl, new FakeGamma());
+
+            engine.SetLevel(150);
+
+            Assert.Equal(100, ctrl.LastSet); // driver pinned/no-op, never sent above 100
+            Assert.Single(ovl.Applied); // software boost still applies without a driver
         }
 
         [Fact]

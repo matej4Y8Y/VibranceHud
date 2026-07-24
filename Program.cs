@@ -19,9 +19,9 @@ namespace VibranceHud
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"Vibrance HUD couldn't start:\n\n{ex.Message}\n\n" +
-                    "Make sure you're on an NVIDIA GPU with the driver installed, " +
-                    "and that at least one monitor is connected to it.",
+                    $"PlexusX couldn't start:\n\n{ex.Message}\n\n" +
+                    "Make sure at least one monitor is connected and try again. " +
+                    "If this keeps happening, please report it.",
                     "PlexusX",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
