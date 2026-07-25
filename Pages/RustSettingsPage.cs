@@ -34,6 +34,7 @@ namespace VibranceHud.Pages
         private readonly DetectedGame _game;
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
+        private readonly Audio.AudioEdgeService? _audio;
         private readonly List<ChipButton> _qualityChips = new();
         private readonly List<ChipButton> _fpsChips = new();
         private readonly List<ChipButton> _ramChips = new();
@@ -47,11 +48,13 @@ namespace VibranceHud.Pages
         private Label _fovValue = null!;
         private Label _status = null!;
 
-        public RustSettingsPage(DetectedGame game, AppSettings settings, SettingsStore store, Action onBack)
+        public RustSettingsPage(DetectedGame game, AppSettings settings, SettingsStore store,
+            Audio.AudioEdgeService? audio, Action onBack)
         {
             _game = game;
             _settings = settings;
             _store = store;
+            _audio = audio;
             _service = new RustSettingsService(Path.Combine(game.InstallDir, "cfg", "client.cfg"));
             AutoScroll = true;
             Font = new Font(Theme.FontFamily, 9.5f);
@@ -280,6 +283,68 @@ namespace VibranceHud.Pages
             }
             Controls.Add(sys);
             y += 226;
+
+            // ---------- Audio Edge ----------
+            if (_audio != null)
+            {
+                var audioCard = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 168) };
+                audioCard.Controls.Add(UiHelpers.Caption("AUDIO EDGE", 18, 16, 260));
+                audioCard.Controls.Add(RowLabel("Loudness limiter", 18, 44));
+                audioCard.Controls.Add(RowHint(
+                    "Caps how loud anything can get. Turn your game up and gun shots stay at the ceiling, " +
+                    "so footsteps come through at nearly the same level.", 18, 62));
+
+                var audioToggle = new ToggleSwitch
+                {
+                    Location = new Point(CardW - 62, 46),
+                    Checked = _settings.AudioEdgeEnabled
+                };
+                audioCard.Controls.Add(audioToggle);
+
+                audioCard.Controls.Add(UiHelpers.Caption("CEILING", 18, 100, 200));
+                var ceilingValue = new Label
+                {
+                    Text = $"{_settings.AudioEdgeThresholdPercent}%",
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Location = new Point(CardW - 60, 100),
+                    Size = new Size(42, 16),
+                    TextAlign = ContentAlignment.MiddleRight
+                };
+                audioCard.Controls.Add(ceilingValue);
+
+                var ceiling = new FlatSlider
+                {
+                    Minimum = 5,
+                    Maximum = 100,
+                    Location = new Point(16, 122),
+                    Width = CardW - 32,
+                    Value = Math.Clamp(_settings.AudioEdgeThresholdPercent, 5, 100)
+                };
+                ceiling.ValueChanged += (s, e) =>
+                {
+                    ceilingValue.Text = $"{ceiling.Value}%";
+                    _settings.AudioEdgeThresholdPercent = ceiling.Value;
+                    _audio.Threshold = ceiling.Value / 100f;
+                    _store.Save(_settings);
+                };
+                audioCard.Controls.Add(ceiling);
+
+                audioToggle.CheckedChanged += (s, e) =>
+                {
+                    _settings.AudioEdgeEnabled = audioToggle.Checked;
+                    _store.Save(_settings);
+                    _audio.Threshold = ceiling.Value / 100f;
+                    if (audioToggle.Checked) _audio.Start(); else _audio.Stop();
+                    SetStatus(audioToggle.Checked
+                        ? $"Audio Edge on — ceiling {ceiling.Value}%"
+                        : "Audio Edge off — your volume is back to normal.", Theme.TextDim);
+                };
+
+                Controls.Add(audioCard);
+                y += audioCard.Height + 16;
+            }
 
             // ---------- Tools ----------
             var tools = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 92) };

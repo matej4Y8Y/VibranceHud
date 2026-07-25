@@ -45,14 +45,17 @@ namespace VibranceHud
         private readonly FpsTweaksPage _fpsPage;
         private readonly NavButton _navVibrance, _navGames, _navFps, _navSettings, _navAccount;
         private readonly SystemTweaks.SystemTweakService _tweaks;
+        private readonly Audio.AudioEdgeService? _audio;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
-            SystemTweaks.SystemTweakService tweaks, Action<string> onThemeChanged)
+            SystemTweaks.SystemTweakService tweaks, Audio.AudioEdgeService? audio,
+            Action<string> onThemeChanged)
         {
             _engine = engine;
             _settings = settings;
             _store = store;
             _tweaks = tweaks;
+            _audio = audio;
             _onThemeChanged = onThemeChanged;
 
             FormBorderStyle = FormBorderStyle.None;
@@ -208,7 +211,7 @@ namespace VibranceHud
             GlowPage page = game.Game.Id switch
             {
                 "cs2" => new Cs2SettingsPage(game, onBack: ShowGames),
-                _ => new RustSettingsPage(game, _settings, _store, onBack: ShowGames),
+                _ => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
             };
             AttachField(page);
             SetContent(page);

@@ -36,5 +36,12 @@ namespace VibranceHud
         /// <summary>Desktop resolution to switch to when launching Rust (0 = leave it alone).</summary>
         public int RustResolutionWidth { get; set; }
         public int RustResolutionHeight { get; set; }
+
+        // Audio Edge (peak limiter)
+        public bool AudioEdgeEnabled { get; set; }
+
+        /// <summary>The loudness ceiling, 5-100 (%). Quiet sounds are untouched; anything
+        /// louder is pulled down to this, so footsteps and gun shots end up level.</summary>
+        public int AudioEdgeThresholdPercent { get; set; } = 30;
     }
 }

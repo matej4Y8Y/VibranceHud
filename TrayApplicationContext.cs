@@ -31,6 +31,7 @@ namespace VibranceHud
         private readonly SettingsStore _store;
         private readonly AppSettings _settings;
         private readonly SplashForm _splash;
+        private readonly Audio.AudioEdgeService? _audioEdge;
         private MainWindow _window;
 
         public TrayApplicationContext()
@@ -60,7 +61,15 @@ namespace VibranceHud
             }
             Theme.Apply(palette); // before building the window
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), ApplyTheme);
+            // Audio Edge needs a playback device; if there isn't one the feature just hides.
+            _audioEdge = CreateAudioEdge();
+            if (_audioEdge != null)
+            {
+                _audioEdge.Threshold = Math.Clamp(_settings.AudioEdgeThresholdPercent, 5, 100) / 100f;
+                if (_settings.AudioEdgeEnabled) _audioEdge.Start();
+            }
+
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
@@ -106,6 +115,13 @@ namespace VibranceHud
         /// app: falling back to <see cref="NullVibranceController"/> keeps Games Hub, Rust
         /// tweaks, and the 100-200% software vibrance boost working on every PC.
         /// </summary>
+        /// <summary>The limiter, or null when this PC has no usable playback device.</summary>
+        private static Audio.AudioEdgeService? CreateAudioEdge()
+        {
+            try { return new Audio.AudioEdgeService(new Audio.WindowsAudioOutput()); }
+            catch { return null; }
+        }
+
         private static IVibranceController CreateVibranceController()
         {
             try
@@ -228,7 +244,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), ApplyTheme);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme);
             _window.ShowAndFocus();
             old.Dispose();
         }
@@ -239,6 +255,7 @@ namespace VibranceHud
             _store.Save(_settings);
             _overlay.Dispose();    // clears any oversaturation and releases the Magnification runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
+            _audioEdge?.Dispose(); // hands the user's volume back - never leave it ducked
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _hotkeyWindow.DestroyHandle();
