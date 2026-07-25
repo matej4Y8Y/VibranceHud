@@ -31,6 +31,11 @@ namespace VibranceHud.Pages
         {
             using (var back = new SolidBrush(Theme.Background))
                 e.Graphics.FillRectangle(back, ClientRectangle);
+
+            // The user's image (if any) sits under the plexus, drawn as this page's slice
+            // of one window-sized picture so it runs continuously behind the whole app.
+            Theming.AppBackground.Paint(e.Graphics, FieldOffset.X, FieldOffset.Y);
+
             Field?.Paint(e.Graphics, FieldOffset.X, FieldOffset.Y);
             base.OnPaint(e);
         }

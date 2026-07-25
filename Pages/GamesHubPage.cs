@@ -40,39 +40,42 @@ namespace VibranceHud.Pages
             };
             Controls.Add(sub);
 
-            var flow = new FlowLayoutPanel
-            {
-                Location = new Point(40, 104),
-                Size = new Size(760, 400),
-                BackColor = Theme.Background,
-                WrapContents = true,
-                AutoScroll = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
-            };
-
+            // Cards sit directly on the page rather than inside a FlowLayoutPanel: a
+            // transparent control nested inside ANOTHER transparent control is where
+            // WinForms' see-through trick actually breaks down - each GameCard already
+            // shows the animated backdrop correctly on its own (same one-level pattern
+            // CardPanel uses everywhere else), but wrapping them in a second transparent
+            // layer left a stale, un-synced snapshot of the background showing through,
+            // which is what looked like a twitching leftover block.
             var detected = GameLibrary.DetectInstalled();
             if (detected.Count == 0)
             {
-                flow.Controls.Add(new Label
+                Controls.Add(new Label
                 {
                     Text = "No supported games detected yet.\n" +
                            "Supported: Rust  (League, Valorant, CS2 coming soon)",
                     ForeColor = Theme.TextDim,
+                    Location = new Point(40, 104),
                     AutoSize = true,
                     BackColor = Color.Transparent
                 });
             }
             else
             {
+                const int cardW = 200, cardH = 160, gap = 16, cols = 3;
+                int i = 0;
                 foreach (var game in detected)
                 {
-                    var card = new GameCard(game);
+                    var card = new GameCard(game)
+                    {
+                        Location = new Point(40 + (i % cols) * (cardW + gap),
+                                              104 + (i / cols) * (cardH + gap))
+                    };
                     card.Click += (s, e) => onConfigure(card.Game);
-                    flow.Controls.Add(card);
+                    Controls.Add(card);
+                    i++;
                 }
             }
-
-            Controls.Add(flow);
         }
     }
 }

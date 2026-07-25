@@ -43,7 +43,43 @@ namespace VibranceHud
             PlexusNodeB: Color.FromArgb(120, 120, 132),
             PlexusLine: Color.FromArgb(95, 95, 106));
 
-        public static readonly IReadOnlyList<ThemePalette> All = new[]
+        public const string CustomName = "Custom";
+
+        private static ThemePalette? _custom;
+        private static IReadOnlyList<ThemePalette>? _allCache;
+
+        /// <summary>Install the palette derived from the user's background image. The whole
+        /// shell - background, cards, borders, glass - is tinted toward the picture, so the
+        /// app reads as one piece with it instead of a black box sitting on top. Only the
+        /// text colours are held fixed, which is what keeps it readable.</summary>
+        public static void SetCustom(Theming.ImageTheme t)
+        {
+            // Text colours are NOT taken from the image - they stay the fixed near-white
+            // that the shell is guaranteed dark enough for.
+            _custom = new ThemePalette(
+                CustomName, IsLight: false,
+                Background: t.Background,
+                Surface: t.Surface,
+                SurfaceHover: t.SurfaceHover,
+                Border: t.Border,
+                GlassFill: t.GlassFill,
+                GlassEdge: t.GlassEdge,
+                Text: Color.FromArgb(240, 240, 246),
+                TextDim: Color.FromArgb(150, 150, 164),
+                Accent: t.Accent, AccentDim: t.AccentDim,
+                PlexusNodeA: t.NodeA, PlexusNodeB: t.NodeB, PlexusLine: t.Line);
+            _allCache = null;
+        }
+
+        public static void ClearCustom()
+        {
+            _custom = null;
+            _allCache = null;
+        }
+
+        public static bool HasCustom => _custom != null;
+
+        private static readonly ThemePalette[] BuiltIn =
         {
             Dark("Violet", Color.FromArgb(167, 139, 250), Color.FromArgb(109, 84, 190),
                 Color.FromArgb(167, 139, 250), Color.FromArgb(232, 96, 214), Color.FromArgb(150, 130, 240)),
@@ -53,6 +89,12 @@ namespace VibranceHud
                 Color.FromArgb(248, 113, 113), Color.FromArgb(225, 70, 100), Color.FromArgb(214, 74, 84)),
             Light,
         };
+
+        /// <summary>Every selectable theme, with the image-derived one appended when set.</summary>
+        public static IReadOnlyList<ThemePalette> All =>
+            _allCache ??= _custom is null
+                ? BuiltIn
+                : BuiltIn.Concat(new[] { _custom }).ToArray();
 
         /// <summary>The palette with this name, or the default if it's unknown.</summary>
         public static ThemePalette ByName(string? name) =>

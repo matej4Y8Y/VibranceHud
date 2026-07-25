@@ -3,16 +3,28 @@ using System;
 namespace VibranceHud
 {
     /// <summary>
-    /// Coordinates every display adjustment behind one place:
-    ///   Vibrance 0-100  -> driver vibrance (NVAPI), no software effect.
-    ///   Vibrance 100-200 -> driver pinned at 100, software saturation supplies the rest.
-    ///   Brightness / eye care -> folded into the same software color matrix.
+    /// Coordinates every display adjustment behind one place.
     ///
-    /// All three are combined into a single screen matrix so there's only ever one pass.
+    /// Vibrance and Saturation are deliberately separate controls, because they are two
+    /// different effects produced by two different mechanisms:
+    ///   Vibrance   0-100 -> the NVIDIA driver's Digital Vibrance (NVAPI). Non-linear:
+    ///                       it lifts muted colours while largely sparing ones that are
+    ///                       already saturated, so it stays natural. Needs an NVIDIA GPU.
+    ///   Saturation 0-200 -> the software colour matrix. Linear: every colour's chroma
+    ///                       scaled equally. Works on any GPU, and is what takes the
+    ///                       picture past the driver's own 100% ceiling.
+    ///
+    /// Saturation, brightness and eye care all fold into a single screen matrix, so
+    /// there's only ever one pass over the screen.
     /// </summary>
     public sealed class VibranceEngine
     {
-        public const int Max = 200;
+        public const int MaxVibrance = 200;
+        public const int MaxSaturation = 200;
+
+        /// <summary>The driver's own hard ceiling. Past this there is no hardware left to
+        /// ask, so vibrance continues in software.</summary>
+        public const int DriverVibranceCeiling = 100;
         public const int MinBrightness = 50;
         public const int MaxBrightness = 150;
         public const int MinGamma = 50;
@@ -25,7 +37,8 @@ namespace VibranceHud
         private readonly ISaturationOverlay _overlay;
         private readonly IGammaRamp _gammaRamp;
 
-        private int _level;
+        private int _vibrance;
+        private int _saturation = 100;
         private int _brightness = 100;
         private int _gamma = 100;
         private bool _eyeCare;
@@ -35,10 +48,24 @@ namespace VibranceHud
             _controller = controller;
             _overlay = overlay;
             _gammaRamp = gammaRamp;
-            _level = Math.Clamp(controller.CurrentLevel, 0, Max);
+            _vibrance = Math.Clamp(controller.CurrentLevel, 0, MaxVibrance);
         }
 
-        public int CurrentLevel => _level;
+        /// <summary>Vibrance 0-200. Up to 100 this is the driver's own Digital Vibrance
+        /// (true non-linear, skin-tone sparing); above 100 the driver is pinned at its
+        /// ceiling and a software vibrance boost carries the rest.</summary>
+        public int Vibrance
+        {
+            get => _vibrance;
+            set { _vibrance = Math.Clamp(value, 0, MaxVibrance); ApplyAll(); }
+        }
+
+        /// <summary>Software saturation, 0-200 (100 = untouched, 0 = greyscale).</summary>
+        public int Saturation
+        {
+            get => _saturation;
+            set { _saturation = Math.Clamp(value, 0, MaxSaturation); ApplyAll(); }
+        }
 
         public int DefaultLevel => _controller.DefaultLevel;
 
@@ -72,34 +99,32 @@ namespace VibranceHud
             set { _eyeCare = value; ApplyAll(); }
         }
 
-        public void SetLevel(int level)
-        {
-            _level = Math.Clamp(level, 0, Max);
-            ApplyAll();
-        }
-
         public void Reset()
         {
             _brightness = 100;
             _eyeCare = false;
             _gamma = 100;
             _gammaRamp.Reset();
-            SetLevel(DefaultLevel);
+            _saturation = 100;
+            Vibrance = DefaultLevel;
         }
 
         private void ApplyAll()
         {
-            // Driver handles vibrance up to its own ceiling; the rest is software.
-            _controller.SetLevel(Math.Min(_level, 100));
+            // Driver takes vibrance up to its ceiling; anything beyond becomes software.
+            _controller.SetLevel(Math.Min(_vibrance, DriverVibranceCeiling));
 
-            float saturation = _level > 100 ? _level / 100f : 1f;
+            float vibrance = _vibrance > DriverVibranceCeiling
+                ? _vibrance / (float)DriverVibranceCeiling
+                : 1f;
+            float saturation = _saturation / 100f;
             float brightness = _brightness / 100f;
             float warmth = _eyeCare ? EyeCareWarmth : 0f;
 
-            if (ColorAdjust.IsIdentity(saturation, brightness, warmth))
+            if (ColorAdjust.IsIdentity(saturation, vibrance, brightness, warmth))
                 _overlay.Clear();
             else
-                _overlay.Apply(ColorAdjust.Build(saturation, brightness, warmth));
+                _overlay.Apply(ColorAdjust.Build(saturation, vibrance, brightness, warmth));
         }
     }
 }

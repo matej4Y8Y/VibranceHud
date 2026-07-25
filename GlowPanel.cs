@@ -12,6 +12,11 @@ namespace VibranceHud
     {
         public ParticleField? Field { get; set; }
 
+        /// <summary>0-255. Paints a translucent sheet of the theme's glass colour over the
+        /// backdrop so this panel reads as its own frosted surface rather than a hole cut
+        /// straight through to the wallpaper. Used by the left nav and title bar.</summary>
+        public int Scrim { get; set; }
+
         public GlowPanel()
         {
             SetStyle(ControlStyles.UserPaint
@@ -25,7 +30,12 @@ namespace VibranceHud
         {
             using (var back = new SolidBrush(Theme.Background))
                 e.Graphics.FillRectangle(back, ClientRectangle);
+            Theming.AppBackground.Paint(e.Graphics, Left, Top);
             Field?.Paint(e.Graphics, Left, Top); // Left/Top are already window-relative here
+
+            if (Scrim > 0 && Theming.AppBackground.IsSet)
+                using (var veil = new SolidBrush(Color.FromArgb(Scrim, Theme.GlassFill)))
+                    e.Graphics.FillRectangle(veil, ClientRectangle);
             base.OnPaint(e);
         }
     }

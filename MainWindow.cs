@@ -43,14 +43,18 @@ namespace VibranceHud
         private readonly SettingsPage _settingsPage;
         private readonly AccountPage _accountPage;
         private readonly FpsTweaksPage _fpsPage;
-        private readonly NavButton _navVibrance, _navGames, _navFps, _navSettings, _navAccount;
+        private readonly CrosshairPage _crosshairPage;
+        private readonly Crosshair.CrosshairService _crosshair;
+        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount;
         private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
             SystemTweaks.SystemTweakService tweaks, Audio.AudioEdgeService? audio,
-            Action<string> onThemeChanged)
+            Action<string> onThemeChanged, Theming.CustomThemeService? custom = null,
+            Crosshair.CrosshairService? crosshair = null)
         {
+            _crosshair = crosshair ?? new Crosshair.CrosshairService();
             _engine = engine;
             _settings = settings;
             _store = store;
@@ -70,9 +74,10 @@ namespace VibranceHud
             DoubleBuffered = true;
 
             _field.Resize(ClientSize.Width, ClientSize.Height);
+            Theming.AppBackground.Resize(ClientSize.Width, ClientSize.Height);
 
             // ---- Title bar (shares the field) ----
-            _titleBar = new GlowPanel { Field = _field, Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            _titleBar = new GlowPanel { Field = _field, Scrim = 110, Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             _titleBar.MouseDown += DragWindow;
 
             var logo = new LogoBox
@@ -91,25 +96,29 @@ namespace VibranceHud
 
             // Pages exist before the nav wires click handlers to them.
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
-            _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged);
+            _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged,
+                custom, onBackgroundChanged: RefreshBackdrop);
             _accountPage = new AccountPage();
+            _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
             _fpsPage = new FpsTweaksPage(_tweaks);
-            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage })
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage })
                 AttachField(page);
 
             // ---- Left nav (shares the field) ----
-            _nav = new GlowPanel { Field = _field, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
+            _nav = new GlowPanel { Field = _field, Scrim = 150, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
             _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
             _navGames = MakeNav("Games", position: 1, iconKind: 1);
             _navFps = MakeNav("FPS Tweaks", position: 2, iconKind: 4);
-            _navSettings = MakeNav("Settings", position: 3, iconKind: 2);
-            _navAccount = MakeNav("Account", position: 4, iconKind: 3);
+            _navCrosshair = MakeNav("Crosshair", position: 3, iconKind: 0);
+            _navSettings = MakeNav("Settings", position: 4, iconKind: 2);
+            _navAccount = MakeNav("Account", position: 5, iconKind: 3);
             _navVibrance.Click += (s, e) => ShowVibrance();
             _navGames.Click += (s, e) => ShowGames();
             _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
+            _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navSettings, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount });
 
             // Version pinned faint in the bottom-left corner - makes it feel like a real build.
             var version = new Label
@@ -132,7 +141,11 @@ namespace VibranceHud
             AddDivider(new Point(0, TitleH), new Size(ClientSize.Width, 1), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right);
             AddDivider(new Point(NavW, TitleH), new Size(1, ClientSize.Height - TitleH), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom);
 
-            Resize += (s, e) => _field.Resize(ClientSize.Width, ClientSize.Height);
+            Resize += (s, e) =>
+            {
+                _field.Resize(ClientSize.Width, ClientSize.Height);
+                Theming.AppBackground.Resize(ClientSize.Width, ClientSize.Height);
+            };
 
             _timer = new System.Windows.Forms.Timer { Interval = 33 };
             _timer.Tick += OnAnimationTick;
@@ -196,7 +209,7 @@ namespace VibranceHud
         private void ShowVibrance()
         {
             Select(_navVibrance, _vibrancePage);
-            _vibrancePage.Refresh(_engine.CurrentLevel);
+            _vibrancePage.Refresh();
         }
 
         private void ShowGames()
@@ -252,7 +265,7 @@ namespace VibranceHud
             if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
             BringToFront();
             Activate();
-            _vibrancePage.Refresh(_engine.CurrentLevel);
+            _vibrancePage.Refresh();
         }
 
         private void DragWindow(object? sender, MouseEventArgs e)
@@ -279,5 +292,13 @@ namespace VibranceHud
             if (disposing) _timer?.Dispose();
             base.Dispose(disposing);
         }
+        /// <summary>Repaint every panel and page after the background image or its dim
+        /// changes - the backdrop is shared, so all of them are stale at once.</summary>
+        private void RefreshBackdrop()
+        {
+            Invalidate(true);
+            foreach (Control c in Controls) c.Invalidate(true);
+        }
+
     }
 }

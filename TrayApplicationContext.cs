@@ -29,6 +29,8 @@ namespace VibranceHud
         private readonly DisplayGammaRamp _gammaRamp;
         private readonly VibranceEngine _engine;
         private readonly SettingsStore _store;
+        private readonly Theming.CustomThemeService _customTheme;
+        private readonly Crosshair.CrosshairService _crosshair = new();
         private readonly AppSettings _settings;
         private readonly SplashForm _splash;
         private readonly Audio.AudioEdgeService? _audioEdge;
@@ -41,15 +43,30 @@ namespace VibranceHud
             _gammaRamp = new DisplayGammaRamp();
             _engine = new VibranceEngine(_controller, _overlay, _gammaRamp);
 
-            _store = new SettingsStore(Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX"));
+            string dataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX");
+            _store = new SettingsStore(dataDir);
             _settings = _store.Load();
+
+            // Rebuild a previously chosen image background + its derived palette before
+            // the theme is resolved, so "Custom" is a known name by the time it's applied.
+            _customTheme = new Theming.CustomThemeService(dataDir, _settings);
+            _customTheme.Restore();
+
+            // Bring back the crosshair the user left on, before the window is built.
+            _crosshair.Apply(_settings.ActiveCrosshair);
+            if (_settings.CrosshairEnabled) _crosshair.Show();
 
             // Restore where the user left things last session.
             _engine.Brightness = _settings.BrightnessPercent;
             _engine.Gamma = _settings.GammaPercent;
             _engine.EyeCare = _settings.EyeCare;
-            _engine.SetLevel(_settings.Level);
+            // Resolved properties migrate an old combined "Level" on first run after
+            // vibrance and saturation became separate controls.
+            _engine.Vibrance = _settings.ResolvedVibrance;
+            _engine.Saturation = _settings.ResolvedSaturation;
+            _settings.VibrancePercent = _engine.Vibrance;
+            _settings.SaturationPercent = _engine.Saturation;
 
             // Resolve the theme (migrating the old light/dark bool) and pin the name back,
             // persisting once so the migration doesn't re-run every launch.
@@ -69,7 +86,7 @@ namespace VibranceHud
                 if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
@@ -244,13 +261,14 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair);
             _window.ShowAndFocus();
             old.Dispose();
         }
 
         protected override void ExitThreadCore()
         {
+            _crosshair.Dispose(); // never leave an overlay floating on screen
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
             _store.Save(_settings);
             _overlay.Dispose();    // clears any oversaturation and releases the Magnification runtime

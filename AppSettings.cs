@@ -6,7 +6,27 @@ namespace VibranceHud
     /// </summary>
     public sealed class AppSettings
     {
+        /// <summary>Legacy combined 0-200 vibrance slider. Kept only so old saved settings
+        /// migrate into <see cref="VibrancePercent"/> + <see cref="SaturationPercent"/>;
+        /// new code reads the resolved properties below.</summary>
         public int Level { get; set; } = 100;
+
+        /// <summary>Driver Digital Vibrance, 0-100. Null on settings written before
+        /// vibrance and saturation became separate controls.</summary>
+        public int? VibrancePercent { get; set; }
+
+        /// <summary>Software colour-matrix saturation, 0-200 (100 = untouched). Null on
+        /// settings written before the split.</summary>
+        public int? SaturationPercent { get; set; }
+
+        /// <summary>Vibrance to actually use, migrating a legacy <see cref="Level"/> the
+        /// same way the old engine split it internally - so upgrading looks identical.</summary>
+        public int ResolvedVibrance => VibrancePercent ?? System.Math.Min(Level, 100);
+
+        /// <summary>Saturation to actually use. A legacy level only drove the software
+        /// matrix above 100; below that the matrix was neutral.</summary>
+        public int ResolvedSaturation => SaturationPercent ?? (Level > 100 ? Level : 100);
+
         public bool StartWithWindows { get; set; }
         public int OpacityPercent { get; set; } = 85;
         /// <summary>Legacy light/dark flag. Kept only to migrate old saved settings into
@@ -19,6 +39,35 @@ namespace VibranceHud
         public int BrightnessPercent { get; set; } = 100;
         public int GammaPercent { get; set; } = 100;
         public bool EyeCare { get; set; }
+
+        // ---- Custom image theme ----
+
+        /// <summary>File name of the background image inside the app's own data folder.
+        /// The picked file is copied there, so moving or deleting the original can't
+        /// break the theme. Empty = no custom background.</summary>
+        public string CustomBackgroundFile { get; set; } = "";
+
+        /// <summary>How far the image is darkened (0-80) so the UI stays readable.
+        /// Auto-set from the image's brightness on upload, then user-adjustable.</summary>
+        public int CustomBackgroundDim { get; set; } = 40;
+
+        /// <summary>How far the background image is softened (0-100). Blur makes busy
+        /// wallpapers sit behind the UI without fighting it.</summary>
+        public int CustomBackgroundBlur { get; set; }
+
+        /// <summary>The accent extracted from the image, cached so startup doesn't have to
+        /// re-scan it. 0 = not derived yet.</summary>
+        public int CustomAccentArgb { get; set; }
+
+        // ---- Crosshair overlay ----
+
+        public bool CrosshairEnabled { get; set; }
+
+        /// <summary>The crosshair currently being used / edited.</summary>
+        public Crosshair.CrosshairConfig ActiveCrosshair { get; set; } = new();
+
+        /// <summary>The user's named crosshairs, switched manually.</summary>
+        public System.Collections.Generic.List<Crosshair.CrosshairConfig> SavedCrosshairs { get; set; } = new();
 
         /// <summary>Last version that showed its "what's new" notes.</summary>
         public string LastSeenVersion { get; set; } = "";

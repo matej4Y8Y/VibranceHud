@@ -53,12 +53,6 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void Max_Is200()
-        {
-            Assert.Equal(200, VibranceEngine.Max);
-        }
-
-        [Fact]
         public void DriverAvailable_ReflectsController()
         {
             var (available, _, _) = NewEngine();
@@ -69,85 +63,31 @@ namespace VibranceHud.Tests
             Assert.False(unavailable.DriverAvailable);
         }
 
+        // Vibrance/Saturation split behaviour lives in ColorSplitTests; these cover the
+        // driver-availability edge and how the other adjustments interact with it.
+
         [Fact]
-        public void NoDriver_AboveThreshold_StillAppliesSoftwareSaturation()
+        public void NoDriver_SoftwareSaturation_StillApplies()
         {
             var ctrl = new FakeController { IsAvailable = false };
             var ovl = new FakeOverlay();
             var engine = new VibranceEngine(ctrl, ovl, new FakeGamma());
 
-            engine.SetLevel(150);
+            engine.Saturation = 150;
 
-            Assert.Equal(100, ctrl.LastSet); // driver pinned/no-op, never sent above 100
-            Assert.Single(ovl.Applied); // software boost still applies without a driver
+            Assert.Single(ovl.Applied); // software boost works without any driver
         }
 
         [Fact]
-        public void BelowThreshold_DrivesGpuOnly_AndClearsOverlay()
+        public void Vibrance_DrivesGpuOnly_AndClearsOverlay()
         {
             var (engine, ctrl, ovl) = NewEngine();
 
-            engine.SetLevel(80);
+            engine.Vibrance = 80;
 
             Assert.Equal(80, ctrl.LastSet);
             Assert.Empty(ovl.Applied);
             Assert.Equal(1, ovl.ClearCalls);
-        }
-
-        [Fact]
-        public void AtThreshold100_IsStillGpuOnly()
-        {
-            var (engine, ctrl, ovl) = NewEngine();
-
-            engine.SetLevel(100);
-
-            Assert.Equal(100, ctrl.LastSet);
-            Assert.Empty(ovl.Applied);
-        }
-
-        [Fact]
-        public void AboveThreshold_PinsGpuAt100_AndAppliesSaturationMatrix()
-        {
-            var (engine, ctrl, ovl) = NewEngine();
-
-            engine.SetLevel(150);
-
-            Assert.Equal(100, ctrl.LastSet);
-            AssertMatrix(ColorAdjust.Build(1.5f, 1f, 0f), ovl.Last);
-        }
-
-        [Fact]
-        public void ClampsAboveMax()
-        {
-            var (engine, ctrl, ovl) = NewEngine();
-
-            engine.SetLevel(250);
-
-            Assert.Equal(200, engine.CurrentLevel);
-            Assert.Equal(100, ctrl.LastSet);
-            AssertMatrix(ColorAdjust.Build(2f, 1f, 0f), ovl.Last);
-        }
-
-        [Fact]
-        public void ClampsBelowZero()
-        {
-            var (engine, ctrl, ovl) = NewEngine();
-
-            engine.SetLevel(-10);
-
-            Assert.Equal(0, engine.CurrentLevel);
-            Assert.Equal(0, ctrl.LastSet);
-            Assert.Equal(1, ovl.ClearCalls);
-        }
-
-        [Fact]
-        public void CurrentLevel_ReflectsLastSet_IncludingOvershoot()
-        {
-            var (engine, _, _) = NewEngine();
-
-            engine.SetLevel(175);
-
-            Assert.Equal(175, engine.CurrentLevel);
         }
 
         [Fact]
@@ -160,10 +100,10 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void Brightness_AppliesMatrix_EvenBelowVibranceThreshold()
+        public void Brightness_AppliesMatrix_EvenAtNeutralSaturation()
         {
             var (engine, _, ovl) = NewEngine();
-            engine.SetLevel(80); // clears
+            engine.Vibrance = 80; // clears
 
             engine.Brightness = 70;
 
@@ -187,7 +127,7 @@ namespace VibranceHud.Tests
         public void EyeCare_AppliesWarmMatrix_AndClearsWhenTurnedOff()
         {
             var (engine, _, ovl) = NewEngine();
-            engine.SetLevel(100);
+            engine.Vibrance = 100;
 
             engine.EyeCare = true;
             AssertMatrix(ColorAdjust.Build(1f, 1f, VibranceEngine.EyeCareWarmth), ovl.Last);
@@ -198,15 +138,13 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void Combined_VibranceBrightnessAndEyeCare_ShareOneMatrix()
+        public void Combined_SaturationBrightnessAndEyeCare_ShareOneMatrix()
         {
             var (engine, ctrl, ovl) = NewEngine();
 
-            engine.SetLevel(160);
+            engine.Saturation = 160;
             engine.Brightness = 90;
             engine.EyeCare = true;
-
-            Assert.Equal(100, ctrl.LastSet); // driver still pinned
             AssertMatrix(ColorAdjust.Build(1.6f, 0.9f, VibranceEngine.EyeCareWarmth), ovl.Last);
         }
 
@@ -264,14 +202,14 @@ namespace VibranceHud.Tests
         {
             var (engine, ctrl, ovl) = NewEngine();
             ctrl.DefaultLevel = 50;
-            engine.SetLevel(200);
+            engine.Saturation = 200;
             engine.Brightness = 60;
             engine.EyeCare = true;
 
             engine.Reset();
 
             Assert.Equal(50, ctrl.LastSet);
-            Assert.Equal(50, engine.CurrentLevel);
+            Assert.Equal(50, engine.Vibrance);
             Assert.Equal(100, engine.Brightness);
             Assert.False(engine.EyeCare);
             Assert.True(ovl.ClearCalls >= 1); // neutral again

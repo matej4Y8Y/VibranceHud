@@ -14,15 +14,20 @@ namespace VibranceHud.Pages
         private readonly SettingsStore _store;
         private readonly Action<int> _onOpacityChanged;
         private readonly Action<string> _onThemeChanged;
+        private readonly Theming.CustomThemeService? _custom;
+        private readonly Action _onBackgroundChanged;
         private readonly System.Collections.Generic.List<SwatchButton> _swatches = new();
 
         public SettingsPage(AppSettings settings, SettingsStore store,
-            Action<int> onOpacityChanged, Action<string> onThemeChanged)
+            Action<int> onOpacityChanged, Action<string> onThemeChanged,
+            Theming.CustomThemeService? custom = null, Action? onBackgroundChanged = null)
         {
             _settings = settings;
             _store = store;
             _onOpacityChanged = onOpacityChanged;
             _onThemeChanged = onThemeChanged;
+            _custom = custom;
+            _onBackgroundChanged = onBackgroundChanged ?? (() => { });
 
             Dock = DockStyle.Fill;
             BackColor = Theme.Background;
@@ -89,7 +94,127 @@ namespace VibranceHud.Pages
             }
             Controls.Add(themeCard);
 
-            var appearance = new CardPanel { Location = new Point(40, 288), Size = new Size(width, 108) };
+            // ---- Custom background image ----
+            // The picked image sits behind the plexus field, and its dominant colour
+            // becomes the accent - so the theme matches whatever the user drops in.
+            var bgCard = new CardPanel { Location = new Point(40, 288), Size = new Size(width, 208) };
+            bgCard.Controls.Add(UiHelpers.Caption("BACKGROUND IMAGE", 18, 16, 260));
+
+            var bgHint = new Label
+            {
+                Text = _custom != null && _custom.HasImage
+                    ? "Theme colour is taken from this image."
+                    : "Pick an image - the theme takes its colour from it.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(18, 40),
+                Size = new Size(width - 40, 18)
+            };
+            bgCard.Controls.Add(bgHint);
+
+            var dimValue = new Label
+            {
+                Text = $"{_settings.CustomBackgroundDim}%",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(width - 60, 92),
+                Size = new Size(42, 16),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+
+            var chooseBtn = FlatButton("Choose image…", 18, 62, 150);
+            var clearBtn = FlatButton("Remove", 178, 62, 100);
+
+            var dimCaption = UiHelpers.Caption("DIM", 18, 92, 120);
+            var dimSlider = new FlatSlider
+            {
+                Minimum = Theming.ImagePalette.MinDim,
+                Maximum = Theming.ImagePalette.MaxDim,
+                Location = new Point(16, 112),
+                Width = width - 32,
+                Value = Math.Clamp(_settings.CustomBackgroundDim,
+                                   Theming.ImagePalette.MinDim, Theming.ImagePalette.MaxDim)
+            };
+            dimSlider.ValueChanged += (s, e) =>
+            {
+                _custom?.SetDim(dimSlider.Value);
+                dimValue.Text = $"{dimSlider.Value}%";
+                _store.Save(_settings);
+                _onBackgroundChanged();
+            };
+
+            var blurValue = new Label
+            {
+                Text = $"{_settings.CustomBackgroundBlur}%",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(width - 60, 148),
+                Size = new Size(42, 16),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+            var blurCaption = UiHelpers.Caption("BLUR", 18, 148, 120);
+            var blurSlider = new FlatSlider
+            {
+                Minimum = 0,
+                Maximum = Theming.AppBackground.MaxBlur,
+                Location = new Point(16, 168),
+                Width = width - 32,
+                Value = Math.Clamp(_settings.CustomBackgroundBlur, 0, Theming.AppBackground.MaxBlur)
+            };
+            blurSlider.ValueChanged += (s, e) =>
+            {
+                _custom?.SetBlur(blurSlider.Value);
+                blurValue.Text = $"{blurSlider.Value}%";
+                _store.Save(_settings);
+                _onBackgroundChanged();
+            };
+
+            chooseBtn.Click += (s, e) =>
+            {
+                using var dlg = new OpenFileDialog
+                {
+                    Title = "Choose a background image",
+                    Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All files|*.*"
+                };
+                if (dlg.ShowDialog(this) != DialogResult.OK || _custom == null) return;
+
+                if (!_custom.SetImage(dlg.FileName))
+                {
+                    bgHint.Text = "That file couldn't be read as an image.";
+                    return;
+                }
+
+                dimSlider.Value = _settings.CustomBackgroundDim;
+                dimValue.Text = $"{_settings.CustomBackgroundDim}%";
+                blurSlider.Value = _settings.CustomBackgroundBlur;
+                blurValue.Text = $"{_settings.CustomBackgroundBlur}%";
+                bgHint.Text = "Theme colour is taken from this image.";
+                _store.Save(_settings);
+                _onThemeChanged(ThemeCatalog.CustomName);
+            };
+
+            clearBtn.Click += (s, e) =>
+            {
+                _custom?.Remove();
+                bgHint.Text = "Pick an image - the theme takes its colour from it.";
+                _store.Save(_settings);
+                _onThemeChanged(ThemeCatalog.DefaultName);
+            };
+
+            bgCard.Controls.Add(blurCaption);
+            bgCard.Controls.Add(blurValue);
+            bgCard.Controls.Add(blurSlider);
+            bgCard.Controls.Add(chooseBtn);
+            bgCard.Controls.Add(clearBtn);
+            bgCard.Controls.Add(dimCaption);
+            bgCard.Controls.Add(dimValue);
+            bgCard.Controls.Add(dimSlider);
+            Controls.Add(bgCard);
+
+            var appearance = new CardPanel { Location = new Point(40, 516), Size = new Size(width, 108) };
             appearance.Controls.Add(UiHelpers.Caption("WINDOW OPACITY", 18, 16, 240));
             var opacityValue = new Label
             {
@@ -120,7 +245,7 @@ namespace VibranceHud.Pages
             appearance.Controls.Add(opacitySlider);
             Controls.Add(appearance);
 
-            var updates = new CardPanel { Location = new Point(40, 408), Size = new Size(width, 92) };
+            var updates = new CardPanel { Location = new Point(40, 636), Size = new Size(width, 92) };
             updates.Controls.Add(UiHelpers.Caption("UPDATES", 18, 16, 200));
             var checkBtn = FlatButton("Check for updates", 18, 44, 180);
             checkBtn.Click += async (s, e) => await UpdateService.CheckManuallyAsync();
@@ -128,7 +253,7 @@ namespace VibranceHud.Pages
             Controls.Add(updates);
 
             // ---- About ----
-            var about = new CardPanel { Location = new Point(40, 512), Size = new Size(width, 150) };
+            var about = new CardPanel { Location = new Point(40, 740), Size = new Size(width, 150) };
             about.Controls.Add(new LogoBox
             {
                 Image = BrandAssets.HorizontalLogo(Theme.IsLight),

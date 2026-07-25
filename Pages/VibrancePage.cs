@@ -16,13 +16,16 @@ namespace VibranceHud.Pages
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
 
-        private readonly FlatSlider _slider;
+        private readonly FlatSlider _slider;     // saturation (software, 0-200)
+        private readonly FlatSlider _vibrance;   // driver Digital Vibrance (0-100)
         private readonly FlatSlider _brightness;
         private readonly FlatSlider _gamma;
         private readonly ToggleSwitch _eyeCare;
         private readonly List<ChipButton> _chips = new();
+        private readonly List<(int Vib, int Sat)> _presetValues = new();
 
-        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY, _brightCapY, _gammaCapY, _eyeY;
+        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY;
+        private int _vibCapY, _brightCapY, _gammaCapY, _eyeY;
 
         // Built once - OnPaint runs ~30x/sec, so never allocate fonts inside it.
         private static readonly Font NumberFont = new(Theme.FontFamily, 46f, FontStyle.Bold);
@@ -37,31 +40,55 @@ namespace VibranceHud.Pages
             _store = store;
             Font = new Font(Theme.FontFamily, 9f);
 
+            // Saturation is the headline control: it's the one that goes past the driver
+            // ceiling, and it works without an NVIDIA GPU.
             _slider = new FlatSlider
             {
                 Minimum = 0,
-                Maximum = VibranceEngine.Max,
+                Maximum = VibranceEngine.MaxSaturation,
                 Notch = 100,
-                Value = _engine.CurrentLevel
+                Value = _engine.Saturation
             };
             _slider.ValueChanged += (s, e) =>
             {
-                _engine.SetLevel(_slider.Value);
-                _settings.Level = _slider.Value;
+                _engine.Saturation = _slider.Value;
+                _settings.SaturationPercent = _slider.Value;
                 UpdateActiveChip();
                 Invalidate();
             };
             Controls.Add(_slider);
 
-            (string name, int level)[] presets =
+            _vibrance = new FlatSlider
             {
-                ("Natural", 50), ("Standard", 100), ("Vivid", 150), ("Max", 200)
+                Minimum = 0,
+                Maximum = VibranceEngine.MaxVibrance,
+                // The notch marks where the driver runs out and software takes over.
+                Notch = VibranceEngine.DriverVibranceCeiling,
+                Value = _engine.Vibrance
             };
-            foreach (var (name, level) in presets)
+            _vibrance.ValueChanged += (s, e) =>
             {
-                var chip = new ChipButton { Text = name, Level = level, Font = new Font(Theme.FontFamily, 9f) };
-                chip.Click += (s, e) => _slider.Value = level;
+                _engine.Vibrance = _vibrance.Value;
+                _settings.VibrancePercent = _vibrance.Value;
+                UpdateActiveChip();
+                Invalidate();
+            };
+            Controls.Add(_vibrance);
+
+            // Presets set BOTH controls. These pairs reproduce exactly what the old
+            // combined 0-200 slider did at 50/100/150/200, so nothing shifts on upgrade.
+            (string name, int vib, int sat)[] presets =
+            {
+                ("Natural", 50, 100), ("Standard", 100, 100),
+                ("Vivid", 100, 150), ("Max", 100, 200)
+            };
+            foreach (var (name, vib, sat) in presets)
+            {
+                var chip = new ChipButton { Text = name, Level = sat, Font = new Font(Theme.FontFamily, 9f) };
+                int v = vib, t = sat;
+                chip.Click += (s, e) => { _vibrance.Value = v; _slider.Value = t; };
                 _chips.Add(chip);
+                _presetValues.Add((vib, sat));
                 Controls.Add(chip);
             }
             UpdateActiveChip();
@@ -113,7 +140,8 @@ namespace VibranceHud.Pages
         {
             _colW = Math.Min(560, Width - 80);
             _cx = (Width - _colW) / 2;
-            int top = Math.Max(20, (Height - 560) / 2);
+            // Matches the glass panel's height below, so the card stays optically centred.
+            int top = Math.Max(20, (Height - 580) / 2);
 
             _numberY = top;
             _captionY = top + 90;
@@ -127,13 +155,16 @@ namespace VibranceHud.Pages
             for (int i = 0; i < _chips.Count; i++)
                 _chips[i].SetBounds(_cx + i * (chipW + 10), chipY, chipW, 36);
 
-            _brightCapY = chipY + 56;
-            _brightness.SetBounds(_cx, chipY + 78, _colW, 32);
+            _vibCapY = chipY + 56;
+            _vibrance.SetBounds(_cx, chipY + 78, _colW, 32);
 
-            _gammaCapY = chipY + 122;
-            _gamma.SetBounds(_cx, chipY + 144, _colW, 32);
+            _brightCapY = chipY + 122;
+            _brightness.SetBounds(_cx, chipY + 144, _colW, 32);
 
-            _eyeY = chipY + 196;
+            _gammaCapY = chipY + 188;
+            _gamma.SetBounds(_cx, chipY + 210, _colW, 32);
+
+            _eyeY = chipY + 262;
             _eyeCare.SetBounds(_cx + _colW - 44, _eyeY - 2, 44, 22);
 
             Invalidate();
@@ -145,7 +176,7 @@ namespace VibranceHud.Pages
             var g = e.Graphics;
 
             // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
-            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 514);
+            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 580);
             Glass.PaintPanel(g, panel, 24, fillAlpha: 165);
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -154,21 +185,23 @@ namespace VibranceHud.Pages
                 new Rectangle(_cx, _numberY, _colW, 84), Theme.Text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            TextRenderer.DrawText(g, UiHelpers.Spaced("DIGITAL VIBRANCE"), CaptionFont,
+            TextRenderer.DrawText(g, UiHelpers.Spaced("SATURATION"), CaptionFont,
                 new Rectangle(_cx, _captionY, _colW, 16), Theme.TextDim, TextFormatFlags.HorizontalCenter);
 
             TextRenderer.DrawText(g, "0", SmallFont, new Rectangle(_cx, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Left);
             TextRenderer.DrawText(g, "100", SmallFont, new Rectangle(_cx, _scaleY, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
             TextRenderer.DrawText(g, "200", SmallFont, new Rectangle(_cx + _colW - 40, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Right);
 
-            if (!_engine.DriverAvailable)
-            {
-                TextRenderer.DrawText(g, "0-100% needs an NVIDIA GPU · boost above 100% still works", SmallFont,
-                    new Rectangle(_cx, _scaleY + 16, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
-            }
-
             TextRenderer.DrawText(g, UiHelpers.Spaced("PRESETS"), CaptionFont,
                 new Rectangle(_cx, _presetCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
+
+            // ---- Vibrance (driver) ----
+            TextRenderer.DrawText(g, UiHelpers.Spaced("VIBRANCE"), CaptionFont,
+                new Rectangle(_cx, _vibCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
+            TextRenderer.DrawText(g,
+                _engine.DriverAvailable ? $"{_vibrance.Value}%" : "no NVIDIA GPU",
+                SmallFont, new Rectangle(_cx + _colW - 110, _vibCapY, 110, 16),
+                Theme.TextDim, TextFormatFlags.Right);
 
             // ---- Brightness calibration ----
             TextRenderer.DrawText(g, UiHelpers.Spaced("BRIGHTNESS"), CaptionFont,
@@ -189,13 +222,19 @@ namespace VibranceHud.Pages
 
         private void UpdateActiveChip()
         {
-            foreach (var chip in _chips)
-                chip.Active = chip.Level == _slider.Value;
+            // A preset lights up only when BOTH controls still match it - Natural and
+            // Standard share saturation 100 and differ only in vibrance.
+            for (int i = 0; i < _chips.Count; i++)
+            {
+                var (vib, sat) = _presetValues[i];
+                _chips[i].Active = _vibrance.Value == vib && _slider.Value == sat;
+            }
         }
 
-        public void Refresh(int level)
+        public void Refresh()
         {
-            _slider.Value = Math.Clamp(level, 0, VibranceEngine.Max);
+            _slider.Value = _engine.Saturation;
+            _vibrance.Value = _engine.Vibrance;
             _brightness.Value = _engine.Brightness;
             _gamma.Value = _engine.Gamma;
             _eyeCare.Checked = _engine.EyeCare;
