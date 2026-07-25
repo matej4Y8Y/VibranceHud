@@ -231,7 +231,7 @@ namespace VibranceHud.Pages
             }
         }
 
-        public void Refresh()
+        public new void Refresh()
         {
             _slider.Value = _engine.Saturation;
             _vibrance.Value = _engine.Vibrance;

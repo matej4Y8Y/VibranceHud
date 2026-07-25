@@ -50,6 +50,27 @@ namespace VibranceHud.Crosshair
         [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr h);
         [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr ho);
 
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER pbmi,
+            uint iUsage, out IntPtr ppvBits, IntPtr hSection, uint dwOffset);
+
+        [DllImport("kernel32.dll", EntryPoint = "RtlMoveMemory")]
+        private static extern void CopyMemory(IntPtr dest, IntPtr src, uint count);
+
+        private const uint DIB_RGB_COLORS = 0;
+        private const uint BI_RGB = 0;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BITMAPINFOHEADER
+        {
+            public uint biSize;
+            public int biWidth, biHeight;
+            public ushort biPlanes, biBitCount;
+            public uint biCompression, biSizeImage;
+            public int biXPelsPerMeter, biYPelsPerMeter;
+            public uint biClrUsed, biClrImportant;
+        }
+
         private CrosshairConfig _config = new();
 
         public CrosshairWindow()
@@ -110,30 +131,8 @@ namespace VibranceHud.Crosshair
             using var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(bmp))
             {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TranslateTransform(w / 2f, h / 2f); // geometry is built around the origin
-
-                var colour = Color.FromArgb(_config.ColourArgb);
-                using var fill = new SolidBrush(colour);
-                using var outline = new Pen(Color.FromArgb(190, 0, 0, 0), 1f);
-
-                foreach (var bar in shapes.Bars)
-                {
-                    g.FillRectangle(fill, bar);
-                    if (_config.Outline) g.DrawRectangle(outline, bar.X, bar.Y, bar.Width, bar.Height);
-                }
-
-                if (shapes.Circle is { } c)
-                {
-                    using var ring = new Pen(colour, Math.Max(1, _config.Thickness));
-                    g.DrawEllipse(ring, c);
-                    if (_config.Outline)
-                    {
-                        float o = Math.Max(1, _config.Thickness) / 2f;
-                        g.DrawEllipse(outline, c.X - o, c.Y - o, c.Width + o * 2, c.Height + o * 2);
-                        g.DrawEllipse(outline, c.X + o, c.Y + o, c.Width - o * 2, c.Height - o * 2);
-                    }
-                }
+                CrosshairRender.Draw(g, _config);
             }
 
             Push(bmp, left, top);
@@ -148,12 +147,35 @@ namespace VibranceHud.Crosshair
 
             try
             {
-                // GetHbitmap(Color) is the wrong overload here: it discards alpha and
-                // flattens every transparent pixel into an OPAQUE fill of that colour -
-                // which turned the whole transparent canvas into a solid black rectangle
-                // the size of the crosshair's bounds. The parameterless overload keeps
-                // per-pixel alpha, which is what a layered window needs.
-                hBitmap = bmp.GetHbitmap();
+                // GetHbitmap (either overload) proved unreliable for this window: the
+                // colour overload flattened alpha into a solid black square, and the
+                // parameterless one let the transparent canvas come through as opaque
+                // white. A hand-built 32bpp DIB section with the premultiplied pixels
+                // copied in verbatim is the only source the AC_SRC_ALPHA blend trusts.
+                var bmi = new BITMAPINFOHEADER
+                {
+                    biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
+                    biWidth = bmp.Width,
+                    biHeight = -bmp.Height, // top-down rows, same layout LockBits returns
+                    biPlanes = 1,
+                    biBitCount = 32,
+                    biCompression = BI_RGB
+                };
+                hBitmap = CreateDIBSection(screenDc, ref bmi, DIB_RGB_COLORS,
+                    out IntPtr bits, IntPtr.Zero, 0);
+                if (hBitmap == IntPtr.Zero || bits == IntPtr.Zero) return;
+
+                var data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+                    ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+                try
+                {
+                    CopyMemory(bits, data.Scan0, (uint)(bmp.Width * bmp.Height * 4));
+                }
+                finally
+                {
+                    bmp.UnlockBits(data);
+                }
+
                 old = SelectObject(memDc, hBitmap);
 
                 var size = new SIZE { cx = bmp.Width, cy = bmp.Height };
@@ -167,8 +189,14 @@ namespace VibranceHud.Crosshair
                     AlphaFormat = AC_SRC_ALPHA
                 };
 
-                UpdateLayeredWindow(Handle, screenDc, ref dst, ref size,
-                    memDc, ref src, 0, ref blend, ULW_ALPHA);
+                if (!UpdateLayeredWindow(Handle, screenDc, ref dst, ref size,
+                        memDc, ref src, 0, ref blend, ULW_ALPHA))
+                {
+                    // This used to be swallowed silently, which is how the white square
+                    // shipped without a trace. Never let it fail quiet again.
+                    System.Diagnostics.Debug.WriteLine(
+                        $"CrosshairWindow: UpdateLayeredWindow failed, error {Marshal.GetLastWin32Error()}");
+                }
             }
             finally
             {

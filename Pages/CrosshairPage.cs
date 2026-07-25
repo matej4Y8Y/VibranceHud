@@ -301,26 +301,9 @@ namespace VibranceHud.Pages
                             g.FillRectangle(((xx / cell + yy / cell) % 2 == 0) ? a : b,
                                 xx, yy, cell, cell);
 
-                var shapes = CrosshairGeometry.Build(Config);
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 var state = g.Save();
                 g.TranslateTransform(Width / 2f, Height / 2f);
-
-                var colour = Color.FromArgb(Config.ColourArgb);
-                using (var fill = new SolidBrush(colour))
-                using (var outline = new Pen(Color.FromArgb(190, 0, 0, 0), 1f))
-                {
-                    foreach (var bar in shapes.Bars)
-                    {
-                        g.FillRectangle(fill, bar);
-                        if (Config.Outline)
-                            g.DrawRectangle(outline, bar.X, bar.Y, bar.Width, bar.Height);
-                    }
-                    if (shapes.Circle is { } c)
-                        using (var ring = new Pen(colour, Math.Max(1, Config.Thickness)))
-                            g.DrawEllipse(ring, c);
-                }
-
+                CrosshairRender.Draw(g, Config);
                 g.Restore(state);
                 base.OnPaint(e);
             }
