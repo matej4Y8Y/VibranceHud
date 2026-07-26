@@ -33,11 +33,11 @@ namespace VibranceHud
             public int Height;
         }
 
-        public Device Device { get; private set; }
+        public Device? Device { get; private set; }
         public List<SwapChain1> SwapChains { get; }
         public List<OutputTarget> Targets { get; }
 
-        private Factory2 _factory;
+        private Factory2? _factory;
 
         public bool IsAvailable => Device != null && Targets.Count > 0;
 

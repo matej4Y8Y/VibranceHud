@@ -56,4 +56,11 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!-- Expose internal types (DxDevice) to the test assembly for integration tests. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>VibranceHud.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

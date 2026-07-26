@@ -40,10 +40,10 @@ namespace VibranceHud
         private const PresentFlags AlphaPremultiplied = PresentFlags.None;
 
         private readonly DxDevice _device;
-        private readonly DxShader _shader;
+        private readonly DxShader _shader = null!;
         private readonly List<DxCapture> _captures;
-        private readonly CancellationTokenSource _cts;
-        private readonly Task _renderLoop;
+        private readonly CancellationTokenSource _cts = null!;
+        private readonly Task _renderLoop = null!;
         private readonly object _matrixLock = new object();
 
         private float[] _currentMatrix;
@@ -66,13 +66,14 @@ namespace VibranceHud
 
             try
             {
-                _shader = new DxShader(_device.Device, _device.Device.ImmediateContext);
+                var device = _device.Device!;
+                _shader = new DxShader(device, device.ImmediateContext);
 
                 // One desktop-duplication capture per monitor, paired 1:1 with the
                 // swap-chain targets created in DxDevice.
                 foreach (var target in _device.Targets)
                 {
-                    _captures.Add(new DxCapture(_device.Device, target.Output));
+                    _captures.Add(new DxCapture(device, target.Output));
                 }
             }
             catch (Exception)
@@ -120,7 +121,7 @@ namespace VibranceHud
 
         private void RenderLoop(CancellationToken ct)
         {
-            var context = _device.Device.ImmediateContext;
+            var context = _device.Device!.ImmediateContext;
             var clear = new RawColor4(0f, 0f, 0f, 0f); // transparent - only the quad writes color
 
             while (!ct.IsCancellationRequested)
