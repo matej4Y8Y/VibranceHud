@@ -25,7 +25,7 @@ namespace VibranceHud
         private readonly NotifyIcon _trayIcon;
         private readonly HotkeyWindow _hotkeyWindow;
         private readonly IVibranceController _controller;
-        private readonly SaturationOverlay _overlay;
+        private readonly ISaturationOverlay _overlay;
         private readonly DisplayGammaRamp _gammaRamp;
         private readonly VibranceEngine _engine;
         private readonly SettingsStore _store;
@@ -39,7 +39,7 @@ namespace VibranceHud
         public TrayApplicationContext()
         {
             _controller = CreateVibranceController();
-            _overlay = new SaturationOverlay();
+            _overlay = TryCreateOverlay();
             _gammaRamp = new DisplayGammaRamp();
             _engine = new VibranceEngine(_controller, _overlay, _gammaRamp);
 
@@ -149,6 +149,17 @@ namespace VibranceHud
             {
                 return new NullVibranceController();
             }
+        }
+
+        private static ISaturationOverlay TryCreateOverlay()
+        {
+            var dx = new DxOverlay();
+            if (dx.IsAvailable) return dx;
+            dx.Dispose();
+            // DX11 init failed (no DX11 GPU, broken driver, session locked, etc.) -
+            // fall back to Magnification API. The user sees saturated colors on the
+            // monitor but the effect is not visible in capture tools.
+            return new MagOverlay();
         }
 
         /// <summary>
@@ -271,7 +282,7 @@ namespace VibranceHud
             _crosshair.Dispose(); // never leave an overlay floating on screen
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
             _store.Save(_settings);
-            _overlay.Dispose();    // clears any oversaturation and releases the Magnification runtime
+            (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
             _audioEdge?.Dispose(); // hands the user's volume back - never leave it ducked
             _trayIcon.Visible = false;

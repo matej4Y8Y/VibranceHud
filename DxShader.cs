@@ -82,9 +82,9 @@ namespace VibranceHud
             _sampler = new SamplerState(device, new SamplerStateDescription
             {
                 Filter = Filter.MinMagMipLinear,
-                AddressU = TextureAddress.Clamp,
-                AddressV = TextureAddress.Clamp,
-                AddressW = TextureAddress.Clamp,
+                AddressU = TextureAddressMode.Clamp,
+                AddressV = TextureAddressMode.Clamp,
+                AddressW = TextureAddressMode.Clamp,
                 ComparisonFunction = Comparison.Never,
                 MinimumLod = 0,
                 MaximumLod = float.MaxValue,
