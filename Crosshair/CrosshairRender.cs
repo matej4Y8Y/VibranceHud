@@ -39,5 +39,38 @@ namespace VibranceHud.Crosshair
                 g.DrawEllipse(ring, c);
             }
         }
+
+        /// <summary>Draw scaled and centred to fit inside <paramref name="target"/> - for
+        /// small thumbnails (saved-chip previews) where a full-size crosshair, drawn at its
+        /// real pixel dimensions, would overflow a tiny box.</summary>
+        public static void Draw(Graphics g, CrosshairConfig config, Rectangle target)
+        {
+            var bounds = CrosshairGeometry.Build(config).Bounds;
+            float scale = 1f;
+            if (bounds.Width > 0 && bounds.Height > 0)
+                scale = Math.Min(1f, 0.82f * Math.Min(target.Width / bounds.Width, target.Height / bounds.Height));
+
+            var state = g.Save();
+            g.SetClip(target);
+            g.TranslateTransform(target.X + target.Width / 2f, target.Y + target.Height / 2f);
+            g.ScaleTransform(scale, scale);
+            Draw(g, config);
+            g.Restore(state);
+        }
+
+        /// <summary>Checkerboard backdrop so both light and dark crosshair colours read
+        /// clearly - shared between the full-size preview and the saved-chip thumbnails.</summary>
+        public static void DrawCheckerboard(Graphics g, Rectangle rect, int cell)
+        {
+            var clip = g.Clip;
+            g.SetClip(rect);
+            using (var a = new SolidBrush(Color.FromArgb(255, 58, 58, 64)))
+            using (var b = new SolidBrush(Color.FromArgb(255, 78, 78, 86)))
+                for (int yy = rect.Top; yy < rect.Bottom; yy += cell)
+                    for (int xx = rect.Left; xx < rect.Right; xx += cell)
+                        g.FillRectangle(((xx - rect.Left) / cell + (yy - rect.Top) / cell) % 2 == 0 ? a : b,
+                            xx, yy, cell, cell);
+            g.Clip = clip;
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 using VibranceHud.Crosshair;
@@ -18,10 +19,14 @@ namespace VibranceHud.Pages
         private readonly CrosshairService _service;
 
         private readonly PreviewBox _preview;
-        private readonly ComboBox _saved;
+        private readonly CardPanel _card;
+        private readonly FlowLayoutPanel _savedFlow;
+        private readonly Label _savedEmpty;
         private readonly ToggleSwitch _enabled;
         private readonly Label _status;
         private readonly List<ChipButton> _shapes = new();
+
+        private const int BaseCardHeight = 630;
 
         private CrosshairConfig _current;
 
@@ -39,8 +44,8 @@ namespace VibranceHud.Pages
             // combo/buttons land around y=572-600): a shorter card clips its own last row
             // regardless of the page's AutoScroll, since a child can't render past its
             // immediate parent's bounds.
-            var card = new CardPanel { Location = new Point(40, 34), Size = new Size(620, 630) };
-            card.Controls.Add(UiHelpers.Caption("CROSSHAIR", 18, 16, 240));
+            _card = new CardPanel { Location = new Point(40, 34), Size = new Size(620, BaseCardHeight) };
+            _card.Controls.Add(UiHelpers.Caption("CROSSHAIR", 18, 16, 240));
 
             _enabled = new ToggleSwitch { Location = new Point(560, 14), Checked = _service.IsVisible };
             _enabled.CheckedChanged += (s, e) =>
@@ -50,10 +55,10 @@ namespace VibranceHud.Pages
                 _store.Save(_settings);
                 UpdateStatus();
             };
-            card.Controls.Add(_enabled);
+            _card.Controls.Add(_enabled);
 
             _preview = new PreviewBox { Location = new Point(18, 44), Size = new Size(584, 150) };
-            card.Controls.Add(_preview);
+            _card.Controls.Add(_preview);
 
             _status = new Label
             {
@@ -63,10 +68,10 @@ namespace VibranceHud.Pages
                 Location = new Point(18, 200),
                 Size = new Size(584, 18)
             };
-            card.Controls.Add(_status);
+            _card.Controls.Add(_status);
 
             // ---- Shape ----
-            card.Controls.Add(UiHelpers.Caption("SHAPE", 18, 228, 200));
+            _card.Controls.Add(UiHelpers.Caption("SHAPE", 18, 228, 200));
             int sx = 18;
             foreach (var shape in new[] { CrosshairShape.Cross, CrosshairShape.Dot,
                                           CrosshairShape.Circle, CrosshairShape.T })
@@ -87,18 +92,18 @@ namespace VibranceHud.Pages
                     Push();
                 };
                 _shapes.Add(chip);
-                card.Controls.Add(chip);
+                _card.Controls.Add(chip);
                 sx += 148;
             }
 
             // ---- Sliders ----
             int y = 300;
-            AddSlider(card, "SIZE", y, 1, 30, _current.Size, v => { _current.Size = v; Push(); });
-            AddSlider(card, "THICKNESS", y + 62, 1, 10, _current.Thickness, v => { _current.Thickness = v; Push(); });
-            AddSlider(card, "GAP", y + 124, 0, 30, _current.Gap, v => { _current.Gap = v; Push(); });
+            AddSlider(_card, "SIZE", y, 1, 30, _current.Size, v => { _current.Size = v; Push(); });
+            AddSlider(_card, "THICKNESS", y + 62, 1, 10, _current.Thickness, v => { _current.Thickness = v; Push(); });
+            AddSlider(_card, "GAP", y + 124, 0, 30, _current.Gap, v => { _current.Gap = v; Push(); });
 
             // ---- Colour + options ----
-            card.Controls.Add(UiHelpers.Caption("COLOUR", 18, y + 186, 200));
+            _card.Controls.Add(UiHelpers.Caption("COLOUR", 18, y + 186, 200));
             int cx = 18;
             foreach (var colour in new[]
             {
@@ -110,13 +115,13 @@ namespace VibranceHud.Pages
                 var dot = new SwatchDot(colour) { Location = new Point(cx, y + 208) };
                 var captured = colour;
                 dot.Click += (s, e) => { _current.ColourArgb = captured.ToArgb(); Push(); };
-                card.Controls.Add(dot);
+                _card.Controls.Add(dot);
                 cx += 44;
             }
 
             var outline = new ToggleSwitch { Location = new Point(560, y + 206), Checked = _current.Outline };
             outline.CheckedChanged += (s, e) => { _current.Outline = outline.Checked; Push(); };
-            card.Controls.Add(new Label
+            _card.Controls.Add(new Label
             {
                 Text = "Outline",
                 ForeColor = Theme.Text,
@@ -124,38 +129,45 @@ namespace VibranceHud.Pages
                 Location = new Point(430, y + 208),
                 AutoSize = true
             });
-            card.Controls.Add(outline);
+            _card.Controls.Add(outline);
 
             // ---- Saved configs ----
-            card.Controls.Add(UiHelpers.Caption("SAVED", 18, y + 250, 200));
-            _saved = new ComboBox
+            _card.Controls.Add(UiHelpers.Caption("SAVED", 18, y + 250, 200));
+
+            var saveBtn = Button("Save as…", 472, y + 272, 130);
+            saveBtn.Click += (s, e) => SaveCurrent();
+            _card.Controls.Add(saveBtn);
+
+            // Fixed width so WrapContents actually wraps; height grows with the row count
+            // (RefreshSavedList grows the card to match, same trick already used for the
+            // card's own AutoScrollMinSize - see the comment at the top of this file about
+            // a child positioned outside its parent's bounds being invisible regardless of
+            // the page's own scroll setting).
+            _savedFlow = new FlowLayoutPanel
             {
                 Location = new Point(18, y + 272),
-                Size = new Size(300, 28),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.Surface,
-                ForeColor = Theme.Text
+                Size = new Size(444, 36),
+                MaximumSize = new Size(444, 0),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                WrapContents = true,
+                BackColor = Theme.Surface
             };
-            _saved.SelectedIndexChanged += (s, e) =>
+            _card.Controls.Add(_savedFlow);
+
+            _savedEmpty = new Label
             {
-                if (_saved.SelectedItem is string name) LoadSaved(name);
+                Text = "No saved crosshairs yet — tweak, then Save as…",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(18, y + 272),
+                Size = new Size(444, 36),
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            card.Controls.Add(_saved);
+            _card.Controls.Add(_savedEmpty);
 
-            var saveBtn = Button("Save as…", 330, y + 272, 130);
-            saveBtn.Click += (s, e) => SaveCurrent();
-            card.Controls.Add(saveBtn);
-
-            var delBtn = Button("Delete", 470, y + 272, 130);
-            delBtn.Click += (s, e) => DeleteCurrent();
-            card.Controls.Add(delBtn);
-
-            Controls.Add(card);
-
-            // Set explicitly rather than relying on WinForms to infer it from children -
-            // a UserControl doesn't always recompute this reliably on its own.
-            AutoScrollMinSize = new Size(0, card.Bottom + 20);
+            Controls.Add(_card);
 
             RefreshSavedList();
             Push();
@@ -223,10 +235,35 @@ namespace VibranceHud.Pages
             }
         }
 
+        /// <summary>Rebuilds the chip list from <c>_settings.SavedCrosshairs</c> and grows the
+        /// card to fit however many rows that wraps to (a fixed card height would clip chips
+        /// past its bottom edge regardless of the page's own AutoScroll - see the comment
+        /// on the card's construction above).</summary>
         private void RefreshSavedList()
         {
-            _saved.Items.Clear();
-            foreach (var c in _settings.SavedCrosshairs) _saved.Items.Add(c.Name);
+            _savedFlow.SuspendLayout();
+            _savedFlow.Controls.Clear();
+            foreach (var saved in _settings.SavedCrosshairs)
+            {
+                var chip = new SavedChip(saved)
+                {
+                    Active = saved.Name == _current.Name,
+                    Margin = new Padding(0, 0, 8, 8)
+                };
+                chip.LoadRequested += (s, e) => LoadSaved(saved.Name);
+                chip.DeleteRequested += (s, e) => DeleteSaved(saved.Name);
+                _savedFlow.Controls.Add(chip);
+            }
+            _savedFlow.ResumeLayout(true);
+
+            bool any = _settings.SavedCrosshairs.Count > 0;
+            _savedFlow.Visible = any;
+            _savedEmpty.Visible = !any;
+
+            // Set explicitly rather than relying on WinForms to infer it from children - a
+            // UserControl doesn't always recompute this reliably on its own.
+            _card.Height = Math.Max(BaseCardHeight, _savedFlow.Bottom + 20);
+            AutoScrollMinSize = new Size(0, _card.Bottom + 20);
         }
 
         private void LoadSaved(string name)
@@ -236,6 +273,7 @@ namespace VibranceHud.Pages
             _current = found.Clone();
             foreach (var c in _shapes) c.Active = c.Text == _current.Shape.ToString();
             Push();
+            RefreshSavedList();
         }
 
         private void SaveCurrent()
@@ -248,12 +286,13 @@ namespace VibranceHud.Pages
             _settings.SavedCrosshairs.Add(_current.Clone());
             _store.Save(_settings);
             RefreshSavedList();
-            _saved.SelectedItem = _current.Name;
         }
 
-        private void DeleteCurrent()
+        /// <summary>Deletes immediately, no confirmation - matches the approved chip design.
+        /// If the deleted config was the active one, the on-screen config is left as-is and
+        /// only the highlight disappears (there's nothing left to highlight).</summary>
+        private void DeleteSaved(string name)
         {
-            if (_saved.SelectedItem is not string name) return;
             _settings.SavedCrosshairs.RemoveAll(c => c.Name == name);
             _store.Save(_settings);
             RefreshSavedList();
@@ -293,13 +332,7 @@ namespace VibranceHud.Pages
             protected override void OnPaint(PaintEventArgs e)
             {
                 var g = e.Graphics;
-                const int cell = 16;
-                using (var a = new SolidBrush(Color.FromArgb(255, 58, 58, 64)))
-                using (var b = new SolidBrush(Color.FromArgb(255, 78, 78, 86)))
-                    for (int yy = 0; yy < Height; yy += cell)
-                        for (int xx = 0; xx < Width; xx += cell)
-                            g.FillRectangle(((xx / cell + yy / cell) % 2 == 0) ? a : b,
-                                xx, yy, cell, cell);
+                CrosshairRender.DrawCheckerboard(g, new Rectangle(0, 0, Width, Height), 16);
 
                 var state = g.Save();
                 g.TranslateTransform(Width / 2f, Height / 2f);
@@ -332,6 +365,94 @@ namespace VibranceHud.Pages
                 e.Graphics.FillEllipse(b, 3, 3, Width - 7, Height - 7);
                 using var p = new Pen(Color.FromArgb(120, 255, 255, 255), 1f);
                 e.Graphics.DrawEllipse(p, 3, 3, Width - 7, Height - 7);
+            }
+        }
+
+        /// <summary>One saved crosshair, shown as a pill: mini preview, name, and a "×" that
+        /// deletes it. Sits inside the (opaque, Theme.Surface) saved-list FlowLayoutPanel and
+        /// uses the same transparent-control trick as SwatchDot/PreviewBox - one level of it
+        /// against an opaque parent is the pattern proven safe elsewhere in this app; the
+        /// FlowLayoutPanel is deliberately NOT transparent itself, since stacking two levels
+        /// of the trick is what caused the ghosting bug on the Games Hub (see HANDOFF.md).</summary>
+        private sealed class SavedChip : Control
+        {
+            private const int PreviewSize = 22;
+            private const int DeleteWidth = 24;
+
+            private readonly CrosshairConfig _config;
+            private bool _hover;
+            private bool _active;
+
+            public bool Active
+            {
+                get => _active;
+                set { if (_active == value) return; _active = value; Invalidate(); }
+            }
+
+            public event EventHandler? LoadRequested;
+            public event EventHandler? DeleteRequested;
+
+            public SavedChip(CrosshairConfig config)
+            {
+                _config = config;
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
+                       | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor
+                       | ControlStyles.ResizeRedraw, true);
+                BackColor = Color.Transparent;
+                Cursor = Cursors.Hand;
+                Font = new Font(Theme.FontFamily, 9f);
+                Size = new Size(190, 36);
+            }
+
+            private Rectangle DeleteRect => new(Width - DeleteWidth, 0, DeleteWidth, Height);
+
+            protected override void OnMouseEnter(EventArgs e)
+            {
+                base.OnMouseEnter(e);
+                _hover = true;
+                Invalidate();
+            }
+
+            protected override void OnMouseLeave(EventArgs e)
+            {
+                base.OnMouseLeave(e);
+                _hover = false;
+                Invalidate();
+            }
+
+            protected override void OnMouseUp(MouseEventArgs e)
+            {
+                base.OnMouseUp(e);
+                if (e.Button != MouseButtons.Left) return;
+                if (DeleteRect.Contains(e.Location)) DeleteRequested?.Invoke(this, EventArgs.Empty);
+                else LoadRequested?.Invoke(this, EventArgs.Empty);
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                var rect = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+                using (var path = Glass.RoundedPath(rect, (Height - 1) / 2f))
+                {
+                    using (var fill = new SolidBrush(_hover ? Theme.SurfaceHover : Theme.Surface))
+                        g.FillPath(fill, path);
+                    using (var border = new Pen(_active ? Theme.Accent : Theme.Border, _active ? 1.6f : 1f))
+                        g.DrawPath(border, path);
+                }
+
+                var previewRect = new Rectangle(7, (Height - PreviewSize) / 2, PreviewSize, PreviewSize);
+                CrosshairRender.DrawCheckerboard(g, previewRect, 6);
+                CrosshairRender.Draw(g, _config, previewRect);
+
+                var textRect = new Rectangle(previewRect.Right + 8, 0,
+                    Width - previewRect.Right - 8 - DeleteWidth, Height);
+                TextRenderer.DrawText(g, _config.Name, Font, textRect, Theme.Text,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+
+                TextRenderer.DrawText(g, "×", Font, DeleteRect, Theme.TextDim,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             }
         }
 
