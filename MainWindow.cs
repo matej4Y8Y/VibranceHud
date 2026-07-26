@@ -224,6 +224,8 @@ namespace VibranceHud
             GlowPage page = game.Game.Id switch
             {
                 "cs2" => new Cs2SettingsPage(game, onBack: ShowGames),
+                "apex" => new ApexSettingsPage(game, onBack: ShowGames),
+                "fortnite" => new FortniteSettingsPage(game, onBack: ShowGames),
                 _ => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
             };
             AttachField(page);

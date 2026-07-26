@@ -53,7 +53,7 @@ namespace VibranceHud.Pages
                 Controls.Add(new Label
                 {
                     Text = "No supported games detected yet.\n" +
-                           "Supported: Rust  (League, Valorant, CS2 coming soon)",
+                           "Supported: Rust, CS2, Apex Legends, Fortnite",
                     ForeColor = Theme.TextDim,
                     Location = new Point(40, 104),
                     AutoSize = true,
