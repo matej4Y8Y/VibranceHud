@@ -1,0 +1,79 @@
+using System;
+
+namespace VibranceHud
+{
+    /// <summary>
+    /// Wires <see cref="GameProcessWatcher"/> events to <see cref="ProfileApplyEngine"/>
+    /// calls. On <see cref="GameProcessWatcher.OnGameLaunched"/>, looks the profile
+    /// up in <see cref="GameProfileStore"/> (no-op when the user hasn't saved one) and
+    /// applies it. On <see cref="GameProcessWatcher.OnGameClosed"/>, restores the
+    /// desktop state captured at apply time.
+    ///
+    /// Not a singleton: constructed once by <c>TrayApplicationContext</c> and owned
+    /// for the lifetime of the tray process. The <see cref="GameProfileApplyGate"/> is
+    /// the per-game opt-out seam for future toggles — today it just approves
+    /// everything, but the shape is right for adding a "don't auto-apply Rust" toggle
+    /// without touching the coordinator.
+    /// </summary>
+    public sealed class ProfileEngineCoordinator
+    {
+        private readonly GameProcessWatcher _watcher;
+        private readonly ProfileApplyEngine _engine;
+        private readonly GameProfileApplyGate _gate;
+
+        /// <summary>Convenience passthrough to <see cref="GameProcessWatcher.IsRunning"/>;
+        /// used by the editor card's status dot and the tray icon's state-aware text.</summary>
+        public bool IsRunning => _watcher.IsRunning;
+
+        public ProfileEngineCoordinator(
+            GameProcessWatcher watcher,
+            ProfileApplyEngine engine,
+            GameProfileApplyGate gate)
+        {
+            _watcher = watcher ?? throw new ArgumentNullException(nameof(watcher));
+            _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+            _gate = gate ?? throw new ArgumentNullException(nameof(gate));
+
+            _watcher.OnGameLaunched += OnLaunched;
+            _watcher.OnGameClosed += OnClosed;
+        }
+
+        /// <summary>Begin polling.</summary>
+        public void Start() => _watcher.Start();
+
+        /// <summary>Stop polling.</summary>
+        public void Stop() => _watcher.Stop();
+
+        private void OnLaunched(string gameId)
+        {
+            // Gate first: per-game opt-out (always approved today, but the seam exists).
+            if (!_gate.ShouldAutoApply(gameId)) return;
+
+            var profile = GameProfileStore.Get(gameId);
+            if (profile == null) return; // user hasn't saved a profile for this game — silent no-op
+
+            _engine.SetCurrent(profile);
+            _engine.ApplyAsync(gameId).GetAwaiter().GetResult();
+        }
+
+        private void OnClosed(string gameId)
+        {
+            // Restore is the same regardless of which game just left; the engine holds
+            // the snapshot. If multiple games were nested last-write-wins-style, this
+            // restores to whatever the previous in-flight game had set (documented in
+            // the spec as the "one auto-managed game at a time" model).
+            _engine.RestoreAsync().GetAwaiter().GetResult();
+        }
+    }
+
+    /// <summary>
+    /// Decision hook: should auto-apply kick in for <paramref name="gameId"/>?
+    /// Default implementation is "yes, always" — the coordinator never invents a
+    /// no-answer today. Future per-game opt-out UI (a toggle in the editor card) plugs
+    /// in here by replacing the implementation; the coordinator never changes.
+    /// </summary>
+    public sealed class GameProfileApplyGate
+    {
+        public bool ShouldAutoApply(string gameId) => true;
+    }
+}
