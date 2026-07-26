@@ -1,75 +1,52 @@
-# PlexusX QA — Test Plan
+# QA checklist
 
-**How to run:** tell the agent "run QA" (the `plexusx-qa` skill drives this), or run
-`scripts/qa-check.sh` alone for the mechanical half. A full QA run writes a verdict to
-`docs/qa/QA-REPORT-<date>.md`.
+Run before every release build. No need to run for small changes unless they touch rendering, settings, detection, or the updater.
 
-**When it runs:** mandatory before every release build/tag, and on demand after any
-risky change (rendering, settings, detection, updater).
+## Before shipping
 
----
+- [ ] `dotnet build -c Release` is clean
+- [ ] `dotnet test` is green (record the count)
+- [ ] Version in csproj matches `AppVersion` in .iss
+- [ ] No undisposed `new SolidBrush` / `new Pen` / `new Bitmap` in OnPaint paths (leak trap)
+- [ ] `bin\Release\net8.0-windows\win-x64\PlexusX.exe` is newer than the last commit
 
-## 1. Mechanical (scripts/qa-check.sh — always first)
+## Visual sweep on the dev build
 
-- Release build: 0 errors, 0 warnings
-- Full unit suite green (record the count)
-- Release runs only: `<Version>` in csproj == `AppVersion` in .iss == release notes file exists
-- GDI heuristic: no undisposed `new SolidBrush/Pen/Bitmap` in OnPaint paths (per-frame leak trap)
-- `publish/PlexusX.exe` newer than last commit
+Launch the dev build, visit every page, check:
 
-## 2. Visual sweep (agent + screenshots, cheap submodel inspects)
+- [ ] **Vibrance** — separate vibrance + saturation sliders; brightness / gamma / eye-care; presets; readouts aligned; nothing clipped
+- [ ] **Games Hub** — cards clean, no ghosting or double frames; grid scrolls if more than 6 games
+- [ ] **Rust / CS2 / Apex / Fortnite** — toggles reflect real config; running-game warning shows when the game is open; Apply writes the config and a backup
+- [ ] **FPS Tweaks** — Apply completes without crashing; status text is honest, not a fake score
+- [ ] **Crosshair** — preview on checkerboard; **no opaque square artifact anywhere**; shape chips switch; saved chips reachable
+- [ ] **Settings** — theme swatches including the Custom image option; image pick recolours accent + particles; dim / blur settings work
+- [ ] **Account** — page renders; trial state shown
+- [ ] **Window chrome** — rounded corners; glass panels; particles animate on every page; no stale frames after resize
 
-Launch the **dev build** (never the installed copy), visit every page, screenshot each,
-and inspect for the project's known bug classes:
+Watch for bug classes that bit the project before: opaque overlay squares, nested-transparency ghosting, bottom rows clipped by parent bounds, stale repaint after theme switch, misaligned custom-drawn text.
 
-| Page | Must be true |
-|---|---|
-| Vibrance | Separate Vibrance + Saturation sliders; brightness/gamma/eye-care; presets; readouts aligned; nothing clipped |
-| Games Hub | Cards clean over the particle background — no ghosting/double frames; grid scrolls if >6 games |
-| Rust / CS2 / Apex / Fortnite | Toggles reflect real config; running-game warning shows when the game is open; Apply writes config + backup |
-| FPS Tweaks | Status text after Apply — never a fake score |
-| Crosshair | Preview renders on checkerboard; **no opaque square artifact anywhere on screen**; shape chips switch; SAVED row reachable |
-| Settings | Theme swatches incl. Custom image; image pick recolours accent/particles; dim/blur work |
-| Account | Page renders, trial state shown |
-| Window chrome | Rounded corners smooth, glass panels, particles animate on every page; resize leaves no stale frames |
+## Functional spot checks
 
-**Bug classes from project history (always check):** opaque overlay squares (alpha
-flattening), nested-transparency ghosting, bottom rows clipped by parent bounds, stale
-repaint after theme switch, misaligned custom-drawn text.
+- [ ] Visit every nav page, then visit again — second visit shouldn't crash with ObjectDisposedException
+- [ ] Drag vibrance / saturation — screen visibly changes
+- [ ] Crosshair on — cross at screen centre, mouse clicks pass through to the window beneath
+- [ ] Theme switch — accent changes everywhere at once
+- [ ] Settings save / load — restart preserves values; corrupt settings.json triggers recovery from .bak
+- [ ] Per-game Apply — config file contains the change, `.vibrancebak` exists, Restore Backup reverts
 
-## 3. Functional spot checks (agent drives the app)
+## Performance budgets
 
-- **Nav round-trip (regression: 0.5.0 crosshair bug):** visit EVERY page, then every page
-  AGAIN — a persistent page disposed on leave throws ObjectDisposedException on re-entry
-  and leaves the content host layout-suspended (flicker + dead nav). Check every nav
-  button highlights when active and un-highlights when left.
-- Drag vibrance/saturation → screen visibly changes (before/after screenshot delta)
-- Crosshair ON → cross at screen centre, clicks pass through to the window beneath
-- Theme switch → accent changes everywhere at once
-- Change settings → close → relaunch → values kept; corrupt `settings.json` → app recovers from `.bak`
-- Per game: Apply → config file contains the change + `.vibrancebak` exists → Restore Backup reverts
+- Cold start to main window: under 3 seconds
+- Idle CPU with particles running: under 3 percent
+- RAM after 60 s idle: under 250 MB
+- Slider drag: no visible stutter, no CPU spike
 
-## 4. Performance budgets
+## Safety
 
-| Metric | Budget | Measure |
-|---|---|---|
-| Cold start → main window | < 3 s | stopwatch |
-| Idle CPU (particles running) | < 3 % | process sampling, 30 s |
-| RAM after 60 s idle | < 250 MB | working set |
-| Slider drag | no visible stutter | watch + CPU spike check |
-
-## 5. Exploit / abuse checks
-
-- Config providers write **only** inside the game's own config path or `%AppData%\PlexusX` — review every `Path.Combine` fed by user input (saved-config names, prompt text) for traversal (`..`, `:` , `/`)
-- Backup/restore targets only `config path + ".vibrancebak"` — never user-supplied paths
-- Malformed `settings.json`, deleted theme image, corrupt config → app degrades, never crashes
-- Updater: version read from release **tag** (+ filename cross-check) — can't be tricked into a downgrade
-- Crosshair window keeps `WS_EX_TRANSPARENT | WS_EX_NOACTIVATE` — click-through, no focus theft
-- `Process.Start` call sites: no unsanitized user input as target
-- No secrets/keys in the repo (scan added lines)
-
-## 6. Report
-
-`docs/qa/QA-REPORT-<date>.md`: PASS / FAIL / SKIP per item, screenshot filenames as
-evidence, perf numbers, exploit findings, and a final verdict: **SHIP** or **NO-SHIP**
-with the blocking items listed.
+- Config providers write only inside the game's own config path or `%AppData%\PlexusX` — any `Path.Combine` fed by user input (`..`, `:`, `/`) needs validation
+- Backup / restore targets only `config path + ".vibrancebak"`, never user-supplied paths
+- Malformed `settings.json`, deleted theme image, corrupt config: app degrades, never crashes
+- Updater reads version from the release tag with a filename cross-check — no silent downgrade
+- Crosshair window keeps `WS_EX_TRANSPARENT | WS_EX_NOACTIVATE` so it's click-through and doesn't steal focus
+- `Process.Start` call sites: no unsanitized user input as the target
+- No secrets in the repo (scan added lines for API keys etc.)
