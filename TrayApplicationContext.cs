@@ -49,6 +49,13 @@ namespace VibranceHud
             _store = new SettingsStore(dataDir);
             _settings = _store.Load();
 
+            // Record which overlay mechanism actually ended up active - TryCreateOverlay()
+            // silently falls back to Magnification if DX11 init failed, and that fallback is
+            // invisible to screen-capture tools (OBS/Discord). Persist it so the Settings page
+            // can tell the user instead of hiding it.
+            _settings.OverlayMode = OverlayModeResolver.Resolve(_overlay);
+            _store.Save(_settings);
+
             // Rebuild a previously chosen image background + its derived palette before
             // the theme is resolved, so "Custom" is a known name by the time it's applied.
             _customTheme = new Theming.CustomThemeService(dataDir, _settings);

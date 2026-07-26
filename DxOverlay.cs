@@ -23,8 +23,10 @@ namespace VibranceHud
     /// The render loop is owned by this class and started in the constructor; it runs until
     /// Dispose() is called.
     /// </summary>
-    public sealed class DxOverlay : ISaturationOverlay, IDisposable
+    public sealed class DxOverlay : ISaturationOverlay, IDisplayOverlay, IDisposable
     {
+        public OverlayMode ActiveMode => OverlayMode.Dx;
+
         private static readonly float[] Identity = new float[]
         {
             1f, 0f, 0f, 0f, 0f,

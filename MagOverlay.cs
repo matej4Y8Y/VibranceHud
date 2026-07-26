@@ -20,8 +20,10 @@ namespace VibranceHud
     /// Does not affect exclusive-fullscreen games or DRM-protected video, and shares the
     /// pipeline with Windows Night Light / Color Filters.
     /// </summary>
-    public sealed class MagOverlay : ISaturationOverlay, IDisposable
+    public sealed class MagOverlay : ISaturationOverlay, IDisplayOverlay, IDisposable
     {
+        public OverlayMode ActiveMode => OverlayMode.Mag;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct MAGCOLOREFFECT
         {
