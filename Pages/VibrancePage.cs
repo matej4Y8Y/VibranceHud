@@ -16,6 +16,12 @@ namespace VibranceHud.Pages
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
 
+        // Sliders fire ValueChanged on every mouse-move during a drag - saving on each one
+        // would hammer disk I/O and risk torn writes. Debounce so one save happens ~500ms
+        // after the user stops moving a slider, not on every intermediate value.
+        private const int SaveDebounceMs = 500;
+        private readonly DebouncedAction _saveDebounce;
+
         private readonly FlatSlider _slider;     // saturation (software, 0-200)
         private readonly FlatSlider _vibrance;   // driver Digital Vibrance (0-100)
         private readonly FlatSlider _brightness;
@@ -38,6 +44,7 @@ namespace VibranceHud.Pages
             _engine = engine;
             _settings = settings;
             _store = store;
+            _saveDebounce = new DebouncedAction(() => _store.Save(_settings), SaveDebounceMs);
             Font = new Font(Theme.FontFamily, 9f);
 
             // Saturation is the headline control: it's the one that goes past the driver
@@ -55,6 +62,7 @@ namespace VibranceHud.Pages
                 _settings.SaturationPercent = _slider.Value;
                 UpdateActiveChip();
                 Invalidate();
+                _saveDebounce.Trigger();
             };
             Controls.Add(_slider);
 
@@ -72,6 +80,7 @@ namespace VibranceHud.Pages
                 _settings.VibrancePercent = _vibrance.Value;
                 UpdateActiveChip();
                 Invalidate();
+                _saveDebounce.Trigger();
             };
             Controls.Add(_vibrance);
 
@@ -105,6 +114,7 @@ namespace VibranceHud.Pages
                 _engine.Brightness = _brightness.Value;
                 _settings.BrightnessPercent = _brightness.Value;
                 Invalidate();
+                _saveDebounce.Trigger();
             };
             Controls.Add(_brightness);
 
@@ -120,6 +130,7 @@ namespace VibranceHud.Pages
                 _engine.Gamma = _gamma.Value;
                 _settings.GammaPercent = _gamma.Value;
                 Invalidate();
+                _saveDebounce.Trigger();
             };
             Controls.Add(_gamma);
 
@@ -240,6 +251,12 @@ namespace VibranceHud.Pages
             _eyeCare.Checked = _engine.EyeCare;
             UpdateActiveChip();
             Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _saveDebounce.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
