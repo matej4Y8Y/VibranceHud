@@ -20,6 +20,10 @@ namespace VibranceHud
         public DetectedGame? Detected { get; }
         public bool IsInstalled => Detected != null;
 
+        /// <summary>Raised when the user clicks the card's "Edit profile" affordance.
+        /// Fires only for installed games (no profile to set if the game isn't installed).</summary>
+        public event EventHandler? OnEditProfileRequested;
+
         public GameCard(SupportedGame game, DetectedGame? detected)
         {
             SupportedGame = game;
@@ -33,6 +37,26 @@ namespace VibranceHud
             Size = new Size(200, 160);
             Cursor = IsInstalled ? Cursors.Hand : Cursors.Default;
             Margin = new Padding(0, 0, 16, 16);
+
+            // "Edit profile ›" affordance in the bottom-right corner. Clickable only when
+            // the game is installed (no point saving a profile for a game that's not).
+            // We use a child Label rather than painting text inline so the click target
+            // gets the standard WinForms hit-test + the standard Cursor.Hand handling
+            // without us reinventing mouse routing inside the custom-paint card.
+            var editProfileLink = new Label
+            {
+                Text = "Edit profile ›",
+                Font = new Font(Theme.FontFamily, 8f),
+                ForeColor = Theme.Accent,
+                BackColor = Color.Transparent,
+                AutoSize = true,
+                Cursor = Cursors.Hand,
+                Visible = IsInstalled,
+            };
+            editProfileLink.Click += (_, _) => OnEditProfileRequested?.Invoke(this, EventArgs.Empty);
+            editProfileLink.Resize += (_, _) => editProfileLink.Location = new Point(
+                Width - editProfileLink.Width - 20, Height - 22);
+            Controls.Add(editProfileLink);
         }
 
         protected override void OnMouseEnter(EventArgs e)

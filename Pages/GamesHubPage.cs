@@ -12,7 +12,7 @@ namespace VibranceHud.Pages
     /// </summary>
     public sealed class GamesHubPage : GlowPage
     {
-        public GamesHubPage(Action<DetectedGame> onConfigure)
+        public GamesHubPage(Action<DetectedGame> onConfigure, Action<SupportedGame>? onEditProfile = null)
         {
             Dock = DockStyle.Fill;
             BackColor = Theme.Background;
@@ -59,7 +59,11 @@ namespace VibranceHud.Pages
                                           104 + (i / cols) * (cardH + gap))
                 };
                 if (detected != null)
+                {
                     card.Click += (s, e) => onConfigure(detected);
+                    if (onEditProfile != null)
+                        card.OnEditProfileRequested += (_, _) => onEditProfile(game);
+                }
                 Controls.Add(card);
                 i++;
             }

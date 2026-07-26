@@ -45,10 +45,12 @@ namespace VibranceHud
         private readonly FpsTweaksPage _fpsPage;
         private readonly CrosshairPage _crosshairPage;
         private readonly Crosshair.CrosshairService _crosshair;
-        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount;
+        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount, _navProfile;
         private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
         private readonly ProfileEngineCoordinator? _profileCoordinator;
+        private ProfileEditorCard? _profileCard;
+        private Panel _profileHost = null!;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
             SystemTweaks.SystemTweakService tweaks, Audio.AudioEdgeService? audio,
@@ -114,14 +116,16 @@ namespace VibranceHud
             _navFps = MakeNav("FPS Tweaks", position: 2, iconKind: 4);
             _navCrosshair = MakeNav("Crosshair", position: 3, iconKind: 0);
             _navSettings = MakeNav("Settings", position: 4, iconKind: 2);
-            _navAccount = MakeNav("Account", position: 5, iconKind: 3);
+            _navProfile = MakeNav("Set Profile", position: 5, iconKind: 2);
+            _navAccount = MakeNav("Account", position: 6, iconKind: 3);
             _navVibrance.Click += (s, e) => ShowVibrance();
             _navGames.Click += (s, e) => ShowGames();
             _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
             _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
+            _navProfile.Click += (s, e) => ShowProfileEditor();
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navProfile, _navAccount });
 
             // Version pinned faint in the bottom-left corner - makes it feel like a real build.
             var version = new Label
@@ -140,6 +144,20 @@ namespace VibranceHud
 
             _contentHost = new Panel { Location = new Point(NavW, TitleH), Size = new Size(ClientSize.Width - NavW, ClientSize.Height - TitleH), BackColor = Theme.Background, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
             Controls.Add(_contentHost);
+
+            // The profile editor slides in over the content host from the right edge.
+            // Created once but kept hidden until the nav button is pressed. Sized so the
+            // card has a 360-wide panel docked to the right of the content host - large
+            // enough for the slider rows + save/cancel buttons without crowding the page.
+            _profileHost = new Panel
+            {
+                BackColor = Color.FromArgb(30, 28, 36),
+                Location = new Point(ClientSize.Width, TitleH),
+                Size = new Size(360, ClientSize.Height - TitleH),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom,
+                Visible = false
+            };
+            Controls.Add(_profileHost);
 
             AddDivider(new Point(0, TitleH), new Size(ClientSize.Width, 1), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right);
             AddDivider(new Point(NavW, TitleH), new Size(1, ClientSize.Height - TitleH), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom);
@@ -217,9 +235,123 @@ namespace VibranceHud
 
         private void ShowGames()
         {
-            var page = new GamesHubPage(OnConfigureGame);
+            var page = new GamesHubPage(OnConfigureGame, OnEditProfile);
             AttachField(page);
             Select(_navGames, page);
+        }
+
+        private void OnEditProfile(SupportedGame game)
+        {
+            // Open the editor pre-filtered to the picked game; populate the picker
+            // with just this game so the user sees the right title and can hit save.
+            ShowProfileEditor();
+            if (_profileCard != null)
+            {
+                _profileCard.PopulateGames(new[] { (game.Id, game.DisplayName) });
+                _profileCard.SelectGame(game.Id);
+            }
+        }
+
+        /// <summary>Show the editor card with the 240ms slide-in animation.
+        /// Lazily creates the card the first time, populating it with every
+        /// supported game (so users can browse profiles for games they
+        /// haven't installed too — though those only persist as future-applicable
+        /// placeholders).</summary>
+        private void ShowProfileEditor()
+        {
+            if (_profileCard == null)
+            {
+                _profileCard = new ProfileEditorCard();
+                _profileCard.PopulateGames(GetEditorGames());
+                _profileCard.SetStatus(_profileCoordinator?.IsRunning ?? false);
+                _profileCard.OnSaved += (_, _) => HideProfileEditor();
+                _profileCard.OnCancelled += (_, _) => HideProfileEditor();
+                _profileCard.Dock = DockStyle.Fill;
+                _profileHost.Controls.Add(_profileCard);
+                _profileCard.BringToFront();
+            }
+            else
+            {
+                // Refreshing each open keeps the status dot honest if the user
+                // toggled anything while the editor was hidden.
+                _profileCard.PopulateGames(GetEditorGames());
+                _profileCard.SetStatus(_profileCoordinator?.IsRunning ?? false);
+            }
+
+            _profileHost.Visible = true;
+            _profileHost.BringToFront();
+            AnimateSlide(_profileHost, inDirection: true);
+            SetActive(_navProfile);
+        }
+
+        /// <summary>Animate the panel back out and hide it.</summary>
+        private void HideProfileEditor()
+        {
+            AnimateSlide(_profileHost, inDirection: false, onComplete: () =>
+            {
+                _profileHost.Visible = false;
+                SetActive(_navVibrance);
+                _vibrancePage.Refresh();
+            });
+        }
+
+        /// <summary>The list the picker shows. Today: every supported game,
+        /// installed or not. The applier no-ops on missing games anyway.</summary>
+        private IEnumerable<(string Id, string Name)> GetEditorGames()
+        {
+            foreach (var g in VibranceHud.Games.SupportedGames.All)
+                yield return (g.Id, g.DisplayName);
+        }
+
+        /// <summary>240ms ease-out cubic: slide the panel in from off-screen-right
+        /// by its full width, fading its background in to opaque at the same time.
+        /// On exit, the reverse runs in 180ms ease-in.</summary>
+        private void AnimateSlide(Panel panel, bool inDirection, Action? onComplete = null)
+        {
+            const int width = 360;
+            var dur = inDirection ? 240 : 180;
+            var startLocation = panel.Location; // remember so we revert cleanly
+            var offX = panel.Parent!.ClientSize.Width;          // off-screen-right
+            var onX = panel.Parent.ClientSize.Width - width;    // docked left edge
+            var startX = inDirection ? offX : onX;
+            var endX = inDirection ? onX : offX;
+            panel.Location = new Point(startX, panel.Location.Y);
+            panel.Visible = true;
+
+            // Opacity-only animation: slide via Location (transform), opacity via the
+            // panel's translucent background alpha so the WinForms-rendered content
+            // underneath can shine through during the entry.
+            var baseBg = inDirection ? Color.FromArgb(0, 28, 28, 36) : Color.FromArgb(30, 28, 36);
+
+            var startedAt = DateTime.UtcNow;
+            var totalMs = dur;
+            var timer = new System.Windows.Forms.Timer { Interval = 16 };
+            timer.Tick += (_, _) =>
+            {
+                var elapsed = (DateTime.UtcNow - startedAt).TotalMilliseconds;
+                var raw = Math.Clamp(elapsed / totalMs, 0, 1);
+                // Ease-out cubic when entering, ease-in cubic when leaving.
+                var eased = inDirection
+                    ? 1 - Math.Pow(1 - raw, 3)
+                    : Math.Pow(raw, 3);
+
+                var x = (int)Math.Round(startX + (endX - startX) * eased);
+                panel.Location = new Point(x, panel.Location.Y);
+
+                var a = inDirection ? (int)(30 * eased) : (int)(30 * (1 - eased));
+                panel.BackColor = Color.FromArgb(Math.Clamp(a, 0, 255), baseBg.R, baseBg.G, baseBg.B);
+
+                if (raw >= 1.0)
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    panel.Location = new Point(endX, panel.Location.Y);
+                    if (inDirection) panel.BackColor = Color.FromArgb(30, 28, 36);
+                    _ = startLocation; // (suppress unused warning)
+                    onComplete?.Invoke();
+                }
+            };
+            timer.Start();
         }
 
         private void OnConfigureGame(DetectedGame game)
