@@ -48,13 +48,16 @@ namespace VibranceHud
         private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount;
         private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
+        private readonly ProfileEngineCoordinator? _profileCoordinator;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
             SystemTweaks.SystemTweakService tweaks, Audio.AudioEdgeService? audio,
             Action<string> onThemeChanged, Theming.CustomThemeService? custom = null,
-            Crosshair.CrosshairService? crosshair = null)
+            Crosshair.CrosshairService? crosshair = null,
+            ProfileEngineCoordinator? profileCoordinator = null)
         {
             _crosshair = crosshair ?? new Crosshair.CrosshairService();
+            _profileCoordinator = profileCoordinator;
             _engine = engine;
             _settings = settings;
             _store = store;

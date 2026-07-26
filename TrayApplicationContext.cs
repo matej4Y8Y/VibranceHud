@@ -34,6 +34,7 @@ namespace VibranceHud
         private readonly AppSettings _settings;
         private readonly SplashForm _splash;
         private readonly Audio.AudioEdgeService? _audioEdge;
+        private ProfileEngineCoordinator? _profileCoordinator;
         private MainWindow _window;
 
         public TrayApplicationContext()
@@ -86,7 +87,7 @@ namespace VibranceHud
                 if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator());
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
@@ -118,6 +119,11 @@ namespace VibranceHud
                 ContextMenuStrip = menu
             };
             _trayIcon.DoubleClick += (s, e) => _window.ShowAndFocus();
+
+            // The tray tooltip surfaces the auto-apply state: "PlexusX" when the
+            // coordinator isn't built yet (e.g. errors during startup), and
+            // "PlexusX — auto-apply running" while the watcher polls.
+            UpdateTrayStateText();
 
             // The splash drives startup: check for updates, install one if there is one,
             // then hand over to the main window.
@@ -272,15 +278,46 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator);
             _window.ShowAndFocus();
             old.Dispose();
+        }
+
+        /// <summary>
+        /// Builds (or returns the existing) profile coordinator. Lazy because the
+        /// coordinator is created just once per process lifetime — the auto-apply
+        /// watcher keeps running across theme-window rebuilds.
+        /// </summary>
+        private ProfileEngineCoordinator BuildProfileCoordinator()
+        {
+            if (_profileCoordinator != null) return _profileCoordinator;
+
+            // Static registry of known games → running process name. Independent of
+            // whether they're installed on this PC: the per-service hub applier
+            // gracefully no-ops when a game is missing, and the watcher just emits
+            // launch events for games the user adds later.
+            var idToExe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["rust"]     = "RustClient",
+                ["cs2"]      = "cs2",
+                ["apex"]     = "r5apex",
+                ["fortnite"] = "FortniteClient-Win64-Shipping",
+            };
+
+            var watcher = new GameProcessWatcher(idToExe);
+            var applyEngine = new ProfileApplyEngine(_engine, new GameHubApplier());
+            var coordinator = new ProfileEngineCoordinator(watcher, applyEngine, new GameProfileApplyGate());
+            coordinator.Start();
+
+            _profileCoordinator = coordinator;
+            return coordinator;
         }
 
         protected override void ExitThreadCore()
         {
             _crosshair.Dispose(); // never leave an overlay floating on screen
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
+            _profileCoordinator?.Stop();  // tear down the polling loop before the engine disappears
             _store.Save(_settings);
             (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
@@ -289,6 +326,16 @@ namespace VibranceHud
             _trayIcon.Dispose();
             _hotkeyWindow.DestroyHandle();
             base.ExitThreadCore();
+        }
+
+        /// <summary>Set the tray tooltip to reflect auto-apply state. Called once on
+        /// tray-icon creation; safe to call later if the coordinator ever becomes
+        /// available after initial startup.</summary>
+        private void UpdateTrayStateText()
+        {
+            var running = _profileCoordinator?.IsRunning == true;
+            // NotifyIcon.Text is capped at 63 chars (defensive truncation).
+            _trayIcon.Text = running ? "PlexusX \u2014 auto-apply running" : "PlexusX";
         }
     }
 
