@@ -17,8 +17,9 @@ it's our trust advantage when charging money.
 
 ## Where we are (shipped)
 
-- System-wide vibrance 0–200% (NVAPI for 0–100, Windows Magnification color matrix for
-  100–200 — the latter works on any GPU).
+- System-wide vibrance 0–200% on any GPU, with the 100–200% range visible in OBS
+  / Discord / NVIDIA ShadowPlay / Windows Snipping Tool (DX11 swap-chain overlay
+  at the DWM layer, PlexusX 0.6.0).
 - Big windowed app: left nav (Vibrance / Games / Settings / Account), animated purple
   plexus background, iOS-style frosted-glass panels.
 - Games Hub: portable Steam detection (registry + libraryfolders.vdf across drives),
