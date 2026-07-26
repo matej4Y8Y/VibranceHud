@@ -5,9 +5,13 @@ namespace VibranceHud
 {
     /// <summary>
     /// System-wide saturation via the Windows Magnification API's fullscreen color effect
-    /// (Magnification.dll). This is how "past 100%" is achieved: the NVIDIA driver caps
-    /// digital vibrance at 100, so beyond that we apply a saturation color matrix to every
-    /// pixel on screen ourselves.
+    /// (Magnification.dll). Used as the fallback path when DX11 init fails on machines
+    /// without a DX11 GPU or with broken display drivers. Superseded as the primary path
+    /// by <see cref="DxOverlay"/> in PlexusX 0.6.0.
+    ///
+    /// The Magnification API renders the effect on a hardware layer that is NOT visible
+    /// to standard Windows capture tools (OBS, Discord, ShadowPlay). If you need capture
+    /// visibility, use the DX11 overlay path.
     ///
     /// Needs no elevation or signing. Windows tears the effect down automatically if this
     /// process dies; <see cref="Dispose"/> also clears it on a graceful exit so the screen
@@ -16,7 +20,7 @@ namespace VibranceHud
     /// Does not affect exclusive-fullscreen games or DRM-protected video, and shares the
     /// pipeline with Windows Night Light / Color Filters.
     /// </summary>
-    public sealed class SaturationOverlay : ISaturationOverlay, IDisposable
+    public sealed class MagOverlay : ISaturationOverlay, IDisposable
     {
         [StructLayout(LayoutKind.Sequential)]
         private struct MAGCOLOREFFECT
@@ -51,7 +55,7 @@ namespace VibranceHud
         /// <summary>True if the Magnification runtime is available; false means "tier-1 only".</summary>
         public bool IsAvailable => _initialized;
 
-        public SaturationOverlay()
+        public MagOverlay()
         {
             _initialized = MagInitialize();
         }
