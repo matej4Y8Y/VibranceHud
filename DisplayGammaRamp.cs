@@ -18,12 +18,39 @@ namespace VibranceHud
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetDeviceGammaRamp(IntPtr hDC, ushort[] ramp);
 
+        private readonly Func<IntPtr, ushort[], bool> _setRamp;
+
+        public DisplayGammaRamp() : this(SetDeviceGammaRamp) { }
+
+        /// <summary>Test seam: lets a fake stand in for the native call so a driver refusal
+        /// (SetDeviceGammaRamp returning false) can be exercised without a real display
+        /// driver that actually refuses ramps.</summary>
+        internal DisplayGammaRamp(Func<IntPtr, ushort[], bool> setRamp)
+        {
+            _setRamp = setRamp;
+        }
+
+        /// <summary>True when the most recent <see cref="Apply"/> was refused by the driver
+        /// (or the device context couldn't be obtained at all). SetDeviceGammaRamp signals a
+        /// refusal by returning false, not by throwing - that return value used to be
+        /// discarded outright, so a refused ramp silently looked like it had taken effect.</summary>
+        public bool LastApplyFailed { get; private set; }
+
         public void Apply(ushort[] ramp)
         {
             var dc = GetDC(IntPtr.Zero); // the whole screen
-            if (dc == IntPtr.Zero) return;
-            try { SetDeviceGammaRamp(dc, ramp); }
-            catch { /* driver refused - leave the screen as-is */ }
+            if (dc == IntPtr.Zero)
+            {
+                LastApplyFailed = true;
+                System.Diagnostics.Debug.WriteLine("DisplayGammaRamp: GetDC failed; gamma ramp not applied.");
+                return;
+            }
+            try
+            {
+                LastApplyFailed = !_setRamp(dc, ramp);
+                if (LastApplyFailed)
+                    System.Diagnostics.Debug.WriteLine("DisplayGammaRamp: driver refused SetDeviceGammaRamp; screen gamma unchanged.");
+            }
             finally { ReleaseDC(IntPtr.Zero, dc); }
         }
 
