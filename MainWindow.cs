@@ -241,7 +241,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navGames, _navFps, _navSettings, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
@@ -257,7 +257,8 @@ namespace VibranceHud
 
             // Dispose transient pages (Games/Rust are rebuilt each visit); keep persistent ones.
             if (old != null && old != page &&
-                old != _vibrancePage && old != _settingsPage && old != _accountPage && old != _fpsPage)
+                old != _vibrancePage && old != _settingsPage && old != _accountPage &&
+                old != _fpsPage && old != _crosshairPage)
                 old.Dispose();
         }
 

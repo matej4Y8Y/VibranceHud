@@ -39,6 +39,10 @@ repaint after theme switch, misaligned custom-drawn text.
 
 ## 3. Functional spot checks (agent drives the app)
 
+- **Nav round-trip (regression: 0.5.0 crosshair bug):** visit EVERY page, then every page
+  AGAIN — a persistent page disposed on leave throws ObjectDisposedException on re-entry
+  and leaves the content host layout-suspended (flicker + dead nav). Check every nav
+  button highlights when active and un-highlights when left.
 - Drag vibrance/saturation → screen visibly changes (before/after screenshot delta)
 - Crosshair ON → cross at screen centre, clicks pass through to the window beneath
 - Theme switch → accent changes everywhere at once
