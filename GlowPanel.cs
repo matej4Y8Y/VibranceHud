@@ -22,14 +22,21 @@ namespace VibranceHud
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
-                   | ControlStyles.ResizeRedraw, true);
-            BackColor = Theme.Background;
+                   | ControlStyles.ResizeRedraw
+                   // SupportsTransparentBackColor lets BackColor=Color.Transparent actually
+                   // be transparent. Without this bit WinForms paints white wherever a
+                   // transparent BackColor is requested - which is why the previous
+                   // "transparent panel" attempt left a stark white slab behind the nav.
+                   | ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            using (var back = new SolidBrush(Theme.Background))
-                e.Graphics.FillRectangle(back, ClientRectangle);
+            // No Theme.Background fill here. The animated backdrop (AppBackground) and
+            // particle field paint the panel's content; only the explicitly-configured
+            // Scrim (set by callers like the title bar) tints them. Scrim=0 means "let
+            // the field show through untouched" - that's how the left nav goes transparent.
             Theming.AppBackground.Paint(e.Graphics, Left, Top);
             Field?.Paint(e.Graphics, Left, Top); // Left/Top are already window-relative here
 

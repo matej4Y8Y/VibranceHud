@@ -29,9 +29,13 @@ namespace VibranceHud
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
-                   | ControlStyles.ResizeRedraw, true);
+                   | ControlStyles.ResizeRedraw
+                   // Required for BackColor=Color.Transparent to take effect - parent panel
+                   // can now show its particle field through the unselected rows.
+                   | ControlStyles.SupportsTransparentBackColor, true);
             Height = 46;
             Cursor = Cursors.Hand;
+            BackColor = Color.Transparent;
         }
 
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hover = true; Invalidate(); }
@@ -42,9 +46,18 @@ namespace VibranceHud
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            var bg = _active ? Theme.SurfaceHover : (_hover ? Theme.Surface : Theme.Background);
-            using (var back = new SolidBrush(bg))
+            // Active and hover items show a subtle surface tint, NOT a full rectangle
+            // gray fill. When inactive AND un-hovered, no fill is painted - the parent
+            // panel's particle field shows straight through the button. This is what
+            // produces the "the gray slab behind the nav is gone" effect.
+            Color? bg = null;
+            if (_active) bg = Theme.SurfaceHover;
+            else if (_hover) bg = Theme.Surface;
+            if (bg.HasValue)
+            {
+                using var back = new SolidBrush(bg.Value);
                 g.FillRectangle(back, ClientRectangle);
+            }
 
             if (_active)
                 using (var bar = new SolidBrush(Theme.Accent))

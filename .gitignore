@@ -15,3 +15,12 @@ installer/
 # OS cruft
 Thumbs.db
 .DS_Store
+
+# Local scratch - never commit
+.hermes/
+chicken.jpg
+installer/release-state.json
+installer/create_release.py
+installer/PlexusX-Setup-0.7.0.exe
+installer/PlexusX-Setup-0.7.2.exe
+*.tmp.py

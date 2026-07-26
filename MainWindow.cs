@@ -110,9 +110,12 @@ namespace VibranceHud
                 AttachField(page);
 
             // ---- Left nav (shares the field) ----
-            // Scrim=0 removes the translucent gray veil behind the left nav so the
-            // animated backdrop shows through cleanly (rather than a dark slab sitting
-            // over the workspace).
+            // The left nav panel is fully transparent (Scrim=0) so the animated backdrop
+            // shows through cleanly. Both GlowPanel and NavButton declare
+            // SupportsTransparentBackColor in their SetStyle flags — without that bit,
+            // WinForms falls back to white when BackColor=Color.Transparent. The fix is
+            // to make every custom-paint panel transparent-aware, not to keep painting
+            // a background fill that hides the field.
             _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
             _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
             _navGames = MakeNav("Games", position: 1, iconKind: 1);

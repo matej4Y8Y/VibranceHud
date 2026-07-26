@@ -1,6 +1,6 @@
 # PlexusX — Project Handoff
 
-Written 2026-07-25 for a move from Claude Code to Hermes Agent. This is everything a new
+Written 2026-07-25 as the editor onboarding reference for this project. This is everything a new
 assistant needs to pick this project up without re-deriving context from scratch.
 
 ---
@@ -175,11 +175,9 @@ comparison shots need a large glowing on-screen number overlay matching the real
 counter's steady-state reading (not its first-frame value, which is often an outlier) —
 the in-game counter alone is too small/low-contrast to read on a phone.
 
-## Skills to bring over / re-create in Hermes
+## Skills to bring over / re-create
 
-These live in `~/.claude/skills/` and won't transfer automatically since they're in
-Claude Code's own skill format. The important **distilled knowledge** (not the file
-format itself) is:
+The important **distilled knowledge** (not specific to any one tool's file format) is:
 
 - **Portable Windows detection**: never hardcode install paths. Read Steam via registry
   (HKCU/HKLM + WOW6432Node), parse `libraryfolders.vdf`, degrade gracefully if absent.
@@ -213,7 +211,7 @@ format itself) is:
   particle/plexus animated backgrounds, palette-as-roles so themes swap cleanly, hand-
   drawn vector icons rather than font glyphs/emoji.
 
-## Point Hermes at
+## Pointing an assistant at
 
 - Local repo: `C:\Users\MR.UltraSexymale\Downloads\VibranceHud`
 - Remote: `https://github.com/matej4Y8Y/VibranceHud`
