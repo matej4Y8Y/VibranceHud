@@ -110,7 +110,10 @@ namespace VibranceHud
                 AttachField(page);
 
             // ---- Left nav (shares the field) ----
-            _nav = new GlowPanel { Field = _field, Scrim = 150, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
+            // Scrim=0 removes the translucent gray veil behind the left nav so the
+            // animated backdrop shows through cleanly (rather than a dark slab sitting
+            // over the workspace).
+            _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
             _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
             _navGames = MakeNav("Games", position: 1, iconKind: 1);
             _navFps = MakeNav("FPS Tweaks", position: 2, iconKind: 4);
