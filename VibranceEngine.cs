@@ -17,7 +17,7 @@ namespace VibranceHud
     /// Saturation, brightness and eye care all fold into a single screen matrix, so
     /// there's only ever one pass over the screen.
     /// </summary>
-    public sealed class VibranceEngine
+    public sealed class VibranceEngine : IVibranceEngine
     {
         public const int MaxVibrance = 200;
         public const int MaxSaturation = 200;
