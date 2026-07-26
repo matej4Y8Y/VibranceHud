@@ -37,7 +37,7 @@ namespace VibranceHud.Pages
 
             int width = 620;
 
-            var general = new CardPanel { Location = new Point(40, 40), Size = new Size(width, 88) };
+            var general = new CardPanel { Location = new Point(40, 40), Size = new Size(width, 112) };
             general.Controls.Add(UiHelpers.Caption("GENERAL", 18, 16, 200));
             general.Controls.Add(new Label
             {
@@ -59,10 +59,25 @@ namespace VibranceHud.Pages
                 _store.Save(_settings);
             };
             general.Controls.Add(startupToggle);
+
+            // Surfaces a silent DX11 -> Magnification fallback (see OverlayModeResolver) -
+            // the fallback still saturates the screen but is invisible to OBS/Discord capture.
+            bool usingFallback = _settings.OverlayMode == VibranceHud.OverlayMode.Mag;
+            general.Controls.Add(new Label
+            {
+                Text = usingFallback
+                    ? "Display engine: Fallback mode (not visible in screen capture)"
+                    : "Display engine: DX11 (visible in screen capture)",
+                ForeColor = usingFallback ? Theme.Accent : Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(18, 78),
+                AutoSize = true
+            });
             Controls.Add(general);
 
             // ---- Theme picker (colour swatches) ----
-            var themeCard = new CardPanel { Location = new Point(40, 148), Size = new Size(width, 120) };
+            var themeCard = new CardPanel { Location = new Point(40, 172), Size = new Size(width, 120) };
             themeCard.Controls.Add(UiHelpers.Caption("THEME", 18, 16, 200));
             int sx = 18;
             foreach (var palette in ThemeCatalog.All)
@@ -97,7 +112,7 @@ namespace VibranceHud.Pages
             // ---- Custom background image ----
             // The picked image sits behind the plexus field, and its dominant colour
             // becomes the accent - so the theme matches whatever the user drops in.
-            var bgCard = new CardPanel { Location = new Point(40, 288), Size = new Size(width, 208) };
+            var bgCard = new CardPanel { Location = new Point(40, 312), Size = new Size(width, 208) };
             bgCard.Controls.Add(UiHelpers.Caption("BACKGROUND IMAGE", 18, 16, 260));
 
             var bgHint = new Label
@@ -214,7 +229,7 @@ namespace VibranceHud.Pages
             bgCard.Controls.Add(dimSlider);
             Controls.Add(bgCard);
 
-            var appearance = new CardPanel { Location = new Point(40, 516), Size = new Size(width, 108) };
+            var appearance = new CardPanel { Location = new Point(40, 540), Size = new Size(width, 108) };
             appearance.Controls.Add(UiHelpers.Caption("WINDOW OPACITY", 18, 16, 240));
             var opacityValue = new Label
             {
@@ -245,7 +260,7 @@ namespace VibranceHud.Pages
             appearance.Controls.Add(opacitySlider);
             Controls.Add(appearance);
 
-            var updates = new CardPanel { Location = new Point(40, 636), Size = new Size(width, 92) };
+            var updates = new CardPanel { Location = new Point(40, 660), Size = new Size(width, 92) };
             updates.Controls.Add(UiHelpers.Caption("UPDATES", 18, 16, 200));
             var checkBtn = FlatButton("Check for updates", 18, 44, 180);
             checkBtn.Click += async (s, e) => await UpdateService.CheckManuallyAsync();
@@ -253,7 +268,7 @@ namespace VibranceHud.Pages
             Controls.Add(updates);
 
             // ---- About ----
-            var about = new CardPanel { Location = new Point(40, 740), Size = new Size(width, 150) };
+            var about = new CardPanel { Location = new Point(40, 764), Size = new Size(width, 150) };
             about.Controls.Add(new LogoBox
             {
                 Image = BrandAssets.HorizontalLogo(Theme.IsLight),

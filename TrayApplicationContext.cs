@@ -36,6 +36,7 @@ namespace VibranceHud
         private readonly Audio.AudioEdgeService? _audioEdge;
         private ProfileEngineCoordinator? _profileCoordinator;
         private MainWindow _window;
+        private VibrancePopup? _vibrancePopup;
 
         public TrayApplicationContext()
         {
@@ -48,6 +49,13 @@ namespace VibranceHud
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX");
             _store = new SettingsStore(dataDir);
             _settings = _store.Load();
+
+            // Record which overlay mechanism actually ended up active - TryCreateOverlay()
+            // silently falls back to Magnification if DX11 init failed, and that fallback is
+            // invisible to screen-capture tools (OBS/Discord). Persist it so the Settings page
+            // can tell the user instead of hiding it.
+            _settings.OverlayMode = OverlayModeResolver.Resolve(_overlay);
+            _store.Save(_settings);
 
             // Rebuild a previously chosen image background + its derived palette before
             // the theme is resolved, so "Custom" is a known name by the time it's applied.
@@ -90,7 +98,7 @@ namespace VibranceHud
             _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator());
 
             _hotkeyWindow = new HotkeyWindow();
-            _hotkeyWindow.HotkeyPressed += (s, e) => _window.ShowAndFocus();
+            _hotkeyWindow.HotkeyPressed += (s, e) => ShowVibrancePopup();
 
             if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, MOD_CONTROL | MOD_ALT, VK_V))
             {
@@ -105,7 +113,8 @@ namespace VibranceHud
             }
 
             var menu = new ContextMenuStrip();
-            menu.Items.Add("Open  (Ctrl+Alt+V)", null, (s, e) => _window.ShowAndFocus());
+            menu.Items.Add("Open", null, (s, e) => _window.ShowAndFocus());
+            menu.Items.Add("Quick vibrance  (Ctrl+Alt+V)", null, (s, e) => ShowVibrancePopup());
             menu.Items.Add("Reset vibrance", null, (s, e) => _engine.Reset());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Check for updates", null, async (s, e) => await UpdateService.CheckManuallyAsync());
@@ -284,6 +293,19 @@ namespace VibranceHud
         }
 
         /// <summary>
+        /// The global hotkey's own surface: a small always-on-top popup for a quick tweak
+        /// without opening the full window. Reused across hotkey presses (built once, then
+        /// just re-shown) so repeated Ctrl+Alt+V doesn't leak a window per press.
+        /// </summary>
+        private void ShowVibrancePopup()
+        {
+            if (_vibrancePopup == null || _vibrancePopup.IsDisposed)
+                _vibrancePopup = new VibrancePopup(_engine, _settings, _store);
+            _vibrancePopup.Show();
+            _vibrancePopup.Activate();
+        }
+
+        /// <summary>
         /// Builds (or returns the existing) profile coordinator. Lazy because the
         /// coordinator is created just once per process lifetime — the auto-apply
         /// watcher keeps running across theme-window rebuilds.
@@ -316,6 +338,7 @@ namespace VibranceHud
         protected override void ExitThreadCore()
         {
             _crosshair.Dispose(); // never leave an overlay floating on screen
+            _vibrancePopup?.Dispose();
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
             _profileCoordinator?.Stop();  // tear down the polling loop before the engine disappears
             _store.Save(_settings);

@@ -40,6 +40,12 @@ namespace VibranceHud
         public int GammaPercent { get; set; } = 100;
         public bool EyeCare { get; set; }
 
+        /// <summary>Which overlay mechanism was actually active last launch (DX11, or the
+        /// Magnification-API fallback if DX11 init failed). Surfaced on the Settings page so
+        /// a silent fallback - which is invisible to screen-capture tools like OBS/Discord -
+        /// isn't hidden from the user. See <see cref="OverlayModeResolver"/>.</summary>
+        public OverlayMode OverlayMode { get; set; } = OverlayMode.Dx;
+
         // ---- Custom image theme ----
 
         /// <summary>File name of the background image inside the app's own data folder.

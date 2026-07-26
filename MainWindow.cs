@@ -356,12 +356,16 @@ namespace VibranceHud
 
         private void OnConfigureGame(DetectedGame game)
         {
-            GlowPage page = game.Game.Id switch
+            // Routing itself is a pure, unit-tested lookup (GamePageRouter) - a game id with
+            // no explicit page must fail closed to UnsupportedGamePage rather than falling
+            // through to some other game's page (Rust's writes directly to client.cfg).
+            GlowPage page = GamePageRouter.Resolve(game.Game.Id) switch
             {
-                "cs2" => new Cs2SettingsPage(game, onBack: ShowGames),
-                "apex" => new ApexSettingsPage(game, onBack: ShowGames),
-                "fortnite" => new FortniteSettingsPage(game, onBack: ShowGames),
-                _ => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
+                GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
+                GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames),
+                GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames),
+                GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames),
+                _ => new UnsupportedGamePage(game.Game, onBack: ShowGames),
             };
             AttachField(page);
             SetContent(page);
