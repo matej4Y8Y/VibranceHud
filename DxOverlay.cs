@@ -42,7 +42,7 @@ namespace VibranceHud
         private const PresentFlags AlphaPremultiplied = PresentFlags.None;
 
         private readonly DxDevice _device;
-        private readonly DxShader _shader = null!;
+        private readonly List<DxShader> _shaders;
         private readonly List<DxCapture> _captures;
         private readonly CancellationTokenSource _cts = null!;
         private readonly Task _renderLoop = null!;
@@ -54,6 +54,7 @@ namespace VibranceHud
 
         public DxOverlay()
         {
+            _shaders = new List<DxShader>();
             _captures = new List<DxCapture>();
             _currentMatrix = Identity;
 
@@ -68,14 +69,14 @@ namespace VibranceHud
 
             try
             {
-                var device = _device.Device!;
-                _shader = new DxShader(device, device.ImmediateContext);
-
-                // One desktop-duplication capture per monitor, paired 1:1 with the
-                // swap-chain targets created in DxDevice.
+                // A shader (compiled against the target's own device) and a desktop-
+                // duplication capture per monitor, one output at a time - a target on a
+                // secondary GPU adapter needs both created against ITS device, not
+                // whichever adapter happened to be enumerated first.
                 foreach (var target in _device.Targets)
                 {
-                    _captures.Add(new DxCapture(device, target.Output));
+                    _shaders.Add(new DxShader(target.Device, target.Device.ImmediateContext));
+                    _captures.Add(new DxCapture(target.Device, target.Output));
                 }
             }
             catch (Exception)
@@ -83,7 +84,8 @@ namespace VibranceHud
                 // Any init failure (duplication unavailable, shader compile, etc.) -> fall back.
                 foreach (var cap in _captures) cap.Dispose();
                 _captures.Clear();
-                _shader?.Dispose();
+                foreach (var shader in _shaders) shader.Dispose();
+                _shaders.Clear();
                 _device.Dispose();
                 _device = null!;
                 IsAvailable = false;
@@ -117,13 +119,13 @@ namespace VibranceHud
             try { _renderLoop.Wait(TimeSpan.FromSeconds(2)); } catch { }
             foreach (var cap in _captures) cap.Dispose();
             _captures.Clear();
-            _shader.Dispose();
+            foreach (var shader in _shaders) shader.Dispose();
+            _shaders.Clear();
             _device.Dispose();
         }
 
         private void RenderLoop(CancellationToken ct)
         {
-            var context = _device.Device!.ImmediateContext;
             var clear = new RawColor4(0f, 0f, 0f, 0f); // transparent - only the quad writes color
 
             while (!ct.IsCancellationRequested)
@@ -133,12 +135,15 @@ namespace VibranceHud
                 {
                     matrix = _currentMatrix;
                 }
-                _shader.ApplyMatrix(matrix);
 
                 for (int i = 0; i < _device.Targets.Count && i < _captures.Count; i++)
                 {
                     var target = _device.Targets[i];
                     var cap = _captures[i];
+                    var shader = _shaders[i];
+                    var context = target.Device.ImmediateContext;
+
+                    shader.ApplyMatrix(matrix);
 
                     // On timeout we still re-present the last captured frame so the effect
                     // doesn't flicker off (session lock, fullscreen exclusive, UAC, etc.).
@@ -148,8 +153,8 @@ namespace VibranceHud
                     context.ClearRenderTargetView(target.Rtv, clear);
                     context.Rasterizer.SetViewport(0, 0, target.Width, target.Height, 0f, 1f);
 
-                    _shader.Bind(cap.FrameView);
-                    _shader.Draw();
+                    shader.Bind(cap.FrameView);
+                    shader.Draw();
 
                     // Present1 with premultiplied alpha - the DWM-capture-friendly path.
                     target.SwapChain.Present(1, AlphaPremultiplied);

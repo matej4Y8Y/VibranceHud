@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using SharpDX;
 using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using SharpDX.Mathematics.Interop;
@@ -9,8 +10,14 @@ using Device = SharpDX.Direct3D11.Device;
 namespace VibranceHud
 {
     /// <summary>
-    /// Owns the DX11 device and one swap-chain per monitor. Lifecycle is create-once,
-    /// dispose-once; per-frame work happens in DxCapture + DxShader driven by DxOverlay.
+    /// Owns one DX11 device per GPU adapter and one swap-chain per monitor across every
+    /// adapter. Lifecycle is create-once, dispose-once; per-frame work happens in
+    /// DxCapture + DxShader driven by DxOverlay.
+    ///
+    /// A multi-GPU PC (a laptop with integrated + discrete graphics, or a desktop with two
+    /// cards) can have monitors attached to different adapters, and DXGI Desktop Duplication
+    /// requires a device created on the SAME adapter as the output it duplicates - so each
+    /// adapter gets its own device, and every one of its outputs shares that device.
     ///
     /// Each monitor gets a borderless, click-through overlay window (NOT topmost - the
     /// spec forbids HWND_TOPMOST because it breaks DWM capture for the layered window
@@ -22,24 +29,29 @@ namespace VibranceHud
     internal sealed class DxDevice : IDisposable
     {
         /// <summary>Per-monitor render target: the swap-chain, its back-buffer RTV, the
-        /// DXGI output (for desktop duplication) and the pixel dimensions.</summary>
+        /// DXGI output (for desktop duplication), the device that owns it, and the pixel
+        /// dimensions.</summary>
         public sealed class OutputTarget
         {
             public SwapChain1 SwapChain = null!;
             public RenderTargetView Rtv = null!;
             public Output1 Output = null!;
+            public Device Device = null!;
             public IntPtr Hwnd;
             public int Width;
             public int Height;
         }
 
-        public Device? Device { get; private set; }
-        public List<SwapChain1> SwapChains { get; }
         public List<OutputTarget> Targets { get; }
 
         private Factory2? _factory;
 
-        public bool IsAvailable => Device != null && Targets.Count > 0;
+        // One device per adapter that produced at least one usable target; tracked
+        // separately from OutputTarget so a multi-monitor adapter's shared device is
+        // disposed exactly once instead of once per output.
+        private readonly List<Device> _devices = new();
+
+        public bool IsAvailable => Targets.Count > 0;
 
         // --- Win32 overlay window plumbing -------------------------------------------------
         private const int WS_POPUP = unchecked((int)0x80000000);
@@ -99,23 +111,51 @@ namespace VibranceHud
 
         public DxDevice()
         {
-            SwapChains = new List<SwapChain1>();
             Targets = new List<OutputTarget>();
 
             try
             {
                 _factory = new Factory2();
-
-                using var adapter = _factory.GetAdapter1(0);
-                // BgraSupport is required for a flip-model swap-chain with alpha compositing.
-                Device = new Device(adapter, DeviceCreationFlags.BgraSupport);
-
                 EnsureWindowClass();
-                CreateSwapChainsForOutputs(adapter);
+
+                for (int i = 0; ; i++)
+                {
+                    Adapter1 adapter;
+                    try
+                    {
+                        adapter = _factory.GetAdapter1(i);
+                    }
+                    catch (SharpDXException)
+                    {
+                        break; // no more adapters
+                    }
+
+                    using (adapter)
+                    {
+                        Device device;
+                        try
+                        {
+                            // BgraSupport is required for a flip-model swap-chain with alpha
+                            // compositing.
+                            device = new Device(adapter, DeviceCreationFlags.BgraSupport);
+                        }
+                        catch (Exception)
+                        {
+                            continue; // this adapter has no usable D3D11 driver - skip it
+                        }
+
+                        int before = Targets.Count;
+                        CreateSwapChainsForOutputs(adapter, device);
+
+                        if (Targets.Count > before) _devices.Add(device);
+                        else device.Dispose(); // adapter had no usable output
+                    }
+                }
 
                 if (Targets.Count == 0)
                 {
-                    // No usable output - treat as unavailable so the caller falls back.
+                    // No usable output on any adapter - treat as unavailable so the caller
+                    // falls back to MagOverlay.
                     Dispose();
                 }
             }
@@ -123,7 +163,6 @@ namespace VibranceHud
             {
                 // DX11 init failure - the caller checks IsAvailable and falls back to MagOverlay.
                 Dispose();
-                Device = null;
             }
         }
 
@@ -142,7 +181,7 @@ namespace VibranceHud
             s_classRegistered = true;
         }
 
-        private void CreateSwapChainsForOutputs(Adapter1 adapter)
+        private void CreateSwapChainsForOutputs(Adapter1 adapter, Device device)
         {
             foreach (var output in adapter.Outputs)
             {
@@ -201,17 +240,17 @@ namespace VibranceHud
                     Flags = SwapChainFlags.None,
                 };
 
-                var swapChain = new SwapChain1(_factory, Device, hwnd, ref desc);
+                var swapChain = new SwapChain1(_factory, device, hwnd, ref desc);
 
                 using (var backBuffer = swapChain.GetBackBuffer<Texture2D>(0))
                 {
-                    var rtv = new RenderTargetView(Device, backBuffer);
-                    SwapChains.Add(swapChain);
+                    var rtv = new RenderTargetView(device, backBuffer);
                     Targets.Add(new OutputTarget
                     {
                         SwapChain = swapChain,
                         Rtv = rtv,
                         Output = output1,
+                        Device = device,
                         Hwnd = hwnd,
                         Width = width,
                         Height = height,
@@ -231,7 +270,6 @@ namespace VibranceHud
                 t.Output?.Dispose();
             }
             Targets.Clear();
-            SwapChains.Clear();
 
             foreach (var hwnd in _windows)
             {
@@ -239,7 +277,9 @@ namespace VibranceHud
             }
             _windows.Clear();
 
-            Device?.Dispose();
+            foreach (var device in _devices) device.Dispose();
+            _devices.Clear();
+
             _factory?.Dispose();
         }
     }
