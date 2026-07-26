@@ -20,6 +20,21 @@ namespace VibranceHud.Games
             return result;
         }
 
+        /// <summary>
+        /// Every supported game paired with its detection (if any), installed games first,
+        /// catalog order preserved within each group. Used by the Games Hub to show the full
+        /// catalog rather than just what's installed.
+        /// </summary>
+        public static IReadOnlyList<(SupportedGame Game, DetectedGame? Detected)> OrderForHub(
+            IReadOnlyList<DetectedGame> detected)
+        {
+            var byGame = detected.ToDictionary(d => d.Game);
+            return SupportedGames.All
+                .Select(g => (Game: g, Detected: byGame.TryGetValue(g, out var d) ? d : null))
+                .OrderBy(x => x.Detected == null)
+                .ToList();
+        }
+
         private static IReadOnlyList<DetectedGame> DetectSteam()
         {
             try

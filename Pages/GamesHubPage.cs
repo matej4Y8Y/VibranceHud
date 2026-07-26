@@ -6,9 +6,9 @@ using VibranceHud.Games;
 namespace VibranceHud.Pages
 {
     /// <summary>
-    /// The Games Hub: detects supported games installed on this PC and shows them as cards.
-    /// Clicking a card opens that game's optimization page. v1 supports Rust; more games
-    /// slot in as the catalog grows.
+    /// The Games Hub: shows every game PlexusX supports as a card, installed games first.
+    /// Clicking an installed card opens that game's optimization page; not-installed cards
+    /// are shown dimmed and inert.
     /// </summary>
     public sealed class GamesHubPage : GlowPage
     {
@@ -32,7 +32,7 @@ namespace VibranceHud.Pages
 
             var sub = new Label
             {
-                Text = "Optimize the supported games installed on your PC.",
+                Text = "Everything PlexusX supports. Installed games are ready to configure.",
                 ForeColor = Theme.TextDim,
                 Location = new Point(42, 66),
                 AutoSize = true,
@@ -47,34 +47,21 @@ namespace VibranceHud.Pages
             // CardPanel uses everywhere else), but wrapping them in a second transparent
             // layer left a stale, un-synced snapshot of the background showing through,
             // which is what looked like a twitching leftover block.
-            var detected = GameLibrary.DetectInstalled();
-            if (detected.Count == 0)
+            var ordered = GameLibrary.OrderForHub(GameLibrary.DetectInstalled());
+
+            const int cardW = 200, cardH = 160, gap = 16, cols = 3;
+            int i = 0;
+            foreach (var (game, detected) in ordered)
             {
-                Controls.Add(new Label
+                var card = new GameCard(game, detected)
                 {
-                    Text = "No supported games detected yet.\n" +
-                           "Supported: Rust, CS2, Apex Legends, Fortnite",
-                    ForeColor = Theme.TextDim,
-                    Location = new Point(40, 104),
-                    AutoSize = true,
-                    BackColor = Color.Transparent
-                });
-            }
-            else
-            {
-                const int cardW = 200, cardH = 160, gap = 16, cols = 3;
-                int i = 0;
-                foreach (var game in detected)
-                {
-                    var card = new GameCard(game)
-                    {
-                        Location = new Point(40 + (i % cols) * (cardW + gap),
-                                              104 + (i / cols) * (cardH + gap))
-                    };
-                    card.Click += (s, e) => onConfigure(card.Game);
-                    Controls.Add(card);
-                    i++;
-                }
+                    Location = new Point(40 + (i % cols) * (cardW + gap),
+                                          104 + (i / cols) * (cardH + gap))
+                };
+                if (detected != null)
+                    card.Click += (s, e) => onConfigure(detected);
+                Controls.Add(card);
+                i++;
             }
         }
     }

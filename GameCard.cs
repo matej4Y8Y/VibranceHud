@@ -7,19 +7,23 @@ using VibranceHud.Games;
 namespace VibranceHud
 {
     /// <summary>
-    /// A clickable card for one detected game: a logo tile (the game's initial on an accent
-    /// tile - swap for real logos later), its name, an "Installed" marker, and a Configure
-    /// hint. Clicking opens that game's settings.
+    /// A card for one game in the catalog: a logo tile (the game's initial on an accent
+    /// tile - swap for real logos later), its name, and an install-state badge. Installed
+    /// games get a "Configure ›" hint and are clickable to open that game's settings;
+    /// not-installed games are shown dimmed and inert.
     /// </summary>
     public sealed class GameCard : Control
     {
         private bool _hover;
 
-        public DetectedGame Game { get; }
+        public SupportedGame SupportedGame { get; }
+        public DetectedGame? Detected { get; }
+        public bool IsInstalled => Detected != null;
 
-        public GameCard(DetectedGame game)
+        public GameCard(SupportedGame game, DetectedGame? detected)
         {
-            Game = game;
+            SupportedGame = game;
+            Detected = detected;
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer
@@ -27,12 +31,21 @@ namespace VibranceHud
                    | ControlStyles.ResizeRedraw, true);
             BackColor = Color.Transparent;
             Size = new Size(200, 160);
-            Cursor = Cursors.Hand;
+            Cursor = IsInstalled ? Cursors.Hand : Cursors.Default;
             Margin = new Padding(0, 0, 16, 16);
         }
 
-        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hover = true; Invalidate(); }
-        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hover = false; Invalidate(); }
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            if (IsInstalled) { _hover = true; Invalidate(); }
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (IsInstalled) { _hover = false; Invalidate(); }
+        }
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -46,27 +59,30 @@ namespace VibranceHud
                 using (var path = Glass.RoundedPath(rectF, 12))
                     g.DrawPath(pen, path);
 
-            // Logo tile: accent-tinted rounded square with the game's initial.
+            // Logo tile: accent-tinted rounded square with the game's initial (dimmed when
+            // not installed).
             var tile = new Rectangle(20, 20, 52, 52);
             using (var tilePath = Rounded(tile, 12))
-            using (var tileFill = new SolidBrush(Theme.AccentDim))
+            using (var tileFill = new SolidBrush(IsInstalled ? Theme.AccentDim : Theme.SurfaceHover))
                 g.FillPath(tileFill, tilePath);
             using (var initFont = new Font(Theme.FontFamily, 20f, FontStyle.Bold))
-                TextRenderer.DrawText(g, Game.Game.DisplayName.Substring(0, 1), initFont, tile, Theme.Text,
+                TextRenderer.DrawText(g, SupportedGame.DisplayName.Substring(0, 1), initFont, tile,
+                    IsInstalled ? Theme.Text : Theme.TextDim,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
             using (var nameFont = new Font(Theme.FontFamily, 12f, FontStyle.Bold))
-                TextRenderer.DrawText(g, Game.Game.DisplayName, nameFont,
+                TextRenderer.DrawText(g, SupportedGame.DisplayName, nameFont,
                     new Rectangle(20, 84, Width - 40, 24), Theme.Text, TextFormatFlags.Left);
 
-            using (var dot = new SolidBrush(Color.FromArgb(80, 220, 130)))
+            using (var dot = new SolidBrush(IsInstalled ? Color.FromArgb(80, 220, 130) : Theme.TextDim))
                 g.FillEllipse(dot, 20, 116, 8, 8);
             using (var small = new Font(Theme.FontFamily, 8f))
             {
-                TextRenderer.DrawText(g, "Installed", small, new Rectangle(32, 111, 100, 16), Theme.TextDim,
-                    TextFormatFlags.Left);
-                TextRenderer.DrawText(g, "Configure ›", small, new Rectangle(Width - 92, 111, 72, 16), Theme.Accent,
-                    TextFormatFlags.Right);
+                TextRenderer.DrawText(g, IsInstalled ? "Installed" : "Not installed", small,
+                    new Rectangle(32, 111, 100, 16), Theme.TextDim, TextFormatFlags.Left);
+                if (IsInstalled)
+                    TextRenderer.DrawText(g, "Configure ›", small, new Rectangle(Width - 92, 111, 72, 16),
+                        Theme.Accent, TextFormatFlags.Right);
             }
         }
 
