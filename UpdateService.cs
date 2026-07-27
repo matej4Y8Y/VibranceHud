@@ -112,15 +112,43 @@ namespace VibranceHud
         /// <summary>
         /// Run the downloaded installer silently. It closes this app, replaces the files and
         /// relaunches PlexusX, so the user just sees the loading screen and then "what's new".
+        ///
+        /// Critical: this method MUST NOT block. The Inno Setup installer needs to close
+        /// PlexusX to write the new files, and PlexusX is the parent that just launched it.
+        /// If we waited on the installer process here, we'd deadlock for ~4 minutes (the
+        /// installer waits up to that long for the parent to exit before giving up).
+        /// Instead, we launch the installer detached and immediately force-exit the process
+        /// so the installer can replace the files without us holding the lock.
         /// </summary>
         public static bool RunInstallerSilently(string installerPath)
         {
             try
             {
-                Process.Start(new ProcessStartInfo(installerPath)
+                // UseShellExecute=false lets us pass arguments without quoting. The new
+                // process is independent of ours - we don't want a job-object inheritance
+                // that would kill the installer when we exit.
+                var psi = new ProcessStartInfo
                 {
-                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES",
-                    UseShellExecute = true
+                    FileName = installerPath,
+                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /SP-",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetTempPath(),
+                };
+                Process.Start(psi);
+
+                // Hard-exit so the installer can write the new files. We can't use
+                // Application.Exit() (it tries to flush UI state and waits for the form
+                // to close, which itself can't close because the installer is writing
+                // over our EXE). Process.Kill is also wrong (it's our parent, depends on
+                // the UI thread). Environment.Exit terminates the process immediately.
+                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    // Small delay so the installer has time to spawn its window before
+                    // we disappear (some Inno Setup versions refuse to run if their parent
+                    // is gone before they init).
+                    System.Threading.Thread.Sleep(200);
+                    Environment.Exit(0);
                 });
                 return true;
             }
