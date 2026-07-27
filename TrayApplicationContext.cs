@@ -12,9 +12,6 @@ namespace VibranceHud
     public sealed class TrayApplicationContext : ApplicationContext
     {
         private const int HOTKEY_ID = 1;
-        private const uint MOD_ALT = 0x0001;
-        private const uint MOD_CONTROL = 0x0002;
-        private const uint VK_V = 0x56;
 
         [DllImport("user32.dll")]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -37,6 +34,7 @@ namespace VibranceHud
         private ProfileEngineCoordinator? _profileCoordinator;
         private MainWindow _window;
         private VibrancePopup? _vibrancePopup;
+        private ToolStripItem? _hotkeyMenuItem;
 
         public TrayApplicationContext()
         {
@@ -95,17 +93,17 @@ namespace VibranceHud
                 if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator());
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), ReRegisterHotkey);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) => ShowVibrancePopup();
 
-            if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, MOD_CONTROL | MOD_ALT, VK_V))
+            if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, _settings.HotkeyModifierMask, _settings.HotkeyVirtualKey))
             {
-                // Not fatal - another app may already own Ctrl+Alt+V. The tray menu
+                // Not fatal - another app may already own this combo. The tray menu
                 // still works either way, so just let the user know why the hotkey is quiet.
                 MessageBox.Show(
-                    "Couldn't register Ctrl+Alt+V (another app may already be using it). " +
+                    $"Couldn't register {GetHotkeyDisplay()} (another app may already be using it). " +
                     "You can still open the slider from the tray icon.",
                     "PlexusX",
                     MessageBoxButtons.OK,
@@ -114,7 +112,7 @@ namespace VibranceHud
 
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open", null, (s, e) => _window.ShowAndFocus());
-            menu.Items.Add("Quick vibrance  (Ctrl+Alt+V)", null, (s, e) => ShowVibrancePopup());
+            _hotkeyMenuItem = menu.Items.Add($"Quick vibrance  ({GetHotkeyDisplay()})", null, (s, e) => ShowVibrancePopup());
             menu.Items.Add("Reset vibrance", null, (s, e) => _engine.Reset());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Check for updates", null, async (s, e) => await UpdateService.CheckManuallyAsync());
@@ -287,7 +285,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, ReRegisterHotkey);
             _window.ShowAndFocus();
             old.Dispose();
         }
@@ -360,6 +358,27 @@ namespace VibranceHud
             // NotifyIcon.Text is capped at 63 chars (defensive truncation).
             _trayIcon.Text = running ? "PlexusX \u2014 auto-apply running" : "PlexusX";
         }
+
+        /// <summary>Drop the live RegisterHotKey, persist the new combo, register it, and
+        /// refresh the tray menu so the visible shortcut stays in sync with what's bound.
+        /// Called from the picker on the Vibrance page; safe to call at any point after
+        /// the hotkey window handle exists.</summary>
+        public void ReRegisterHotkey(uint mask, uint vk)
+        {
+            UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
+            _settings.HotkeyModifierMask = mask;
+            _settings.HotkeyVirtualKey = vk;
+            _store.Save(_settings);
+            RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, mask, vk);
+            if (_hotkeyMenuItem != null)
+                _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()})";
+        }
+
+        /// <summary>Render the user's bound combo for the tray menu and the
+        /// couldn't-register warning. Routes through the same static helper the picker
+        /// uses, so the two displays can never disagree.</summary>
+        private string GetHotkeyDisplay() => HotkeyPicker.GetDisplay(
+            _settings.HotkeyModifierMask, _settings.HotkeyVirtualKey);
     }
 
     /// <summary>

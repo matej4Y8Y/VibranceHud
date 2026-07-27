@@ -42,6 +42,15 @@ namespace VibranceHud
         private int _brightness = 100;
         private int _gamma = 100;
         private bool _eyeCare;
+        private bool _dragging;
+
+        // When the user is dragging a slider, the value setter is called on every
+        // mouse-move event. Calling MagSetFullscreenColorEffect (or the DX11 swap-chain
+        // write) on every move is slow on systems where DWM is software-rendered or the
+        // Magnification API is in use (~10-30ms per call), which blocks the UI thread
+        // and makes the slider feel jumpy. ScheduleOverlayApply short-circuits during a
+        // drag so the chip tracks the cursor 1:1 and the screen catches up on EndDrag
+        // with one immediate write.
 
         public VibranceEngine(IVibranceController controller, ISaturationOverlay overlay, IGammaRamp gammaRamp)
         {
@@ -49,6 +58,30 @@ namespace VibranceHud
             _overlay = overlay;
             _gammaRamp = gammaRamp;
             _vibrance = Math.Clamp(controller.CurrentLevel, 0, MaxVibrance);
+        }
+
+        /// <summary>Begin a slider drag. From this point until <see cref="EndDrag"/> the engine
+        /// suppresses overlay writes so the slow MagSetFullscreenColorEffect syscall doesn't
+        /// block the UI thread (which is what causes the user-perceived "jumping" lag on
+        /// systems where the DWM gradient compositor is software-rendered or the Mag path
+        /// is in use). The slider chip itself tracks the cursor 1:1 via WinForms' own
+        /// repaint, so the user still sees the value change. On EndDrag, the final
+        /// overlay value is committed in a single write.</summary>
+        public void BeginDrag()
+                {
+            _dragging = true;
+        }
+
+        /// <summary>End a slider drag. Flushes the overlay with the current value in a
+        /// single MagSetFullscreenColorEffect call so the screen catches up to the chip's
+        /// final position.</summary>
+        public void EndDrag()
+                {
+            _dragging = false;
+            // Force one immediate overlay write so the screen matches the chip's
+            // final position. This runs synchronously on the UI thread, which is fine
+            // because the user has stopped dragging and the brief freeze is invisible.
+            ApplyOverlay();
         }
 
         /// <summary>Vibrance 0-200. Up to 100 this is the driver's own Digital Vibrance
@@ -111,9 +144,31 @@ namespace VibranceHud
 
         private void ApplyAll()
         {
-            // Driver takes vibrance up to its ceiling; anything beyond becomes software.
-            _controller.SetLevel(Math.Min(_vibrance, DriverVibranceCeiling));
+            // Driver vibrance is cheap (NVAPI call) - apply immediately so the user
+                // sees the slider-chip feedback match the driver-level change without
+                // a one-frame delay.
+                _controller.SetLevel(Math.Min(_vibrance, DriverVibranceCeiling));
 
+                // The screen overlay (DX11 swap chain / Magnification API) is expensive.
+                // ScheduleOverlayApply short-circuits during a slider drag and commits a
+                // single write on EndDrag.
+                ScheduleOverlayApply();
+            }
+
+        private void ScheduleOverlayApply()
+                {
+            // During a slider drag, skip the overlay write entirely. The chip on the
+            // page tracks the cursor 1:1 via WinForms' own repaint cycle, so the user
+            // still sees the value change. The expensive MagSetFullscreenColorEffect
+            // syscall would otherwise block the UI thread for ~10-30ms per call, which
+            // is what makes the slider feel jumpy on Mag-path systems. EndDrag flushes
+            // the final value in a single write.
+            if (_dragging) return;
+            ApplyOverlay();
+                }
+
+        private void ApplyOverlay()
+        {
             float vibrance = _vibrance > DriverVibranceCeiling
                 ? _vibrance / (float)DriverVibranceCeiling
                 : 1f;

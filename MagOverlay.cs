@@ -54,7 +54,7 @@ namespace VibranceHud
 
         private bool _initialized;
 
-        /// <summary>True if the Magnification runtime is available; false means "tier-1 only".</summary>
+        /// <summary>True when the Magnification runtime is available; false means "tier-1 only".</summary>
         public bool IsAvailable => _initialized;
 
         public MagOverlay()

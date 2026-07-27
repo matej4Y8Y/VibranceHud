@@ -98,5 +98,17 @@ namespace VibranceHud
         /// <summary>The loudness ceiling, 5-100 (%). Quiet sounds are untouched; anything
         /// louder is pulled down to this, so footsteps and gun shots end up level.</summary>
         public int AudioEdgeThresholdPercent { get; set; } = 30;
+
+        // ---- Quick vibrance hotkey ----
+
+        /// <summary>Win32 RegisterHotKey modifier mask (MOD_ALT|MOD_CONTROL|MOD_SHIFT|MOD_WIN
+        /// bits; see HotkeyPicker.Modifiers for the constants). Default: Ctrl+Alt.</summary>
+        public uint HotkeyModifierMask { get; set; } = HotkeyModifiers.Control | HotkeyModifiers.Alt;
+
+        /// <summary>The non-modifier key the user picks (V = 0x56 by default, so the
+        /// out-of-the-box behaviour matches the hardcoded Ctrl+Alt+V the app shipped with).
+        /// Range: 0x30..0x5A (top-row 0-9, A-Z), 0x60..0x87 (numpad 0-9), 0x70..0x7B (F1-F12),
+        /// plus a handful of named keys.</summary>
+        public uint HotkeyVirtualKey { get; set; } = HotkeyKeys.V;
     }
 }

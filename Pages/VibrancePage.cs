@@ -26,12 +26,18 @@ namespace VibranceHud.Pages
         private readonly FlatSlider _vibrance;   // driver Digital Vibrance (0-100)
         private readonly FlatSlider _brightness;
         private readonly FlatSlider _gamma;
+        private readonly HotkeyPicker _hotkeyPicker;
         private readonly ToggleSwitch _eyeCare;
         private readonly List<ChipButton> _chips = new();
         private readonly List<(int Vib, int Sat)> _presetValues = new();
 
         private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY;
-        private int _vibCapY, _brightCapY, _gammaCapY, _eyeY;
+        private int _vibCapY, _hotkeyCapY, _brightCapY, _gammaCapY, _eyeY;
+
+        /// <summary>Raised when the user picks a new quick-vibrance hotkey combo. The
+        /// tray forwards to <see cref="TrayApplicationContext.ReRegisterHotkey"/> so the
+        /// OS-level RegisterHotKey is swapped without a restart.</summary>
+        public event Action<uint, uint>? HotkeyChanged;
 
         // Built once - OnPaint runs ~30x/sec, so never allocate fonts inside it.
         private static readonly Font NumberFont = new(Theme.FontFamily, 46f, FontStyle.Bold);
@@ -64,6 +70,11 @@ namespace VibranceHud.Pages
                 Invalidate();
                 _saveDebounce.Trigger();
             };
+            // Tell the engine when the user is actively dragging so it can suppress
+            // overlay writes during the drag (the chip tracks the cursor 1:1; the
+            // screen catches up on MouseUp via EndDrag's single flush).
+            _slider.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
+            _slider.MouseUp += (s, e) => _engine.EndDrag();
             Controls.Add(_slider);
 
             _vibrance = new FlatSlider
@@ -82,7 +93,25 @@ namespace VibranceHud.Pages
                 Invalidate();
                 _saveDebounce.Trigger();
             };
+            _vibrance.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
+            _vibrance.MouseUp += (s, e) => _engine.EndDrag();
             Controls.Add(_vibrance);
+
+            // Hotkey picker: seeded from settings, raised through the page so the tray can
+            // swap the live RegisterHotKey without the page having to know about Win32.
+            _hotkeyPicker = new HotkeyPicker
+            {
+                ModifierMask = _settings.HotkeyModifierMask,
+                VirtualKey = _settings.HotkeyVirtualKey
+            };
+            _hotkeyPicker.HotkeyChanged += (mask, vk) =>
+            {
+                _settings.HotkeyModifierMask = mask;
+                _settings.HotkeyVirtualKey = vk;
+                _store.Save(_settings);
+                HotkeyChanged?.Invoke(mask, vk);
+            };
+            Controls.Add(_hotkeyPicker);
 
             // Presets set BOTH controls. These pairs reproduce exactly what the old
             // combined 0-200 slider did at 50/100/150/200, so nothing shifts on upgrade.
@@ -116,6 +145,8 @@ namespace VibranceHud.Pages
                 Invalidate();
                 _saveDebounce.Trigger();
             };
+            _brightness.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
+            _brightness.MouseUp += (s, e) => _engine.EndDrag();
             Controls.Add(_brightness);
 
             _gamma = new FlatSlider
@@ -132,6 +163,8 @@ namespace VibranceHud.Pages
                 Invalidate();
                 _saveDebounce.Trigger();
             };
+            _gamma.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
+            _gamma.MouseUp += (s, e) => _engine.EndDrag();
             Controls.Add(_gamma);
 
             _eyeCare = new ToggleSwitch { Checked = _engine.EyeCare };
@@ -152,7 +185,7 @@ namespace VibranceHud.Pages
             _colW = Math.Min(560, Width - 80);
             _cx = (Width - _colW) / 2;
             // Matches the glass panel's height below, so the card stays optically centred.
-            int top = Math.Max(20, (Height - 580) / 2);
+            int top = Math.Max(20, (Height - 620) / 2);
 
             _numberY = top;
             _captionY = top + 90;
@@ -169,6 +202,9 @@ namespace VibranceHud.Pages
             _vibCapY = chipY + 56;
             _vibrance.SetBounds(_cx, chipY + 78, _colW, 32);
 
+            // Brightness, Gamma, then Eye care. The hotkey picker is intentionally
+            // pushed to the very bottom (below Eye care) as the final element on
+            // the page, since it's a one-shot config surface, not a primary control.
             _brightCapY = chipY + 122;
             _brightness.SetBounds(_cx, chipY + 144, _colW, 32);
 
@@ -177,6 +213,16 @@ namespace VibranceHud.Pages
 
             _eyeY = chipY + 262;
             _eyeCare.SetBounds(_cx + _colW - 44, _eyeY - 2, 44, 22);
+
+            // Quick hotkey vibrance - caption above, compact ~300px chip + Set
+            // button below it, sitting at the very bottom of the page.
+            _hotkeyCapY = chipY + 300;
+            int hotkeyW = 300;
+            hotkeyW = Math.Max(HotkeyPicker.PickerMinimumSize.Width,
+                Math.Min(hotkeyW, _colW));
+            int hotkeyH = HotkeyPicker.PickerDefaultSize.Height;
+            int hotkeyX = _cx + (_colW - hotkeyW) / 2;
+            _hotkeyPicker.SetBounds(hotkeyX, _hotkeyCapY + 18, hotkeyW, hotkeyH);
 
             Invalidate();
         }
@@ -187,7 +233,7 @@ namespace VibranceHud.Pages
             var g = e.Graphics;
 
             // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
-            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 580);
+            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 720);
             Glass.PaintPanel(g, panel, 24, fillAlpha: 165);
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -229,6 +275,13 @@ namespace VibranceHud.Pages
             // ---- Eye care ----
             TextRenderer.DrawText(g, "Eye care  (warm light)", RowFont,
                 new Rectangle(_cx, _eyeY, 300, 20), Theme.Text, TextFormatFlags.Left);
+
+            // ---- Quick hotkey vibrance (last element on the page) ----
+            // Lowercase, regular weight - not the all-caps style of the slider
+            // captions, since this is a small one-shot config row rather than a
+            // primary control section.
+            TextRenderer.DrawText(g, "Quick hotkey vibrance", SmallFont,
+                new Rectangle(_cx, _hotkeyCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
         }
 
         private void UpdateActiveChip()
@@ -249,6 +302,8 @@ namespace VibranceHud.Pages
             _brightness.Value = _engine.Brightness;
             _gamma.Value = _engine.Gamma;
             _eyeCare.Checked = _engine.EyeCare;
+            _hotkeyPicker.ModifierMask = _settings.HotkeyModifierMask;
+            _hotkeyPicker.VirtualKey = _settings.HotkeyVirtualKey;
             UpdateActiveChip();
             Invalidate();
         }

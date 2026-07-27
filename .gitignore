@@ -24,3 +24,6 @@ installer/create_release.py
 installer/PlexusX-Setup-0.7.0.exe
 installer/PlexusX-Setup-0.7.2.exe
 *.tmp.py
+
+# Local debug tools (DX probes, scratch projects, etc.)
+tools/

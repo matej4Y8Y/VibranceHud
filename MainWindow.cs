@@ -56,7 +56,8 @@ namespace VibranceHud
             SystemTweaks.SystemTweakService tweaks, Audio.AudioEdgeService? audio,
             Action<string> onThemeChanged, Theming.CustomThemeService? custom = null,
             Crosshair.CrosshairService? crosshair = null,
-            ProfileEngineCoordinator? profileCoordinator = null)
+            ProfileEngineCoordinator? profileCoordinator = null,
+            Action<uint, uint>? onHotkeyChanged = null)
         {
             _crosshair = crosshair ?? new Crosshair.CrosshairService();
             _profileCoordinator = profileCoordinator;
@@ -101,6 +102,8 @@ namespace VibranceHud
 
             // Pages exist before the nav wires click handlers to them.
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
+            // The tray owns the live RegisterHotKey; forward the page's re-bind signal.
+            _vibrancePage.HotkeyChanged += (mask, vk) => onHotkeyChanged?.Invoke(mask, vk);
             _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged,
                 custom, onBackgroundChanged: RefreshBackdrop);
             _accountPage = new AccountPage();
