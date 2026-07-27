@@ -6,6 +6,10 @@ namespace VibranceHud.Tests
 {
     internal sealed class FakeVibranceEngine : IVibranceEngine
     {
+            // Drag begin/end are UI-lifecycle hooks; a fake has no state to guard.
+            public void BeginDrag() { }
+            public void EndDrag() { }
+
         public int Vibrance { get; set; } = 100;
         public int Saturation { get; set; } = 100;
         public int Brightness { get; set; } = 100;

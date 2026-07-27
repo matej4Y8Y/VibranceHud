@@ -35,6 +35,7 @@ namespace VibranceHud.Pages
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
         private readonly Audio.AudioEdgeService? _audio;
+        private readonly Nvidia.INvidiaDriverSettings? _nvidia;
         private readonly List<ChipButton> _qualityChips = new();
         private readonly List<ChipButton> _fpsChips = new();
         private readonly List<ChipButton> _ramChips = new();
@@ -49,12 +50,13 @@ namespace VibranceHud.Pages
         private Label _status = null!;
 
         public RustSettingsPage(DetectedGame game, AppSettings settings, SettingsStore store,
-            Audio.AudioEdgeService? audio, Action onBack)
+            Audio.AudioEdgeService? audio, Action onBack, Nvidia.INvidiaDriverSettings? nvidia = null)
         {
             _game = game;
             _settings = settings;
             _store = store;
             _audio = audio;
+            _nvidia = nvidia;
             _service = new RustSettingsService(Path.Combine(game.InstallDir, "cfg", "client.cfg"));
             AutoScroll = true;
             Font = new Font(Theme.FontFamily, 9.5f);
@@ -283,6 +285,75 @@ namespace VibranceHud.Pages
             }
             Controls.Add(sys);
             y += 226;
+
+            // ---------- NVIDIA driver tweaks ----------
+            // Only what this GPU can actually do reaches the screen; with no NVIDIA card
+            // the whole card never gets built. A toggle that silently does nothing is
+            // worse than no toggle at all.
+            var gpu = _nvidia ?? new Nvidia.NullNvidiaDriverSettings();
+            var nvTweaks = Nvidia.NvidiaTweakCatalog.Available(gpu.Tier);
+            if (nvTweaks.Count > 0)
+            {
+                int rowH = 52;
+                var nv = new CardPanel
+                {
+                    Location = new Point(Pad, y),
+                    Size = new Size(CardW, 44 + nvTweaks.Count * rowH + 12)
+                };
+                nv.Controls.Add(UiHelpers.Caption("NVIDIA TWEAKS", 18, 16, 260));
+
+                int ry = 44;
+                foreach (var tweak in nvTweaks)
+                {
+                    nv.Controls.Add(RowLabel(tweak.Label, 18, ry));
+                    nv.Controls.Add(RowHint(tweak.Description, 18, ry + 18));
+
+                    var status = new Label
+                    {
+                        ForeColor = Theme.Accent,
+                        BackColor = Color.Transparent,
+                        Font = new Font(Theme.FontFamily, 8f),
+                        Location = new Point(18, ry + 34),
+                        Size = new Size(CardW - 90, 14)
+                    };
+                    nv.Controls.Add(status);
+
+                    bool on = _settings.RustNvidiaTweaks.Contains(tweak.Id);
+                    if (on) status.Text = "✓ " + tweak.AppliedText;
+
+                    var captured = tweak;
+                    var toggle = new ToggleSwitch
+                    {
+                        Location = new Point(CardW - 62, ry + 2),
+                        Checked = on
+                    };
+                    toggle.CheckedChanged += (s, e) =>
+                    {
+                        // The frame cap only means anything with a number behind it;
+                        // 0 lets the driver decide, which is what "off" writes back.
+                        bool ok = gpu.Apply(captured.Id, toggle.Checked, _settings.RustFpsCap);
+                        if (!ok)
+                        {
+                            status.ForeColor = Theme.TextDim;
+                            status.Text = "Driver didn’t accept this setting.";
+                            toggle.Checked = false;
+                            return;
+                        }
+
+                        status.ForeColor = Theme.Accent;
+                        status.Text = toggle.Checked ? "✓ " + captured.AppliedText : "";
+
+                        if (toggle.Checked) _settings.RustNvidiaTweaks.Add(captured.Id);
+                        else _settings.RustNvidiaTweaks.Remove(captured.Id);
+                        _store.Save(_settings);
+                    };
+                    nv.Controls.Add(toggle);
+                    ry += rowH;
+                }
+
+                Controls.Add(nv);
+                y += nv.Height + 16;
+            }
 
             // ---------- Audio Edge ----------
             if (_audio != null)

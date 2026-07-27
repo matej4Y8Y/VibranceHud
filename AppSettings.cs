@@ -75,6 +75,14 @@ namespace VibranceHud
         /// <summary>The user's named crosshairs, switched manually.</summary>
         public System.Collections.Generic.List<Crosshair.CrosshairConfig> SavedCrosshairs { get; set; } = new();
 
+        // ---- NVIDIA driver tweaks (Rust) ----
+
+        /// <summary>Ids of the NVIDIA driver tweaks currently applied to Rust's profile.</summary>
+        public System.Collections.Generic.HashSet<string> RustNvidiaTweaks { get; set; } = new();
+
+        /// <summary>Target for the steady frame cap, in FPS.</summary>
+        public int RustFpsCap { get; set; } = 90;
+
         /// <summary>Last version that showed its "what's new" notes.</summary>
         public string LastSeenVersion { get; set; } = "";
 

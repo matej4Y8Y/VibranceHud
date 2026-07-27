@@ -45,6 +45,7 @@ namespace VibranceHud
         private readonly FpsTweaksPage _fpsPage;
         private readonly CrosshairPage _crosshairPage;
         private readonly Crosshair.CrosshairService _crosshair;
+        private readonly Nvidia.INvidiaDriverSettings _nvidia = CreateNvidia();
         private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount, _navProfile;
         private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
@@ -370,7 +371,7 @@ namespace VibranceHud
             // through to some other game's page (Rust's writes directly to client.cfg).
             GlowPage page = GamePageRouter.Resolve(game.Game.Id) switch
             {
-                GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
+                GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames, nvidia: _nvidia),
                 GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames),
                 GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames),
                 GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames),
@@ -445,6 +446,14 @@ namespace VibranceHud
         }
         /// <summary>Repaint every panel and page after the background image or its dim
         /// changes - the backdrop is shared, so all of them are stale at once.</summary>
+        /// <summary>Driver settings, or a no-op stand-in when this PC has no NVIDIA
+        /// GPU - in which case the NVIDIA card simply never appears.</summary>
+        private static Nvidia.INvidiaDriverSettings CreateNvidia()
+        {
+            try { return new Nvidia.NvidiaDriverSettings(); }
+            catch { return new Nvidia.NullNvidiaDriverSettings(); }
+        }
+
         private void RefreshBackdrop()
         {
             Invalidate(true);
