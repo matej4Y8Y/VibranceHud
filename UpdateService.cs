@@ -74,12 +74,25 @@ namespace VibranceHud
 
         /// <summary>
         /// Download the installer, reporting 0-100. Returns the file path, or null on failure.
+        /// Re-downloads if the target file already exists with a corrupt PE header (catches
+        /// partial downloads or a previous failed update that left a 0-byte / junk file
+        /// in %TEMP%).
         /// </summary>
         public static async Task<string?> DownloadAsync(ReleaseInfo release, Action<int> onProgress)
         {
             try
             {
                 var file = Path.Combine(Path.GetTempPath(), $"PlexusX-Setup-{release.Version}.exe");
+
+                // If a corrupt installer from a prior failed update is sitting in %TEMP%,
+                // wipe it so the download below writes a fresh file. The corrupt file has
+                // the same name the downloader would write, so without this we'd reuse
+                // it and the new Process.Start would fail with WinError 216 ("not a valid
+                // Win32 application") exactly as the user reported.
+                if (File.Exists(file) && !IsValidInstaller(file))
+                {
+                    try { File.Delete(file); } catch { /* best-effort */ }
+                }
 
                 // The installer now bundles the .NET runtime (self-contained build), so it's
                 // well over 100MB - the 30s timeout used for the tiny metadata calls above
@@ -101,11 +114,39 @@ namespace VibranceHud
                     read += n;
                     if (total is > 0) onProgress((int)(read * 100 / total.Value));
                 }
+
+                // Final sanity check: did we get a valid PE? A truncated download passes
+                // the size check but Process.Start will fail with WinError 216, leaving
+                // the user on "Installing update..." forever. Reject it here instead.
+                if (!IsValidInstaller(file))
+                {
+                    try { File.Delete(file); } catch { /* best-effort */ }
+                    return null;
+                }
                 return file;
             }
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>True when the file starts with the PE magic "MZ" (0x4D5A). Used to
+        /// detect a corrupt / partially-downloaded installer before we try to run it.
+        /// Internal so tests can verify the validator directly.</summary>
+        internal static bool IsValidInstaller(string path)
+        {
+            try
+            {
+                using var s = File.OpenRead(path);
+                if (s.Length < 2) return false;
+                Span<byte> head = stackalloc byte[2];
+                int n = s.Read(head);
+                return n == 2 && head[0] == 0x4D && head[1] == 0x5A;
+            }
+            catch
+            {
+                return false;
             }
         }
 
