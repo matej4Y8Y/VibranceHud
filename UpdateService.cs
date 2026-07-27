@@ -113,41 +113,61 @@ namespace VibranceHud
         /// Run the downloaded installer silently. It closes this app, replaces the files and
         /// relaunches PlexusX, so the user just sees the loading screen and then "what's new".
         ///
-        /// Critical: this method MUST NOT block. The Inno Setup installer needs to close
-        /// PlexusX to write the new files, and PlexusX is the parent that just launched it.
-        /// If we waited on the installer process here, we'd deadlock for ~4 minutes (the
-        /// installer waits up to that long for the parent to exit before giving up).
-        /// Instead, we launch the installer detached and immediately force-exit the process
-        /// so the installer can replace the files without us holding the lock.
+        /// Implementation notes - the auto-update flow has multiple failure modes and this
+        /// version hardens each one:
+        ///
+        /// 1. The Inno Setup installer needs to close PlexusX to write the new files, and
+        ///    PlexusX is the parent that just launched it. If we waited on the installer
+        ///    here (the original UseShellExecute=true approach), we'd deadlock for ~4 min
+        ///    (the installer waits that long for the parent to exit before giving up).
+        /// 2. Anti-virus + Windows file permissions sometimes block silent installers started
+        ///    with UseShellExecute=true from a different process. UseShellExecute=false +
+        ///    explicit arguments + CreateNoWindow=true avoids that path.
+        /// 3. Inno Setup refuses to run if its parent process is gone before the installer's
+        ///    own window initializes. We sleep ~700ms before Environment.Exit so the
+        ///    installer has time to init.
+        /// 4. On Windows the installer also needs an interactive desktop (not session 0)
+        ///    to display any error dialogs; we run from the user's desktop session by
+        ///    using their %TEMP% as WorkingDirectory.
         /// </summary>
         public static bool RunInstallerSilently(string installerPath)
         {
             try
             {
-                // UseShellExecute=false lets us pass arguments without quoting. The new
-                // process is independent of ours - we don't want a job-object inheritance
-                // that would kill the installer when we exit.
                 var psi = new ProcessStartInfo
                 {
                     FileName = installerPath,
-                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /SP-",
+                    // /SP- = "don't show the 'do you want to install' prompt"
+                    // /CLOSEAPPLICATIONS = polite close (CurStepChanged does the F kill)
+                    // /FORCECLOSEAPPLICATIONS = bypass graceful-shutdown prompt
+                    // /RESTARTAPPLICATIONS handled by [Run] section in the .iss
+                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /SP- /FORCECLOSEAPPLICATIONS /CLOSEAPPLICATIONS",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetTempPath(),
                 };
-                Process.Start(psi);
+                var proc = Process.Start(psi);
+                if (proc == null)
+                {
+                    // Anti-virus or Windows policy blocked the launch. Don't try to exit;
+                    // the user still has a working PlexusX.
+                    return false;
+                }
 
-                // Hard-exit so the installer can write the new files. We can't use
-                // Application.Exit() (it tries to flush UI state and waits for the form
+                // Hard-exit so the installer can write the new files. Application.Exit()
+                // can't be used here - it tries to flush UI state and waits for the form
                 // to close, which itself can't close because the installer is writing
-                // over our EXE). Process.Kill is also wrong (it's our parent, depends on
-                // the UI thread). Environment.Exit terminates the process immediately.
+                // over our EXE. Process.Kill on self is also wrong (it depends on the UI
+                // thread we are on). Environment.Exit terminates the process immediately
+                // from any thread.
                 System.Threading.ThreadPool.QueueUserWorkItem(_ =>
                 {
-                    // Small delay so the installer has time to spawn its window before
-                    // we disappear (some Inno Setup versions refuse to run if their parent
-                    // is gone before they init).
-                    System.Threading.Thread.Sleep(200);
+                    // Wait long enough for the installer to spawn its process tree and
+                    // initialize its window. 700ms also matches the sleep in CurStepChanged
+                    // that follows the taskkill, so the installer's taskkill has time to
+                    // complete before our process disappears (Inno Setup can fail if the
+                    // parent exits mid-taskkill).
+                    System.Threading.Thread.Sleep(700);
                     Environment.Exit(0);
                 });
                 return true;
