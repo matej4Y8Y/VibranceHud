@@ -43,6 +43,7 @@ namespace VibranceHud
         private int _gamma = 100;
         private bool _eyeCare;
         private bool _dragging;
+        private bool _overlaySuspended;
 
         // When the user is dragging a slider, the value setter is called on every
         // mouse-move event. Calling MagSetFullscreenColorEffect (or the DX11 swap-chain
@@ -73,16 +74,35 @@ namespace VibranceHud
         }
 
         /// <summary>End a slider drag. Flushes the overlay with the current value in a
-        /// single MagSetFullscreenColorEffect call so the screen catches up to the chip's
-        /// final position.</summary>
-        public void EndDrag()
+                /// single MagSetFullscreenColorEffect call so the screen catches up to the chip's
+                /// final position.</summary>
+                public void EndDrag()
                 {
-            _dragging = false;
-            // Force one immediate overlay write so the screen matches the chip's
-            // final position. This runs synchronously on the UI thread, which is fine
-            // because the user has stopped dragging and the brief freeze is invisible.
-            ApplyOverlay();
-        }
+                    _dragging = false;
+                    // Force one immediate overlay write so the screen matches the chip's
+                    // final position. This runs synchronously on the UI thread, which is fine
+                    // because the user has stopped dragging and the brief freeze is invisible.
+                    ApplyOverlay();
+                }
+
+                /// <summary>Pause the screen overlay. Used when PlexusX loses focus so the
+                /// tint doesn't follow the user into other apps. The chip and UI values
+                /// stay correct; only the overlay write is suspended. Resuming re-applies
+                /// the current chip values.</summary>
+                public void SuspendOverlay()
+                {
+                    if (_overlaySuspended) return;
+                    _overlaySuspended = true;
+                    _overlay.Clear();
+                }
+
+                /// <summary>Resume the screen overlay using the current chip values.</summary>
+                public void ResumeOverlay()
+                {
+                    if (!_overlaySuspended) return;
+                    _overlaySuspended = false;
+                    ApplyOverlay();
+                }
 
         /// <summary>Vibrance 0-200. Up to 100 this is the driver's own Digital Vibrance
         /// (true non-linear, skin-tone sparing); above 100 the driver is pinned at its

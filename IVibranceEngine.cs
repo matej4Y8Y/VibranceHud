@@ -22,5 +22,14 @@ namespace VibranceHud
         /// committed in a single write so the screen matches the chip. See
         /// <see cref="VibranceEngine.EndDrag"/>.</summary>
         void EndDrag();
+
+        /// <summary>Pause the screen overlay so the tint disappears (used when PlexusX
+        /// loses focus). The chip and the UI values stay correct; only the screen
+        /// overlay is gated.</summary>
+        void SuspendOverlay();
+
+        /// <summary>Resume the screen overlay using the current chip values (used when
+        /// PlexusX becomes the foreground window again).</summary>
+        void ResumeOverlay();
     }
 }

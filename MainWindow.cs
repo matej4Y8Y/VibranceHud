@@ -356,7 +356,7 @@ namespace VibranceHud
                     timer.Stop();
                     timer.Dispose();
                     panel.Location = new Point(endX, panel.Location.Y);
-                    if (inDirection) panel.BackColor = Color.FromArgb(30, 28, 36);
+            if (inDirection) panel.BackColor = Color.FromArgb(30, 28, 36);
                     _ = startLocation; // (suppress unused warning)
                     onComplete?.Invoke();
                 }
@@ -426,6 +426,32 @@ namespace VibranceHud
             ReleaseCapture();
             SendMessage(Handle, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         }
+
+        // When PlexusX loses focus (alt-tab to another app), clear the screen overlay so
+                // the tint doesn't follow the user into other apps. Restore it when PlexusX
+                // becomes the foreground window again. The Mag and DX overlays both have
+                // Clear() which writes the identity matrix - that disables the effect entirely.
+                // The chip and the UI values stay correct; only the screen tint is gated on
+                // focus.
+                private bool _overlaySuspended;
+
+                protected override void OnDeactivate(EventArgs e)
+                {
+            base.OnDeactivate(e);
+            if (_overlaySuspended) return;
+                    _overlaySuspended = true;
+            try { _engine.SuspendOverlay(); }
+            catch { /* engine may be disposed during shutdown */ }
+                }
+
+                protected override void OnActivated(EventArgs e)
+                {
+            base.OnActivated(e);
+            if (!_overlaySuspended) return;
+                    _overlaySuspended = false;
+            try { _engine.ResumeOverlay(); }
+            catch { /* same */ }
+                }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
