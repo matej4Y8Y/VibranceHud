@@ -44,7 +44,7 @@ namespace VibranceHud
             _engine = new VibranceEngine(_controller, _overlay, _gammaRamp);
 
             string dataDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlexusX");
             _store = new SettingsStore(dataDir);
             _settings = _store.Load();
 
@@ -80,8 +80,8 @@ namespace VibranceHud
             var palette = ThemeCatalog.Resolve(_settings.ThemeName, _settings.LightTheme);
             if (_settings.ThemeName != palette.Name)
             {
-                _settings.ThemeName = palette.Name;
-                _store.Save(_settings);
+            _settings.ThemeName = palette.Name;
+            _store.Save(_settings);
             }
             Theme.Apply(palette); // before building the window
 
@@ -89,8 +89,8 @@ namespace VibranceHud
             _audioEdge = CreateAudioEdge();
             if (_audioEdge != null)
             {
-                _audioEdge.Threshold = Math.Clamp(_settings.AudioEdgeThresholdPercent, 5, 100) / 100f;
-                if (_settings.AudioEdgeEnabled) _audioEdge.Start();
+            _audioEdge.Threshold = Math.Clamp(_settings.AudioEdgeThresholdPercent, 5, 100) / 100f;
+            if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
             _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), ReRegisterHotkey);
@@ -100,14 +100,14 @@ namespace VibranceHud
 
             if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, _settings.HotkeyModifierMask, _settings.HotkeyVirtualKey))
             {
-                // Not fatal - another app may already own this combo. The tray menu
-                // still works either way, so just let the user know why the hotkey is quiet.
-                MessageBox.Show(
-                    $"Couldn't register {GetHotkeyDisplay()} (another app may already be using it). " +
-                    "You can still open the slider from the tray icon.",
-                    "PlexusX",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
+            // Not fatal - another app may already own this combo. The tray menu
+            // still works either way, so just let the user know why the hotkey is quiet.
+            MessageBox.Show(
+            $"Couldn't register {GetHotkeyDisplay()} (another app may already be using it). " +
+            "You can still open the slider from the tray icon.",
+            "PlexusX",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Warning);
             }
 
             var menu = new ContextMenuStrip();
@@ -120,10 +120,10 @@ namespace VibranceHud
 
             _trayIcon = new NotifyIcon
             {
-                Icon = AppIcon.Value,
-                Text = "PlexusX",
-                Visible = true,
-                ContextMenuStrip = menu
+            Icon = AppIcon.Value,
+            Text = "PlexusX",
+            Visible = true,
+            ContextMenuStrip = menu
             };
             _trayIcon.DoubleClick += (s, e) => _window.ShowAndFocus();
 
@@ -156,11 +156,11 @@ namespace VibranceHud
         {
             try
             {
-                return new VibranceController();
+            return new VibranceController();
             }
             catch
             {
-                return new NullVibranceController();
+            return new NullVibranceController();
             }
         }
 
@@ -181,14 +181,29 @@ namespace VibranceHud
         /// updated, then open the app.
         /// </summary>
         private async Task RunStartupAsync()
-        {
+            {
             var startedAt = DateTime.UtcNow;
+
+            // If a previous session downloaded an installer and stashed it in
+            // AppSettings.PendingUpdateInstaller, run it now BEFORE doing anything else.
+            // The installer will close this new PlexusX, replace the files, and the
+            // installer's [Run] section relaunches the new version. This is the only
+            // reliable way to self-update - launching the installer from a running
+            // PlexusX (the previous design) silently fails on Windows because the OS
+            // blocks silent installs from a live parent.
+            if (UpdateService.RunPendingUpdateIfAny(_settings))
+            {
+                // Installer is running and will close us shortly. Hand control back to
+                // the message loop so it has time to do its work before we shut down.
+                Application.Exit();
+                return;
+            }
 
             _splash.SetStatus("Checking for updates…");
             var update = await UpdateService.TryGetUpdateAsync();
 
             if (update != null && await InstallUpdateAsync(update))
-                return; // the installer took over and will relaunch PlexusX
+            return; // the installer took over and will relaunch PlexusX
 
             _splash.SetStatus("Starting…");
             var notes = await WhatsNewNotesAsync();
@@ -205,23 +220,23 @@ namespace VibranceHud
             // already-constructed window so it repaints in the chosen colours.
             if (!_settings.OnboardingComplete)
             {
-                var themeBefore = Theme.CurrentName;
-                using (var onboarding = new OnboardingForm(_settings, _store))
-                    onboarding.ShowDialog();
+            var themeBefore = Theme.CurrentName;
+            using (var onboarding = new OnboardingForm(_settings, _store))
+            onboarding.ShowDialog();
 
-                // Don't also pop "what's new" on a brand-new install.
-                _settings.LastSeenVersion = UpdateService.CurrentVersion.ToString();
-                _store.Save(_settings);
+            // Don't also pop "what's new" on a brand-new install.
+            _settings.LastSeenVersion = UpdateService.CurrentVersion.ToString();
+            _store.Save(_settings);
 
-                if (Theme.CurrentName != themeBefore) RebuildWindow();
-                else _window.ShowAndFocus();
-                return;
+            if (Theme.CurrentName != themeBefore) RebuildWindow();
+            else _window.ShowAndFocus();
+            return;
             }
 
             if (notes != null)
             {
-                using var whatsNew = new WhatsNewWindow(UpdateService.CurrentVersion, notes);
-                whatsNew.ShowDialog();
+            using var whatsNew = new WhatsNewWindow(UpdateService.CurrentVersion, notes);
+            whatsNew.ShowDialog();
             }
 
             _window.ShowAndFocus();
@@ -229,19 +244,33 @@ namespace VibranceHud
 
         /// <summary>Returns true when the installer started and this instance should quit.</summary>
         private async Task<bool> InstallUpdateAsync(ReleaseInfo update)
-        {
+            {
             string label = $"Downloading update {update.Version}…";
             _splash.SetStatus(label, 0);
 
             var file = await UpdateService.DownloadAsync(update, p => _splash.SetStatus(label, p));
             if (file == null) return false; // download failed - carry on into the app
 
-            _splash.SetStatus("Installing update…");
-            if (!UpdateService.RunInstallerSilently(file)) return false;
+            // Stash the installer path so the NEXT launch picks it up. Running it from
+            // here (the previous design) silently failed on this user's machine because
+            // Windows blocks silent installs from a live parent process. The next-launch
+            // approach is the only reliable way to self-update.
+            _settings.PendingUpdateInstaller = file;
+            _settings.PendingUpdateVersion = update.Version.ToString();
+            _store.Save(_settings);
 
-            ExitThread();
-            return true;
-        }
+            // Sanity check before promising the user a clean install.
+            if (!UpdateService.RunInstallerSilently(file))
+            {
+            _settings.PendingUpdateInstaller = "";
+            _settings.PendingUpdateVersion = "";
+            _store.Save(_settings);
+            return false;
+            }
+
+            _splash.SetStatus($"Restart PlexusX to finish installing v{update.Version}");
+            return false; // don't close the app - user does it manually
+            }
 
         /// <summary>
         /// The notes to show once after an update, or null when there's nothing to show
@@ -275,9 +304,9 @@ namespace VibranceHud
             var deferred = new System.Windows.Forms.Timer { Interval = 1 };
             deferred.Tick += (s, e) =>
             {
-                deferred.Stop();
-                deferred.Dispose();
-                RebuildWindow();
+            deferred.Stop();
+            deferred.Dispose();
+            RebuildWindow();
             };
             deferred.Start();
         }
@@ -298,7 +327,7 @@ namespace VibranceHud
         private void ShowVibrancePopup()
         {
             if (_vibrancePopup == null || _vibrancePopup.IsDisposed)
-                _vibrancePopup = new VibrancePopup(_engine, _settings, _store);
+            _vibrancePopup = new VibrancePopup(_engine, _settings, _store);
             _vibrancePopup.Show();
             _vibrancePopup.Activate();
         }
@@ -318,10 +347,10 @@ namespace VibranceHud
             // launch events for games the user adds later.
             var idToExe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["rust"]     = "RustClient",
-                ["cs2"]      = "cs2",
-                ["apex"]     = "r5apex",
-                ["fortnite"] = "FortniteClient-Win64-Shipping",
+            ["rust"]     = "RustClient",
+            ["cs2"]      = "cs2",
+            ["apex"]     = "r5apex",
+            ["fortnite"] = "FortniteClient-Win64-Shipping",
             };
 
             var watcher = new GameProcessWatcher(idToExe);
@@ -371,7 +400,7 @@ namespace VibranceHud
             _store.Save(_settings);
             RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, mask, vk);
             if (_hotkeyMenuItem != null)
-                _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()})";
+            _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()})";
         }
 
         /// <summary>Render the user's bound combo for the tray menu and the
@@ -400,7 +429,7 @@ namespace VibranceHud
         {
             if (m.Msg == WM_HOTKEY)
             {
-                HotkeyPressed?.Invoke(this, EventArgs.Empty);
+            HotkeyPressed?.Invoke(this, EventArgs.Empty);
             }
 
             base.WndProc(ref m);

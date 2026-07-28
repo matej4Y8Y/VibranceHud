@@ -89,6 +89,18 @@ namespace VibranceHud
         /// </summary>
         public System.Collections.Generic.HashSet<string> NvAppSupportedTweaks { get; set; } = new();
 
+        /// <summary>Path to a downloaded installer that's waiting to be run. The PlexusX
+        /// startup sequence checks this BEFORE the main window opens and runs the
+        /// installer (which then closes PlexusX, replaces files, relaunches). This is
+        /// the only reliable way to self-update - launching the installer while PlexusX
+        /// is running either deadlocks or fails silently because Windows blocks silent
+        /// installs from a live parent process.</summary>
+        public string PendingUpdateInstaller { get; set; } = "";
+
+        /// <summary>The version the <see cref="PendingUpdateInstaller"/> is for, so we can
+        /// show "update to vX.Y.Z" on the splash when the install kicks off.</summary>
+        public string PendingUpdateVersion { get; set; } = "";
+
         /// <summary>Target for the steady frame cap, in FPS.</summary>
         public int RustFpsCap { get; set; } = 90;
 

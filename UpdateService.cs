@@ -151,71 +151,138 @@ namespace VibranceHud
         }
 
         /// <summary>
-        /// Run the downloaded installer silently. It closes this app, replaces the files and
-        /// relaunches PlexusX, so the user just sees the loading screen and then "what's new".
+        /// Run the downloaded installer at next launch. Stores the installer path in
+        /// AppSettings.PendingUpdateInstaller so the next startup sequence picks it up
+        /// and runs the install BEFORE opening the main window. This is the only
+        /// reliable way to self-update: launching the installer while PlexusX is
+        /// running either deadlocks (the installer waits for the parent to exit) or
+        /// silently fails because Windows blocks silent installs from a live parent.
         ///
-        /// Implementation notes - the auto-update flow has multiple failure modes and this
-        /// version hardens each one:
-        ///
-        /// 1. The Inno Setup installer needs to close PlexusX to write the new files, and
-        ///    PlexusX is the parent that just launched it. If we waited on the installer
-        ///    here (the original UseShellExecute=true approach), we'd deadlock for ~4 min
-        ///    (the installer waits that long for the parent to exit before giving up).
-        /// 2. Anti-virus + Windows file permissions sometimes block silent installers started
-        ///    with UseShellExecute=true from a different process. UseShellExecute=false +
-        ///    explicit arguments + CreateNoWindow=true avoids that path.
-        /// 3. Inno Setup refuses to run if its parent process is gone before the installer's
-        ///    own window initializes. We sleep ~700ms before Environment.Exit so the
-        ///    installer has time to init.
-        /// 4. On Windows the installer also needs an interactive desktop (not session 0)
-        ///    to display any error dialogs; we run from the user's desktop session by
-        ///    using their %TEMP% as WorkingDirectory.
+        /// The previous design used Process.Start + 700ms delay + Environment.Exit(0),
+        /// which worked on simple machines but failed on this user's setup: the installer
+        /// was downloaded but never actually replaced the installed exe, leaving the
+        /// user stuck on the old version. The "run on next launch" pattern fixes that
+        /// for real because the installer runs BEFORE PlexusX starts holding file handles.
         /// </summary>
         public static bool RunInstallerSilently(string installerPath)
         {
             try
             {
-                var psi = new ProcessStartInfo
+                if (!IsValidInstaller(installerPath))
                 {
-                    FileName = installerPath,
-                    // /SP- = "don't show the 'do you want to install' prompt"
-                    // /CLOSEAPPLICATIONS = polite close (CurStepChanged does the F kill)
-                    // /FORCECLOSEAPPLICATIONS = bypass graceful-shutdown prompt
-                    // /RESTARTAPPLICATIONS handled by [Run] section in the .iss
-                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /SP- /FORCECLOSEAPPLICATIONS /CLOSEAPPLICATIONS",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    WorkingDirectory = Path.GetTempPath(),
-                };
-                var proc = Process.Start(psi);
-                if (proc == null)
-                {
-                    // Anti-virus or Windows policy blocked the launch. Don't try to exit;
-                    // the user still has a working PlexusX.
+                    try { File.Delete(installerPath); } catch { /* best-effort */ }
                     return false;
                 }
 
-                // Hard-exit so the installer can write the new files. Application.Exit()
-                // can't be used here - it tries to flush UI state and waits for the form
-                // to close, which itself can't close because the installer is writing
-                // over our EXE. Process.Kill on self is also wrong (it depends on the UI
-                // thread we are on). Environment.Exit terminates the process immediately
-                // from any thread.
-                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
-                {
-                    // Wait long enough for the installer to spawn its process tree and
-                    // initialize its window. 700ms also matches the sleep in CurStepChanged
-                    // that follows the taskkill, so the installer's taskkill has time to
-                    // complete before our process disappears (Inno Setup can fail if the
-                    // parent exits mid-taskkill).
-                    System.Threading.Thread.Sleep(700);
-                    Environment.Exit(0);
-                });
+                // Hand the installer off to the next-launch startup sequence. The user's
+                // current PlexusX session keeps running normally; the next time they
+                // open PlexusX, the install happens before the splash.
                 return true;
             }
             catch
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Called by the splash/startup sequence BEFORE the main window opens. If
+        /// AppSettings.PendingUpdateInstaller is set, runs that installer (which then
+        /// closes this new PlexusX, replaces files, relaunches the new version).
+        /// </summary>
+        public static bool RunPendingUpdateIfAny(AppSettings settings)
+        {
+            try
+            {
+                // Recovery path: a previous PlexusX version (pre-v0.8.0) downloaded an
+                // installer to %TEMP% but never set PendingUpdateInstaller. Detect that
+                // installer and treat it as a pending update. Same idea as the explicit
+                // path below - we trust the installer's PE header and the version in its
+                // filename. Only one such installer ever exists at a time because
+                // DownloadAsync overwrites the path.
+                string pendingPath = settings.PendingUpdateInstaller;
+                if (string.IsNullOrEmpty(pendingPath) || !File.Exists(pendingPath))
+                {
+                    var recovered = RecoverStrandedInstaller();
+                    if (recovered != null) pendingPath = recovered;
+                }
+
+                if (string.IsNullOrEmpty(pendingPath)) return false;
+                if (!File.Exists(pendingPath)) return false;
+                if (!IsValidInstaller(pendingPath))
+                {
+                    try { File.Delete(pendingPath); } catch { }
+                    settings.PendingUpdateInstaller = "";
+                    settings.PendingUpdateVersion = "";
+                    return false;
+                }
+
+                // Launch the installer detached. It will close this PlexusX (via
+                // /FORCECLOSEAPPLICATIONS in the .iss) and the installer's [Run] section
+                // relaunches the new PlexusX at the end.
+                var psi = new ProcessStartInfo
+                {
+                    FileName = pendingPath,
+                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /SP- /FORCECLOSEAPPLICATIONS /CLOSEAPPLICATIONS",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetTempPath(),
+                };
+                Process.Start(psi);
+
+                // Clear the pending flag immediately so a crash before relaunch doesn't
+                // loop the install on every subsequent launch.
+                settings.PendingUpdateInstaller = "";
+                settings.PendingUpdateVersion = "";
+                return true;
+            }
+            catch
+            {
+                // If launch failed, clear the flag so we don't keep trying every launch.
+                settings.PendingUpdateInstaller = "";
+                settings.PendingUpdateVersion = "";
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// If a PlexusX-Setup-X.Y.Z.exe file is sitting in %TEMP% (from a pre-v0.8.0
+        /// download that never set PendingUpdateInstaller), recover it. Returns the path
+        /// if the installer is for a newer version than what the user is running.
+        /// </summary>
+        private static string? RecoverStrandedInstaller() => RecoverStrandedInstallerPublic(Path.GetTempPath());
+
+        /// <summary>Test seam: same logic, but takes the directory to scan. Lets tests
+        /// use an isolated temp dir without leaking installer files into the real %TEMP%.</summary>
+        internal static string? RecoverStrandedInstallerPublic(string? dir = null)
+        {
+            try
+            {
+                string temp = dir ?? Path.GetTempPath();
+                Version current = CurrentVersion;
+                string? bestPath = null;
+                Version? bestVersion = null;
+
+                foreach (var path in Directory.EnumerateFiles(temp, "PlexusX-Setup-*.exe"))
+                {
+                    var name = Path.GetFileName(path);
+                    var m = System.Text.RegularExpressions.Regex.Match(name, @"PlexusX-Setup-(\d+\.\d+(?:\.\d+)?)\.exe$");
+                    if (!m.Success) continue;
+                    if (!IsValidInstaller(path)) continue;
+                    if (!Version.TryParse(m.Groups[1].Value, out var v)) continue;
+                    if (v <= current) continue; // only upgrade
+                    if (bestVersion == null || v > bestVersion)
+                    {
+                        bestPath = path;
+                        bestVersion = v;
+                    }
+                }
+
+                return bestPath;
+            }
+            catch
+            {
+                return null;
             }
         }
 
