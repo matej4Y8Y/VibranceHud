@@ -3,14 +3,36 @@ using System.Linq;
 using NvAPIWrapper;
 using NvAPIWrapper.DRS;
 using NvAPIWrapper.GPU;
+using NvAPIWrapper.Native.Exceptions;
+using NvAPIWrapper.Native.General;
 
 namespace VibranceHud.Nvidia
 {
+    /// <summary>
+    /// Outcome of trying to apply one NVIDIA driver setting. The wrapper used to collapse
+    /// every failure into a boolean false, which made "driver not installed", "setting id
+    /// isn't known to this driver version", and "needs admin to save the profile" all
+    /// surface as the same cryptic "Driver didn't accept this setting" message.
+    /// </summary>
+    public enum NvidiaApplyResult
+    {
+        /// <summary>The value was written and the session saved cleanly.</summary>
+        Success,
+        /// <summary>NVAPI refused to save the profile, most likely because writing
+        /// <c>C:\ProgramData\NVIDIA Corporation\Drs\nvdrsdb0.bin</c> needs admin.
+        /// The UI should offer an "Apply as admin" button that relaunches PlexusX
+        /// elevated to apply this same single tweak.</summary>
+        NeedsAdmin,
+        /// <summary>Any other failure: unknown setting id, driver mismatch, NVAPI
+        /// not initialised, etc. Surfaced to the user as a generic "didn't accept".</summary>
+        Unsupported,
+    }
+
     /// <summary>Applies driver tweaks. Injected so the UI is testable without a GPU.</summary>
     public interface INvidiaDriverSettings
     {
         GpuTier Tier { get; }
-        bool Apply(string tweakId, bool on, int fpsCap);
+        NvidiaApplyResult Apply(string tweakId, bool on, int fpsCap);
 
         /// <summary>
         /// Best-effort probe: does this driver actually accept the given tweak id?
@@ -26,8 +48,8 @@ namespace VibranceHud.Nvidia
     /// and nothing game-side, so it carries no anti-cheat risk.
     ///
     /// Every call is defensive: a driver that doesn't expose a given setting, or a session
-    /// that won't open, returns false instead of throwing. A tweak that can't be applied
-    /// must never take the app down or leave the toggle lying about its state.
+    /// that won't open, returns an error result instead of throwing. A tweak that can't be
+    /// applied must never take the app down or leave the toggle lying about its state.
     /// </summary>
     public sealed class NvidiaDriverSettings : INvidiaDriverSettings
     {
@@ -59,25 +81,34 @@ namespace VibranceHud.Nvidia
             }
         }
 
-        public bool Apply(string tweakId, bool on, int fpsCap)
+        public NvidiaApplyResult Apply(string tweakId, bool on, int fpsCap)
         {
-            if (Tier == GpuTier.None) return false;
+            if (Tier == GpuTier.None) return NvidiaApplyResult.Unsupported;
 
             try
             {
                 using var session = DriverSettingsSession.CreateAndLoad();
                 var profile = FindOrCreateProfile(session);
-                if (profile == null) return false;
+                if (profile == null) return NvidiaApplyResult.Unsupported;
 
                 foreach (var (id, value) in ValuesFor(tweakId, on, fpsCap))
                     profile.SetSetting(id, value);
 
                 session.Save();
-                return true;
+                return NvidiaApplyResult.Success;
+            }
+            catch (NVIDIAApiException ex) when (ex.Status == Status.AccessDenied)
+            {
+                // The most common cause on a non-admin user is the per-user DRS
+                // profile file under ProgramData\NVIDIA Corporation\Drs being
+                // write-protected without admin rights. Distinguish so the UI can
+                // offer the elevated-helper path instead of the cryptic
+                // "driver didn't accept" message.
+                return NvidiaApplyResult.NeedsAdmin;
             }
             catch
             {
-                return false;
+                return NvidiaApplyResult.Unsupported;
             }
         }
 
@@ -177,13 +208,50 @@ namespace VibranceHud.Nvidia
                 },
                 _ => Array.Empty<(KnownSettingId, uint)>()
             };
+
+        /// <summary>
+        /// Headless entry point used by the elevated relaunch. Replays the same
+        /// write the un-elevated <see cref="Apply"/> would do, but with the UAC
+        /// grant on it; the success result here is the only signal the outer
+        /// process gets back. Same defensive shape so a settings id that the
+        /// driver version doesn't recognise still resolves to Unsupported rather
+        /// than throwing.
+        /// </summary>
+        public static NvidiaApplyResult ApplyHeadless(string tweakId, bool on, int fpsCap)
+        {
+            try
+            {
+                try { NVIDIA.Initialize(); } catch { /* already initialised */ }
+
+                using var session = DriverSettingsSession.CreateAndLoad();
+                var profile = FindOrCreateProfile(session);
+                if (profile == null) return NvidiaApplyResult.Unsupported;
+
+                foreach (var (id, value) in ValuesFor(tweakId, on, fpsCap))
+                    profile.SetSetting(id, value);
+
+                session.Save();
+                return NvidiaApplyResult.Success;
+            }
+            catch (NVIDIAApiException ex) when (ex.Status == Status.AccessDenied)
+            {
+                // If this fires while we're already elevated, something else is wrong
+                // (file locked, profile corrupt) - but the "needs admin" status is the
+                // best signal the caller has to show the user.
+                return NvidiaApplyResult.NeedsAdmin;
+            }
+            catch
+            {
+                return NvidiaApplyResult.Unsupported;
+            }
+        }
     }
 
     /// <summary>Stand-in when this PC has no NVIDIA GPU - the card hides itself.</summary>
     public sealed class NullNvidiaDriverSettings : INvidiaDriverSettings
     {
         public GpuTier Tier => GpuTier.None;
-        public bool Apply(string tweakId, bool on, int fpsCap) => false;
+        public NvidiaApplyResult Apply(string tweakId, bool on, int fpsCap) => NvidiaApplyResult.Unsupported;
         // No NVIDIA card means no driver to ask. Always false, never throws - the Scan
         // button must be safe on machines where the rest of the card is hidden.
         public bool IsSupported(string tweakId) => false;

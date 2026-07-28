@@ -89,6 +89,15 @@ namespace VibranceHud
         /// </summary>
         public System.Collections.Generic.HashSet<string> NvAppSupportedTweaks { get; set; } = new();
 
+        /// <summary>
+        /// Ids of NVIDIA driver tweaks whose DRS save failed with access-denied on a
+        /// standard user account. Recorded so the Rust page surfaces the "Apply as admin"
+        /// button on the very first render after the failure, instead of waiting for the
+        /// user to retry and only then discovering the elevation is needed. Cleared
+        /// automatically when the elevated re-apply succeeds.
+        /// </summary>
+        public System.Collections.Generic.HashSet<string> RustNvidiaTweaksNeedsAdmin { get; set; } = new();
+
         /// <summary>Path to a downloaded installer that's waiting to be run. The PlexusX
         /// startup sequence checks this BEFORE the main window opens and runs the
         /// installer (which then closes PlexusX, replaces files, relaunches). This is

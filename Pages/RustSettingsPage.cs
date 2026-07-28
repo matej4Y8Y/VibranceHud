@@ -504,6 +504,11 @@ private void BuildNvidiaCard(int y, Nvidia.INvidiaDriverSettings gpu)
             };
             _nvCard.Controls.Add(status);
 
+            // Per-row state that the toggle handler closes over. Built up before the
+            // toggle is created so we can put the "Apply as admin" button right next
+            // to it from the start (instead of springing one into existence when an
+            // AccessDenied shows up, which would re-layout the card underneath it).
+            bool needAdminHint = _settings.RustNvidiaTweaksNeedsAdmin.Contains(tweak.Id);
             bool on = _settings.RustNvidiaTweaks.Contains(tweak.Id);
             if (on) status.Text = "✓ " + tweak.AppliedText;
 
@@ -513,7 +518,25 @@ private void BuildNvidiaCard(int y, Nvidia.INvidiaDriverSettings gpu)
                 Location = new Point(CardW - 62, ry + 2),
                 Checked = on
             };
-            toggle.CheckedChanged += (s, e) =>
+
+            // A button rendered above the row hint, beside the toggle, that pops the
+            // UAC prompt and re-applies via the elevated helper. Hidden until either
+            // a cached scan OR a failed in-process apply proves the user needs it,
+            // so the card doesn't look cluttered on machines where tweaks just work.
+            var adminBtn = new Button
+            {
+                Text = "Apply as admin",
+                Location = new Point(CardW - 62 - 124, ry + 8),
+                Size = new Size(118, 22),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Theme.AccentDim,
+                ForeColor = Theme.Text,
+                Font = new Font(Theme.FontFamily, 8f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Visible = needAdminHint
+            };
+
+            toggle.CheckedChanged += async (s, e) =>
             {
                 // If a scan is on file and this tweak isn't in it, the user is
                 // trying to toggle a setting the driver can't apply. Stay silent
@@ -524,23 +547,86 @@ private void BuildNvidiaCard(int y, Nvidia.INvidiaDriverSettings gpu)
                     return;
                 }
 
-                bool ok = gpu.Apply(captured.Id, toggle.Checked, _settings.RustFpsCap);
-                if (!ok)
+                // Run NVAPI on a worker thread so the UI doesn't freeze on a stalled
+                // DRS open / create (same pattern as the FPS tweaks page).
+                toggle.Enabled = false;
+                adminBtn.Enabled = false;
+                Nvidia.NvidiaApplyResult result;
+                try
                 {
-                    status.ForeColor = Theme.TextDim;
-                    status.Text = "Driver didn’t accept this setting.";
-                    toggle.Checked = false;
+                    result = await System.Threading.Tasks.Task.Run(() =>
+                        gpu.Apply(captured.Id, toggle.Checked, _settings.RustFpsCap));
+                }
+                finally
+                {
+                    toggle.Enabled = true;
+                    adminBtn.Enabled = true;
+                }
+
+                if (result == Nvidia.NvidiaApplyResult.Success)
+                {
+                    status.ForeColor = Theme.Accent;
+                    status.Text = toggle.Checked ? "✓ " + captured.AppliedText : "";
+                    adminBtn.Visible = false;
+                    _settings.RustNvidiaTweaksNeedsAdmin.Remove(captured.Id);
+
+                    if (toggle.Checked) _settings.RustNvidiaTweaks.Add(captured.Id);
+                    else _settings.RustNvidiaTweaks.Remove(captured.Id);
+                    _store.Save(_settings);
                     return;
                 }
 
-                status.ForeColor = Theme.Accent;
-                status.Text = toggle.Checked ? "✓ " + captured.AppliedText : "";
+                if (result == Nvidia.NvidiaApplyResult.NeedsAdmin)
+                {
+                    // The DRS save failed because ProgramData\NVIDIA Corporation\Drs
+                    // is locked behind admin. Show the hint + button so one click
+                    // takes the user through the same UAC prompt the HKLM FPS tweaks
+                    // use. Remember it so the next page open keeps the button visible
+                    // instead of starting over looking failed.
+                    status.ForeColor = Color.FromArgb(240, 180, 90);
+                    status.Text = "⚠  Run PlexusX as administrator to apply this — or click \"Apply as admin\".";
+                    toggle.Checked = false;
+                    adminBtn.Visible = true;
+                    _settings.RustNvidiaTweaksNeedsAdmin.Add(captured.Id);
+                    _store.Save(_settings);
+                    return;
+                }
 
-                if (toggle.Checked) _settings.RustNvidiaTweaks.Add(captured.Id);
-                else _settings.RustNvidiaTweaks.Remove(captured.Id);
-                _store.Save(_settings);
+                // Generic "driver refused" — no admin pathway, no retry, no escalation.
+                status.ForeColor = Theme.TextDim;
+                status.Text = "Driver didn’t accept this setting.";
+                toggle.Checked = false;
             };
+
+            adminBtn.Click += async (s, e) =>
+            {
+                adminBtn.Enabled = false;
+                toggle.Enabled = false;
+                bool ok = await System.Threading.Tasks.Task.Run(() =>
+                    Nvidia.NvidiaTweakElevationService.RunElevated(
+                        captured.Id, on: true, _settings.RustFpsCap));
+                adminBtn.Enabled = true;
+                toggle.Enabled = true;
+
+                if (ok)
+                {
+                    status.ForeColor = Theme.Accent;
+                    status.Text = "✓ " + captured.AppliedText;
+                    toggle.Checked = true;
+                    adminBtn.Visible = false;
+                    _settings.RustNvidiaTweaks.Add(captured.Id);
+                    _settings.RustNvidiaTweaksNeedsAdmin.Remove(captured.Id);
+                    _store.Save(_settings);
+                }
+                else
+                {
+                    status.ForeColor = Color.FromArgb(240, 130, 130);
+                    status.Text = "Couldn't apply even as admin — see the message above for why.";
+                }
+            };
+
             _nvCard.Controls.Add(toggle);
+            if (adminBtn.Visible) _nvCard.Controls.Add(adminBtn);
             ry += rowH;
         }
     }

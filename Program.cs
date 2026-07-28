@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using VibranceHud.Nvidia;
 using VibranceHud.SystemTweaks;
 
 namespace VibranceHud
@@ -12,6 +13,11 @@ namespace VibranceHud
             // Elevated relaunch to apply one admin-only FPS tweak, then exit - no UI, no tray.
             if (SystemTweakService.IsHeadlessTweakInvocation(args))
                 return SystemTweakService.RunHeadless(args);
+
+            // Elevated relaunch to apply one NVAPI driver tweak (admin needed for
+            // %ProgramData%\NVIDIA Corporation\Drs\nvdrsdb0.bin), then exit.
+            if (NvidiaTweakElevationService.IsHeadlessInvocation(args))
+                return NvidiaTweakElevationService.RunHeadless(args);
 
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();

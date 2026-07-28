@@ -75,5 +75,73 @@ namespace VibranceHud.Tests
             Assert.NotNull(s.NvAppSupportedTweaks);
             Assert.Empty(s.NvAppSupportedTweaks);
         }
+
+        // ---- Tri-state Apply result (v0.8.1) ----
+        // The previous Apply collapsed every failure into bool false, surfacing
+        // "Driver didn't accept this setting" even when the actual cause was
+        // "session.Save() denied because the DRS file is admin-write only".
+        // These tests pin down the new tri-state contract so the UI can show a
+        // helpful "Run as admin" hint instead of a cryptic error.
+
+        [Fact]
+        public void NullDriver_Apply_ReturnsUnsupported()
+        {
+            // No NVIDIA card = nothing the driver can accept. Treated as Unsupported
+            // (the same category as "this driver version doesn't know this id"),
+            // NOT as NeedsAdmin - we don't want to ask the user for elevation when
+            // there's nothing the elevation could fix.
+            var nvidia = new NullNvidiaDriverSettings();
+            var result = nvidia.Apply("power-max", true, 0);
+            Assert.Equal(NvidiaApplyResult.Unsupported, result);
+        }
+
+        [Fact]
+        public void NullDriver_Apply_NeverThrows()
+        {
+            // Same as IsSupported: a call against the null driver must never throw.
+            // The elevated helper path treats any exception as "fall through to non-
+            // elevated branch", so the null driver has to behave.
+            var nvidia = new NullNvidiaDriverSettings();
+            var ex = Record.Exception(() => nvidia.Apply("power-max", true, 60));
+            Assert.Null(ex);
+        }
+
+        [Fact]
+        public void Settings_RustNvidiaTweaksNeedsAdmin_PersistsRoundTrip()
+        {
+            // When Apply returns NeedsAdmin, the page persists the tweak id into
+            // RustNvidiaTweaksNeedsAdmin so the "Apply as admin" button stays visible
+            // after a restart. Verify the round trip.
+            var dir = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "plexusx-needadmin-" + System.Guid.NewGuid().ToString("N"));
+            try
+            {
+                var store = new SettingsStore(dir);
+                var s = new AppSettings();
+                s.RustNvidiaTweaksNeedsAdmin = new HashSet<string> { "low-latency", "vsync-off" };
+                store.Save(s);
+
+                var loaded = store.Load();
+                Assert.Contains("low-latency", loaded.RustNvidiaTweaksNeedsAdmin);
+                Assert.Contains("vsync-off", loaded.RustNvidiaTweaksNeedsAdmin);
+                Assert.DoesNotContain("power-max", loaded.RustNvidiaTweaksNeedsAdmin);
+            }
+            finally
+            {
+                if (System.IO.Directory.Exists(dir))
+                    System.IO.Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void Settings_RustNvidiaTweaksNeedsAdmin_DefaultIsEmpty()
+        {
+            // Fresh install: the field exists but is empty, mirroring
+            // RustNvidiaTweaks and NvAppSupportedTweaks.
+            var s = new AppSettings();
+            Assert.NotNull(s.RustNvidiaTweaksNeedsAdmin);
+            Assert.Empty(s.RustNvidiaTweaksNeedsAdmin);
+        }
     }
 }
