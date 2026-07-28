@@ -97,20 +97,40 @@ namespace VibranceHud.Nvidia
                 session.Save();
                 return NvidiaApplyResult.Success;
             }
-            catch (NVIDIAApiException ex) when (ex.Status == Status.AccessDenied)
+            catch (NVIDIAApiException ex) when (IsPermissionStatus(ex.Status))
             {
-                // The most common cause on a non-admin user is the per-user DRS
-                // profile file under ProgramData\NVIDIA Corporation\Drs being
-                // write-protected without admin rights. Distinguish so the UI can
-                // offer the elevated-helper path instead of the cryptic
-                // "driver didn't accept" message.
+                // The per-user DRS profile file under ProgramData\NVIDIA Corporation\Drs
+                // is locked behind admin on most installs. NVAPI raises several different
+                // status codes that all map to the same root cause (insufficient privilege
+                // to write that file), so catch the whole family rather than guessing the
+                // right status name. With this the UI can offer the elevated-helper path
+                // instead of the cryptic "driver didn't accept" message.
                 return NvidiaApplyResult.NeedsAdmin;
+            }
+            catch (NVIDIANotSupportedException)
+            {
+                // The current driver build doesn't recognise this KnownSettingId. The
+                // Scan probe should normally catch this first, but a few mid-life driver
+                // updates change id meanings, so the runtime check has to agree.
+                return NvidiaApplyResult.Unsupported;
             }
             catch
             {
                 return NvidiaApplyResult.Unsupported;
             }
         }
+
+                /// <summary>True when the NVAPI failure was caused by the running process not
+                /// having write access to the per-user DRS file (under ProgramData). NVAPI
+                /// reports this with several different status codes depending on driver version
+                /// and which internal call returned first, so the truth-set is wider than just
+                /// AccessDenied.</summary>
+                private static bool IsPermissionStatus(Status s) =>
+                    s == Status.AccessDenied ||
+                    s == Status.InvalidUserPrivilege ||
+                    s == Status.SetNotAllowed ||
+                    s == Status.ProfileRemoved ||
+                    s == Status.RequestUserToDisableDWM;
 
         private static DriverSettingsProfile? FindOrCreateProfile(DriverSettingsSession session)
         {
@@ -227,23 +247,23 @@ namespace VibranceHud.Nvidia
                 var profile = FindOrCreateProfile(session);
                 if (profile == null) return NvidiaApplyResult.Unsupported;
 
-                foreach (var (id, value) in ValuesFor(tweakId, on, fpsCap))
-                    profile.SetSetting(id, value);
+            foreach (var (id, value) in ValuesFor(tweakId, on, fpsCap))
+                profile.SetSetting(id, value);
 
-                session.Save();
-                return NvidiaApplyResult.Success;
-            }
-            catch (NVIDIAApiException ex) when (ex.Status == Status.AccessDenied)
-            {
-                // If this fires while we're already elevated, something else is wrong
-                // (file locked, profile corrupt) - but the "needs admin" status is the
-                // best signal the caller has to show the user.
-                return NvidiaApplyResult.NeedsAdmin;
-            }
-            catch
-            {
-                return NvidiaApplyResult.Unsupported;
-            }
+            session.Save();
+            return NvidiaApplyResult.Success;
+        }
+        catch (NVIDIAApiException ex) when (IsPermissionStatus(ex.Status))
+                    {
+                        // If this fires while we're already elevated, something else is wrong
+                        // (file locked, profile corrupt) - but the "needs admin" status is the
+                        // best signal the caller has to show the user.
+                        return NvidiaApplyResult.NeedsAdmin;
+                    }
+        catch
+        {
+            return NvidiaApplyResult.Unsupported;
+        }
         }
     }
 
