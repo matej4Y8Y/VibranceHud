@@ -128,7 +128,7 @@ Each FPS Tweaks SAFE toggle is worth points equal to its impact-class score. The
 - Points = sum of point values for each FPS Tweaks SAFE toggle that is currently `IsApplied() == true`
 - Counter refreshes every time an FPS Tweaks toggle changes state (the existing Toggle.CheckedChanged already runs on the UI thread; we hook into the same point)
 - Counter also refreshes once on MainWindow load
-- No points for Advanced tier unless user enables them (then they count, since the user explicitly opted in)
+- Advanced tier counts toward the total when its toggle is on (no special exclusion rule)
 
 ### 2.4 Data flow
 
@@ -160,7 +160,7 @@ Each FPS Tweaks SAFE toggle is worth points equal to its impact-class score. The
   - All 4 SAFE off → 0
   - All 4 SAFE on → 110
   - One on (Boost Games Scheduling only) → 25
-  - Advanced tier (Game Mode) on doesn't count by default; only counts if its toggle is True (consistent with "any applied tweak counts")
+  - Advanced tier (Game Mode) on counts toward the total when its toggle is True (consistent with "any applied tweak counts")
 - `IsApplied()` check is mocked via fake tweaks (returns Canned for the 4 ids)
 
 The fake engine pattern (`FakeEngine` from prior tests) is available — `FakeVibranceEngine implements` etc. Should make `FakeSystemTweak : ISystemTweak` work.
