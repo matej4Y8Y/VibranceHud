@@ -11,6 +11,13 @@ namespace VibranceHud.Nvidia
     {
         GpuTier Tier { get; }
         bool Apply(string tweakId, bool on, int fpsCap);
+
+        /// <summary>
+        /// Best-effort probe: does this driver actually accept the given tweak id?
+        /// Returns false (never throws) on unknown ids, missing drivers, or any
+        /// NVAPI error. Used by the Scan button to filter the toggles the UI shows.
+        /// </summary>
+        bool IsSupported(string tweakId);
     }
 
     /// <summary>
@@ -85,10 +92,8 @@ namespace VibranceHud.Nvidia
             return created;
         }
 
-        /// <summary>
-        /// The driver values behind each toggle. "Off" writes the driver's own stock value
-        /// back rather than deleting the setting, so reverting is explicit and predictable.
-        /// </summary>
+        /// <summary>The driver values behind each toggle. "Off" writes the driver's own stock value
+        /// back rather than deleting the setting, so reverting is explicit and predictable.</summary>
         private static (KnownSettingId, uint)[] ValuesFor(string tweakId, bool on, int fpsCap) =>
             tweakId switch
             {
@@ -113,6 +118,65 @@ namespace VibranceHud.Nvidia
 
                 _ => Array.Empty<(KnownSettingId, uint)>()
             };
+
+        /// <summary>
+        /// Probes whether the driver accepts the given tweak id. Goes through the same
+        /// NVAPI session code path as <see cref="Apply"/> but only reads - on a freshly
+        /// installed driver some KnownSettingIds throw "setting not supported" on the
+        /// existing profile, which is exactly the signal Scan needs to hide the toggle.
+        /// Never throws: returns false on any exception so the Scan button stays safe
+        /// even when NVAPI is in a bad state.
+        /// </summary>
+        public bool IsSupported(string tweakId)
+        {
+            if (Tier == GpuTier.None) return false;
+            if (string.IsNullOrEmpty(tweakId)) return false;
+
+            // Some tweaks map to multiple settings (none today, but a vector for the
+            // future). The tweak is only "supported" if every backing setting is
+            // readable - otherwise the driver won't accept the full write either.
+            var ids = SettingIdsFor(tweakId);
+            if (ids.Length == 0) return false;
+
+            try
+            {
+                using var session = DriverSettingsSession.CreateAndLoad();
+                var profile = FindOrCreateProfile(session);
+                if (profile == null) return false;
+
+                foreach (var (_, id) in ids)
+                {
+                    // GetSetting returns null when the driver reports "unknown
+                    // setting id" against this version. That is the signal to hide.
+                    if (profile.GetSetting(id) == null) return false;
+                }
+                return true;
+            }
+            catch
+            {
+                // NVAPI is never authoritative for the UI - it can be missing,
+                // mismatched, or simply busy. False keeps the toggle hidden, which
+                // is the conservative outcome the Scan flow is designed for.
+                return false;
+            }
+        }
+
+        /// <summary>The driver setting ids a tweak touches. Kept separate from
+        /// <see cref="ValuesFor"/> so <see cref="IsSupported"/> doesn't have to fabricate
+        /// a placeholder value to extract the ids back out.</summary>
+        private static (KnownSettingId, uint)[] SettingIdsFor(string tweakId) =>
+            tweakId switch
+            {
+                "power-max" => new[] { (KnownSettingId.D3DOpenGLGPUMaximumPower, 0u) },
+                "low-latency" => new[] { (KnownSettingId.PreRenderLimit, 0u) },
+                "texture-perf" => new[] { (KnownSettingId.QualityEnhancements, 0u) },
+                "vsync-off" => new[] { (KnownSettingId.VSyncMode, 0u) },
+                "fps-cap" => new[]
+                {
+                    (KnownSettingId.PerformanceStateFrameRateLimiter, 0u)
+                },
+                _ => Array.Empty<(KnownSettingId, uint)>()
+            };
     }
 
     /// <summary>Stand-in when this PC has no NVIDIA GPU - the card hides itself.</summary>
@@ -120,5 +184,8 @@ namespace VibranceHud.Nvidia
     {
         public GpuTier Tier => GpuTier.None;
         public bool Apply(string tweakId, bool on, int fpsCap) => false;
+        // No NVIDIA card means no driver to ask. Always false, never throws - the Scan
+        // button must be safe on machines where the rest of the card is hidden.
+        public bool IsSupported(string tweakId) => false;
     }
 }

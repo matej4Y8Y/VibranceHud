@@ -80,6 +80,15 @@ namespace VibranceHud
         /// <summary>Ids of the NVIDIA driver tweaks currently applied to Rust's profile.</summary>
         public System.Collections.Generic.HashSet<string> RustNvidiaTweaks { get; set; } = new();
 
+        /// <summary>
+        /// Ids of NVIDIA driver tweaks the user has confirmed the driver actually accepts,
+        /// captured by the Scan button on the Rust page. Empty on a fresh install means
+        /// "no scan yet" - the card then shows every tweak the tier allows, so Scan is
+        /// opt-in, not a prerequisite for the card to be useful. Always non-null so the
+        /// UI can iterate without null-checks every page load.
+        /// </summary>
+        public System.Collections.Generic.HashSet<string> NvAppSupportedTweaks { get; set; } = new();
+
         /// <summary>Target for the steady frame cap, in FPS.</summary>
         public int RustFpsCap { get; set; } = 90;
 
