@@ -25,6 +25,10 @@ namespace VibranceHud.Tests
             public void BeginDrag() { }
             public void EndDrag() { }
 
+            // Focus-overlay hooks: no state to guard in a fake.
+            public void SuspendOverlay() { }
+            public void ResumeOverlay() { }
+
             public int Vibrance { get; set; } = 100;
             public int Saturation { get; set; } = 100;
             public int Brightness { get; set; } = 100;
