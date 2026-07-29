@@ -120,10 +120,31 @@ namespace VibranceHud.Pages
                 Notch = notch,
                 Value = Math.Clamp(initial, min, max),
             };
-            // The value chip is drawn in OnPaint, so a repaint is all a change needs.
-            slider.ValueChanged += (_, _) => Invalidate();
+            // The value chip is drawn in OnPaint, so a repaint is all a change needs - but
+            // only of the chip. A full Invalidate() here also redraws the glass cards and
+            // the whole shared particle field underneath them, on every mouse-move of a
+            // drag, which is what made these sliders feel heavy.
+            slider.ValueChanged += (_, _) => InvalidateValueChip(slider);
             Controls.Add(slider);
             return slider;
+        }
+
+        /// <summary>Repaint just the numeric chip belonging to one slider row. The chip sits
+        /// at the right end of the row the slider was placed in, so its rectangle is derived
+        /// from the slider's own bounds rather than tracked separately.</summary>
+        private void InvalidateValueChip(FlatSlider slider)
+        {
+            if (slider.Width <= 0 || _m.Equals(default(EditorMetrics)))
+            {
+                Invalidate();
+                return;
+            }
+
+            // SplitRow puts the value chip flush against the row's right edge, immediately
+            // after the slider track plus one gap.
+            var chip = new Rectangle(slider.Right + 12, slider.Top - 12, 58 + 12, slider.Height + 24);
+            chip.Inflate(6, 6);
+            Invalidate(chip);
         }
 
         // ---- Layout ----

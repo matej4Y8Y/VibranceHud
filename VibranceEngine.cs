@@ -45,6 +45,13 @@ namespace VibranceHud
         private bool _dragging;
         private bool _overlaySuspended;
 
+        // Set when a drag changed the value each one guards, so EndDrag flushes only the
+        // writes that are actually needed. Without these, EndDrag either has to flush
+        // everything (a driver call and a gamma-ramp syscall on every mouse-release, even
+        // for sliders that touch neither) or track nothing and skip the flush entirely.
+        private bool _driverDirty;
+        private bool _gammaDirty;
+
         // When the user is dragging a slider, the value setter is called on every
         // mouse-move event. Calling MagSetFullscreenColorEffect (or the DX11 swap-chain
         // write) on every move is slow on systems where DWM is software-rendered or the
@@ -79,6 +86,24 @@ namespace VibranceHud
                 public void EndDrag()
                 {
                     _dragging = false;
+
+                    // Flush the driver level only if the drag actually moved vibrance.
+                    // Dragging saturation/brightness/gamma leaves the driver value alone,
+                    // and an NVAPI write with an unchanged value is pure wasted latency.
+                    if (_driverDirty)
+                    {
+                        _driverDirty = false;
+                        ApplyDriverVibrance();
+                    }
+
+                    // Same for the gamma ramp: SetDeviceGammaRamp is a slow syscall, so it
+                    // runs once here rather than on every mouse-move during the drag.
+                    if (_gammaDirty)
+                    {
+                        _gammaDirty = false;
+                        ApplyGammaRamp();
+                    }
+
                     // Force one immediate overlay write so the screen matches the chip's
                     // final position. This runs synchronously on the UI thread, which is fine
                     // because the user has stopped dragging and the brief freeze is invisible.
@@ -110,14 +135,28 @@ namespace VibranceHud
         public int Vibrance
         {
             get => _vibrance;
-            set { _vibrance = Math.Clamp(value, 0, MaxVibrance); ApplyAll(); }
+            set
+            {
+                _vibrance = Math.Clamp(value, 0, MaxVibrance);
+                // Vibrance is the one control that really does need the driver. During a
+                // drag, mark it dirty and let EndDrag issue the single write.
+                if (_dragging) _driverDirty = true;
+                else ApplyDriverVibrance();
+                ScheduleOverlayApply();
+            }
         }
 
         /// <summary>Software saturation, 0-200 (100 = untouched, 0 = greyscale).</summary>
         public int Saturation
         {
             get => _saturation;
-            set { _saturation = Math.Clamp(value, 0, MaxSaturation); ApplyAll(); }
+            set
+            {
+                _saturation = Math.Clamp(value, 0, MaxSaturation);
+                // No driver call here: saturation is applied entirely in the colour matrix,
+                // so the driver's Digital Vibrance level is unaffected.
+                ScheduleOverlayApply();
+            }
         }
 
         public int DefaultLevel => _controller.DefaultLevel;
@@ -129,7 +168,12 @@ namespace VibranceHud
         public int Brightness
         {
             get => _brightness;
-            set { _brightness = Math.Clamp(value, MinBrightness, MaxBrightness); ApplyAll(); }
+            set
+            {
+                _brightness = Math.Clamp(value, MinBrightness, MaxBrightness);
+                // Brightness folds into the colour matrix - no driver involvement.
+                ScheduleOverlayApply();
+            }
         }
 
         /// <summary>Screen gamma, 50-150 (100 = untouched). Uses the display's gamma ramp,
@@ -140,8 +184,11 @@ namespace VibranceHud
             set
             {
                 _gamma = Math.Clamp(value, MinGamma, MaxGamma);
-                if (_gamma == 100) _gammaRamp.Reset();
-                else _gammaRamp.Apply(GammaCurve.Build(_gamma / 100f));
+                // SetDeviceGammaRamp is a slow syscall (tens of ms on some drivers) and it
+                // used to run on every mouse-move of the gamma slider, which is what made
+                // that slider the worst-feeling one. Defer to EndDrag like everything else.
+                if (_dragging) _gammaDirty = true;
+                else ApplyGammaRamp();
             }
         }
 
@@ -162,18 +209,25 @@ namespace VibranceHud
             Vibrance = DefaultLevel;
         }
 
+        /// <summary>Push the current vibrance to the driver. Called directly outside a drag
+        /// and once from EndDrag; never per mouse-move.</summary>
+        private void ApplyDriverVibrance() =>
+            _controller.SetLevel(Math.Min(_vibrance, DriverVibranceCeiling));
+
+        /// <summary>Install (or clear) the gamma ramp for the current gamma value.</summary>
+        private void ApplyGammaRamp()
+        {
+            if (_gamma == 100) _gammaRamp.Reset();
+            else _gammaRamp.Apply(GammaCurve.Build(_gamma / 100f));
+        }
+
+        /// <summary>Everything the display state depends on, applied in one go. Used by the
+        /// paths that change several values at once (Reset, settings load, resume).</summary>
         private void ApplyAll()
         {
-            // Driver vibrance is cheap (NVAPI call) - apply immediately so the user
-                // sees the slider-chip feedback match the driver-level change without
-                // a one-frame delay.
-                _controller.SetLevel(Math.Min(_vibrance, DriverVibranceCeiling));
-
-                // The screen overlay (DX11 swap chain / Magnification API) is expensive.
-                // ScheduleOverlayApply short-circuits during a slider drag and commits a
-                // single write on EndDrag.
-                ScheduleOverlayApply();
-            }
+            ApplyDriverVibrance();
+            ScheduleOverlayApply();
+        }
 
         private void ScheduleOverlayApply()
                         {

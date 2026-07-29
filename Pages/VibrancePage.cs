@@ -36,6 +36,33 @@ namespace VibranceHud.Pages
         private int _vibCapY, _hotkeyCapY, _brightCapY, _gammaCapY, _eyeY;
         private int _mainHotkeyCapY;
 
+        // Which rectangle each slider's numeric readout occupies. Used to repaint just
+        // that text during a drag instead of the whole page - see InvalidateReadout.
+        private Rectangle SaturationReadout => new(_cx, _numberY, _colW, 84);
+        private Rectangle VibranceReadout => new(_cx + _colW - 110, _vibCapY, 110, 16);
+        private Rectangle BrightnessReadout => new(_cx + _colW - 50, _brightCapY, 50, 16);
+        private Rectangle GammaReadout => new(_cx + _colW - 50, _gammaCapY, 50, 16);
+
+        /// <summary>
+        /// Repaint one readout rather than the entire page.
+        ///
+        /// A bare Invalidate() here repaints everything GlowPage draws underneath us: the
+        /// background image and all 65 nodes plus their connecting lines of the shared
+        /// particle field. That field animates on its own 33ms timer and does not change
+        /// because a slider moved, so during a drag - which raises ValueChanged on every
+        /// mouse-move, easily 100+/sec - it was re-rasterising the whole scene several
+        /// times per animation frame purely to redraw a number. That was the largest
+        /// single contributor to the drag feeling heavy.
+        /// </summary>
+        private void InvalidateReadout(Rectangle r)
+        {
+            // Before the first layout pass the rects are all zero-sized; fall back to a
+            // full repaint so the initial render is still correct.
+            if (_colW <= 0) { Invalidate(); return; }
+            r.Inflate(6, 6); // cover antialiased glyph edges
+            Invalidate(r);
+        }
+
         /// <summary>Raised when the user picks a new quick-vibrance hotkey combo. The
         /// tray forwards to <see cref="TrayApplicationContext.ReRegisterHotkey"/> so the
         /// OS-level RegisterHotKey is swapped without a restart.</summary>
@@ -84,7 +111,7 @@ namespace VibranceHud.Pages
                         _engine.Saturation = _slider.Value;
                         _settings.SaturationPercent = _slider.Value;
                         UpdateActiveChip();
-                        Invalidate();
+                        InvalidateReadout(SaturationReadout);
                         _saveDebounce.Trigger();
                     };
                     // Tell the engine when the user is actively dragging so it can suppress
@@ -107,7 +134,7 @@ namespace VibranceHud.Pages
                 _engine.Vibrance = _vibrance.Value;
                 _settings.VibrancePercent = _vibrance.Value;
                 UpdateActiveChip();
-                Invalidate();
+                InvalidateReadout(VibranceReadout);
                 _saveDebounce.Trigger();
             };
             _vibrance.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
@@ -178,7 +205,7 @@ namespace VibranceHud.Pages
             {
                 _engine.Brightness = _brightness.Value;
                 _settings.BrightnessPercent = _brightness.Value;
-                Invalidate();
+                InvalidateReadout(BrightnessReadout);
                 _saveDebounce.Trigger();
             };
             _brightness.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
@@ -196,7 +223,7 @@ namespace VibranceHud.Pages
             {
                 _engine.Gamma = _gamma.Value;
                 _settings.GammaPercent = _gamma.Value;
-                Invalidate();
+                InvalidateReadout(GammaReadout);
                 _saveDebounce.Trigger();
             };
             _gamma.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
