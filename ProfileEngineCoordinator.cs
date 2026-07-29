@@ -71,9 +71,26 @@ namespace VibranceHud
     /// Default implementation is "yes, always" — the coordinator never invents a
     /// no-answer today. Future per-game opt-out UI (a toggle in the editor card) plugs
     /// in here by replacing the implementation; the coordinator never changes.
+    ///
+    /// Post alt-tab fix: takes an <see cref="AppSettings"/> so it can honour
+    /// <see cref="AppSettings.ManualOverrideActive"/> - if the user tweaked values
+    /// from the popup after a profile was applied, the next launch of the same game
+    /// skips the auto-apply until they opt back in (the picker can clear the flag,
+    /// or it auto-clears on PlexusX shutdown so it never persists across reboots).
     /// </summary>
     public sealed class GameProfileApplyGate
     {
-        public bool ShouldAutoApply(string gameId) => true;
+        private readonly AppSettings _settings;
+
+        public GameProfileApplyGate(AppSettings settings)
+        {
+            _settings = settings;
+        }
+
+        public bool ShouldAutoApply(string gameId)
+        {
+            if (_settings.ManualOverrideActive) return false;   // user's last popup tweak wins
+            return true;
+        }
     }
 }

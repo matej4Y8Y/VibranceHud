@@ -35,7 +35,6 @@ namespace VibranceHud.Pages
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
         private readonly Audio.AudioEdgeService? _audio;
-        private readonly Nvidia.INvidiaDriverSettings? _nvidia;
         private readonly List<ChipButton> _qualityChips = new();
         private readonly List<ChipButton> _fpsChips = new();
         private readonly List<ChipButton> _ramChips = new();
@@ -49,22 +48,16 @@ namespace VibranceHud.Pages
         private Label _fovValue = null!;
         private Label _status = null!;
 
-        // NVIDIA Tweaks card - re-built whenever Scan updates the supported set.
-        private CardPanel? _nvCard;
-        private Button? _scanButton;
-        private Label? _scanLastLabel;
-        // The y position of the card when it was last built, so re-builds (triggered
-        // by the Scan button) sit in the same place instead of jumping the layout.
-        private int _nvCardY;
+        // NVIDIA Tweaks card removed in v0.9.0 - see
+        // docs/design/specs/2026-07-29-remove-nvidia-tweaks.md.
 
         public RustSettingsPage(DetectedGame game, AppSettings settings, SettingsStore store,
-            Audio.AudioEdgeService? audio, Action onBack, Nvidia.INvidiaDriverSettings? nvidia = null)
+            Audio.AudioEdgeService? audio, Action onBack)
         {
             _game = game;
             _settings = settings;
             _store = store;
             _audio = audio;
-            _nvidia = nvidia;
             _service = new RustSettingsService(Path.Combine(game.InstallDir, "cfg", "client.cfg"));
             AutoScroll = true;
             Font = new Font(Theme.FontFamily, 9.5f);
@@ -294,17 +287,9 @@ namespace VibranceHud.Pages
             Controls.Add(sys);
             y += 226;
 
-            // ---------- NVIDIA driver tweaks ----------
-            // Only what this GPU can actually do reaches the screen; with no NVIDIA card
-            // the whole card never gets built. The Scan button inside the card probes
-            // the driver for which settings it actually accepts.
-            var gpu = _nvidia ?? new Nvidia.NullNvidiaDriverSettings();
-            var nvTweaks = Nvidia.NvidiaTweakCatalog.Available(gpu.Tier);
-            if (nvTweaks.Count > 0)
-            {
-                BuildNvidiaCard(y, gpu);
-                y += _nvCard!.Height + 16;
-            }
+            // NVIDIA driver tweaks removed in v0.9.0 - the NVAPI path didn't
+            // work on the user's hardware (driver mismatch + DRS writes need
+            // admin). See docs/design/specs/2026-07-29-remove-nvidia-tweaks.md.
 
             // ---------- Audio Edge ----------
             if (_audio != null)
@@ -412,260 +397,6 @@ namespace VibranceHud.Pages
 // Builds (or rebuilds) the NVIDIA Tweaks card. After a Scan, the row list is
 // recomputed from the cached supported set in AppSettings; without a scan,
 // the user sees all tier-allowed toggles (the pre-scan fallback).
-private void BuildNvidiaCard(int y, Nvidia.INvidiaDriverSettings gpu)
-{
-    // Wipe any previous card so a re-scan sits in the same place.
-    if (_nvCard != null)
-    {
-        Controls.Remove(_nvCard);
-        _nvCard.Dispose();
-        _nvCard = null;
-    }
-
-    var nvTweaks = Nvidia.NvidiaTweakCatalog.Available(gpu.Tier);
-
-    // Use cached supported set if non-empty; else fall back to all tier-allowed
-    // toggles. The cached set is what we trust until the user re-scans.
-    bool hasCachedScan = _settings.NvAppSupportedTweaks != null
-                          && _settings.NvAppSupportedTweaks.Count > 0;
-    if (hasCachedScan)
-    {
-        nvTweaks = nvTweaks
-            .Where(t => _settings.NvAppSupportedTweaks.Contains(t.Id))
-            .ToList();
-    }
-
-    const int rowH = 52;
-    int cardH = 44 + nvTweaks.Count * rowH + 12 + 28; // +28 for the Scan button row
-
-    _nvCard = new CardPanel
-    {
-        Location = new Point(Pad, y),
-        Size = new Size(CardW, cardH)
-    };
-    _nvCardY = y;
-
-    _nvCard.Controls.Add(UiHelpers.Caption("NVIDIA TWEAKS", 18, 16, 260));
-
-    // Scan button on the right of the caption.
-    _scanButton = new Button
-    {
-        Text = "Scan",
-        Location = new Point(CardW - 90, 14),
-        Size = new Size(72, 24),
-        FlatStyle = FlatStyle.Flat,
-        BackColor = Theme.Accent,
-        ForeColor = Theme.Background,
-        Font = new Font(Theme.FontFamily, 8f, FontStyle.Bold),
-        Cursor = Cursors.Hand
-    };
-    _scanButton.Click += (s, e) => RunScan(gpu);
-    _nvCard.Controls.Add(_scanButton);
-
-    _scanLastLabel = new Label
-    {
-        Text = hasCachedScan ? "Last scan: cached" : "Last scan: never",
-        ForeColor = Theme.TextDim,
-        BackColor = Color.Transparent,
-        Font = new Font(Theme.FontFamily, 8f),
-        Location = new Point(18, cardH - 24),
-        Size = new Size(CardW - 36, 16)
-    };
-    _nvCard.Controls.Add(_scanLastLabel);
-
-    if (nvTweaks.Count == 0)
-    {
-        var none = new Label
-        {
-            Text = "Click Scan to detect which settings your driver accepts.",
-            ForeColor = Theme.TextDim,
-            BackColor = Color.Transparent,
-            Font = new Font(Theme.FontFamily, 8.5f),
-            Location = new Point(18, 44),
-            Size = new Size(CardW - 36, 18)
-        };
-        _nvCard.Controls.Add(none);
-    }
-    else
-    {
-        int ry = 44;
-        foreach (var tweak in nvTweaks)
-        {
-            _nvCard.Controls.Add(RowLabel(tweak.Label, 18, ry));
-            _nvCard.Controls.Add(RowHint(tweak.Description, 18, ry + 18));
-
-            var status = new Label
-            {
-                ForeColor = Theme.Accent,
-                BackColor = Color.Transparent,
-                Font = new Font(Theme.FontFamily, 8f),
-                Location = new Point(18, ry + 34),
-                Size = new Size(CardW - 90, 14)
-            };
-            _nvCard.Controls.Add(status);
-
-            // Per-row state that the toggle handler closes over. Built up before the
-            // toggle is created so we can put the "Apply as admin" button right next
-            // to it from the start (instead of springing one into existence when an
-            // AccessDenied shows up, which would re-layout the card underneath it).
-            bool needAdminHint = _settings.RustNvidiaTweaksNeedsAdmin.Contains(tweak.Id);
-            bool on = _settings.RustNvidiaTweaks.Contains(tweak.Id);
-            if (on) status.Text = "✓ " + tweak.AppliedText;
-
-            var captured = tweak;
-            var toggle = new ToggleSwitch
-            {
-                Location = new Point(CardW - 62, ry + 2),
-                Checked = on
-            };
-
-            // A button rendered above the row hint, beside the toggle, that pops the
-            // UAC prompt and re-applies via the elevated helper. Hidden until either
-            // a cached scan OR a failed in-process apply proves the user needs it,
-            // so the card doesn't look cluttered on machines where tweaks just work.
-            var adminBtn = new Button
-            {
-                Text = "Apply as admin",
-                Location = new Point(CardW - 62 - 124, ry + 8),
-                Size = new Size(118, 22),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.AccentDim,
-                ForeColor = Theme.Text,
-                Font = new Font(Theme.FontFamily, 8f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Visible = needAdminHint
-            };
-
-            toggle.CheckedChanged += async (s, e) =>
-            {
-                // If a scan is on file and this tweak isn't in it, the user is
-                // trying to toggle a setting the driver can't apply. Stay silent
-                // instead of showing the cryptic "didn't accept" message.
-                if (hasCachedScan && !_settings.NvAppSupportedTweaks.Contains(captured.Id))
-                {
-                    toggle.Checked = false;
-                    return;
-                }
-
-                // Run NVAPI on a worker thread so the UI doesn't freeze on a stalled
-                // DRS open / create (same pattern as the FPS tweaks page).
-                toggle.Enabled = false;
-                adminBtn.Enabled = false;
-                Nvidia.NvidiaApplyResult result;
-                try
-                {
-                    result = await System.Threading.Tasks.Task.Run(() =>
-                        gpu.Apply(captured.Id, toggle.Checked, _settings.RustFpsCap));
-                }
-                finally
-                {
-                    toggle.Enabled = true;
-                    adminBtn.Enabled = true;
-                }
-
-                if (result == Nvidia.NvidiaApplyResult.Success)
-                {
-                    status.ForeColor = Theme.Accent;
-                    status.Text = toggle.Checked ? "✓ " + captured.AppliedText : "";
-                    adminBtn.Visible = false;
-                    _settings.RustNvidiaTweaksNeedsAdmin.Remove(captured.Id);
-
-                    if (toggle.Checked) _settings.RustNvidiaTweaks.Add(captured.Id);
-                    else _settings.RustNvidiaTweaks.Remove(captured.Id);
-                    _store.Save(_settings);
-                    return;
-                }
-
-                if (result == Nvidia.NvidiaApplyResult.NeedsAdmin)
-                {
-                    // The DRS save failed because ProgramData\NVIDIA Corporation\Drs
-                    // is locked behind admin. Show the hint + button so one click
-                    // takes the user through the same UAC prompt the HKLM FPS tweaks
-                    // use. Remember it so the next page open keeps the button visible
-                    // instead of starting over looking failed.
-                    status.ForeColor = Color.FromArgb(240, 180, 90);
-                    status.Text = "⚠  Run PlexusX as administrator to apply this — or click \"Apply as admin\".";
-                    toggle.Checked = false;
-                    adminBtn.Visible = true;
-                    _settings.RustNvidiaTweaksNeedsAdmin.Add(captured.Id);
-                    _store.Save(_settings);
-                    return;
-                }
-
-                // Generic "driver refused" — no admin pathway, no retry, no escalation.
-                status.ForeColor = Theme.TextDim;
-                status.Text = "Driver didn’t accept this setting.";
-                toggle.Checked = false;
-            };
-
-            adminBtn.Click += async (s, e) =>
-            {
-                adminBtn.Enabled = false;
-                toggle.Enabled = false;
-                bool ok = await System.Threading.Tasks.Task.Run(() =>
-                    Nvidia.NvidiaTweakElevationService.RunElevated(
-                        captured.Id, on: true, _settings.RustFpsCap));
-                adminBtn.Enabled = true;
-                toggle.Enabled = true;
-
-                if (ok)
-                {
-                    status.ForeColor = Theme.Accent;
-                    status.Text = "✓ " + captured.AppliedText;
-                    toggle.Checked = true;
-                    adminBtn.Visible = false;
-                    _settings.RustNvidiaTweaks.Add(captured.Id);
-                    _settings.RustNvidiaTweaksNeedsAdmin.Remove(captured.Id);
-                    _store.Save(_settings);
-                }
-                else
-                {
-                    status.ForeColor = Color.FromArgb(240, 130, 130);
-                    status.Text = "Couldn't apply even as admin — see the message above for why.";
-                }
-            };
-
-            _nvCard.Controls.Add(toggle);
-            if (adminBtn.Visible) _nvCard.Controls.Add(adminBtn);
-            ry += rowH;
-        }
-    }
-
-    Controls.Add(_nvCard);
-}
-
-// Probe every tweak in the catalog and rebuild the card with just the supported
-// ones. Caches the result so a re-open of PlexusX shows the filtered set without
-// re-probing.
-private void RunScan(Nvidia.INvidiaDriverSettings gpu)
-{
-    if (_scanButton == null) return;
-    _scanButton.Enabled = false;
-    try
-    {
-        var supported = new HashSet<string>();
-        foreach (var tweak in Nvidia.NvidiaTweakCatalog.All)
-        {
-            if (gpu.IsSupported(tweak.Id)) supported.Add(tweak.Id);
-        }
-        _settings.NvAppSupportedTweaks = supported;
-        _store.Save(_settings);
-        BuildNvidiaCard(_nvCardY, gpu);
-        if (_scanLastLabel != null) _scanLastLabel.Text = "Last scan: just now";
-    }
-    catch
-    {
-        // Scan failure: rebuild with the fallback set so the page still shows
-        // something useful rather than a broken card.
-        BuildNvidiaCard(_nvCardY, gpu);
-        if (_scanLastLabel != null) _scanLastLabel.Text = "Last scan: failed";
-    }
-    finally
-    {
-        if (_scanButton != null) _scanButton.Enabled = true;
-    }
-}
-
         /// <summary>Set every control to the preset's loadout and write it in one click.</summary>
         private void ApplyPreset(RustPreset preset)
         {

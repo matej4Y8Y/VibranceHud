@@ -1,7 +1,7 @@
 # PlexusX — Project Handoff
 
-Written 2026-07-25 as the editor onboarding reference for this project. This is everything a new
-assistant needs to pick this project up without re-deriving context from scratch.
+Written 2026-07-25. Everything needed to pick this project up without re-deriving
+context from scratch: architecture, decisions already made, and how to ship a release.
 
 ---
 
@@ -13,14 +13,13 @@ lockout, its own installer and auto-updater. Target user: PC gamers who want dis
 vibrance beyond what NVIDIA's control panel allows, plus per-game optimization.
 
 - Repo: `github.com/matej4Y8Y/VibranceHud` (remote already configured, origin set)
-- Local path: `C:\Users\MR.UltraSexymale\Downloads\VibranceHud`
 - Real installed copy (auto-launches via Windows `Run` registry key, separate from any
   dev build): `%LocalAppData%\Programs\PlexusX\PlexusX.exe`
 - Stack: C# / .NET 8, WinForms, self-contained single-file publish, xUnit tests
 - Distributed via Inno Setup installer + GitHub Releases (Velopack-style auto-update
   keyed off the release **tag**, not the filename — see Release Ritual below)
 
-**Hard requirement, stated emphatically by the user:** because this ships to the public,
+**Hard requirement:** because this ships to the public,
 **game/Steam detection must work on every PC** — never hardcode paths. Read Steam from
 the registry (HKCU/HKLM, including WOW6432Node), parse `libraryfolders.vdf` for all
 library drives, degrade gracefully if Steam/the game is absent. Cover with unit tests.
@@ -78,38 +77,19 @@ fix is an **EV code-signing certificate** (~$200–400/yr) — this is the stand
 open item, not yet acted on. Reputation also builds over time with a signed, widely
 distributed build.
 
-## Working style — please follow these
+## Working conventions
 
-- **Brainstorm before building anything non-trivial.** New feature / new UI surface / new
-  subsystem → present a short design, ask only the genuinely blocking question, then
-  build. Small tweaks (a colour value, a slider range) — just do them, no ceremony.
-  Keep brainstorming tight; this user moves fast and often answers a design question by
-  describing the exact flow they want — follow that over your own proposal.
+- **Design before building anything non-trivial.** New feature / new UI surface / new
+  subsystem → write a short design note in `docs/design/specs/` first. Small tweaks
+  (a colour value, a slider range) — just do them, no ceremony.
 - **TDD the pure logic.** Every feature in this codebase separates pure, testable logic
   (colour maths, geometry, settings resolution) from thin I/O/UI wrappers. Write the
-  tests first, watch them fail for the right reason, then implement. 199 tests currently
-  pass; keep that discipline.
-- **Verify, don't assume.** Read real file contents before building against them
-  (transcripts, screenshots, actual on-disk state) rather than guessing. Extract frames /
-  take screenshots to confirm a render or UI change actually looks right — don't trust
-  "the command didn't error" as proof of correctness.
-- Ask one question at a time when something is genuinely ambiguous; prefer multiple
-  choice. Don't ask about things you can reasonably infer or that are small/reversible.
+  tests first, watch them fail for the right reason, then implement.
+- **Verify, don't assume.** Read real file contents before building against them rather
+  than guessing. Actually look at the rendered UI to confirm a visual change landed —
+  "the command didn't error" is not proof of correctness.
 
-## ⚠️ Uncommitted work — handle this first
-
-As of this handoff, **23 files are uncommitted** on the `main` branch (all today's
-session's work): the Vibrance/Saturation split, image background theming, the crosshair
-overlay feature, and a settings-durability fix (atomic writes + backup so a crash
-mid-save can't reset the user's whole config). None of this exists anywhere except this
-local working directory. **Commit it before doing anything else** — `git status` will
-show exactly what's pending. All 199 tests pass against this uncommitted state.
-
-Two design specs already written and NOT yet committed (in `docs/superpowers/specs/`):
-- `2026-07-25-image-theme-design.md`
-- `2026-07-25-crosshair-overlay-design.md`
-
-## Recent bugs fixed this session (context in case they resurface)
+## Notable bugs already fixed (context in case they resurface)
 
 1. **`Bitmap.GetHbitmap(Color background)` discards alpha.** Used in the crosshair
    overlay window — turned the entire transparent canvas into a solid opaque black
@@ -175,9 +155,9 @@ comparison shots need a large glowing on-screen number overlay matching the real
 counter's steady-state reading (not its first-frame value, which is often an outlier) —
 the in-game counter alone is too small/low-contrast to read on a phone.
 
-## Skills to bring over / re-create
+## Hard-won lessons worth keeping
 
-The important **distilled knowledge** (not specific to any one tool's file format) is:
+Distilled knowledge from building this, worth carrying into any similar project:
 
 - **Portable Windows detection**: never hardcode install paths. Read Steam via registry
   (HKCU/HKLM + WOW6432Node), parse `libraryfolders.vdf`, degrade gracefully if absent.
@@ -211,10 +191,9 @@ The important **distilled knowledge** (not specific to any one tool's file forma
   particle/plexus animated backgrounds, palette-as-roles so themes swap cleanly, hand-
   drawn vector icons rather than font glyphs/emoji.
 
-## Pointing an assistant at
+## Key files
 
-- Local repo: `C:\Users\MR.UltraSexymale\Downloads\VibranceHud`
 - Remote: `https://github.com/matej4Y8Y/VibranceHud`
 - This file: `docs/HANDOFF.md` (committed, so it travels with the repo)
-- Specs: `docs/superpowers/specs/*.md`
+- Specs: `docs/design/specs/*.md`
 - Roadmap: `docs/ROADMAP.md`

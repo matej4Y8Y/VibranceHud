@@ -2,16 +2,24 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using VibranceHud.License;
 
 namespace VibranceHud
 {
     /// <summary>
     /// Keeps the app alive as a tray icon and owns the main window, opening/focusing it on
     /// the global hotkey (Ctrl+Alt+V), the tray double-click, and startup.
+    ///
+    /// Two global hotkeys are registered now (post alt-tab fix):
+    ///   - HOTKEY_ID      -> the quick vibrance popup (settings.Hotkey* combo)
+    ///   - MAIN_HOTKEY_ID -> the full main window (settings.MainHotkey* combo, opt-in)
+    /// Both share the same invisible HotkeyWindow so WM_HOTKEY messages from either ID
+    /// reach us via the same WndProc.
     /// </summary>
     public sealed class TrayApplicationContext : ApplicationContext
     {
         private const int HOTKEY_ID = 1;
+        private const int MAIN_HOTKEY_ID = 2;
 
         [DllImport("user32.dll")]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -33,11 +41,14 @@ namespace VibranceHud
         private readonly Audio.AudioEdgeService? _audioEdge;
         private ProfileEngineCoordinator? _profileCoordinator;
         private MainWindow _window;
+        private readonly LicenseService _license;
         private VibrancePopup? _vibrancePopup;
         private ToolStripItem? _hotkeyMenuItem;
+        private ToolStripMenuItem? _mainHotkeyMenuItem;
 
-        public TrayApplicationContext()
+        public TrayApplicationContext(LicenseService? license = null)
         {
+            _license = license ?? new LicenseService();
             _controller = CreateVibranceController();
             _overlay = TryCreateOverlay();
             _gammaRamp = new DisplayGammaRamp();
@@ -49,10 +60,14 @@ namespace VibranceHud
             _settings = _store.Load();
 
             // Record which overlay mechanism actually ended up active - TryCreateOverlay()
-            // silently falls back to Magnification if DX11 init failed, and that fallback is
-            // invisible to screen-capture tools (OBS/Discord). Persist it so the Settings page
-            // can tell the user instead of hiding it.
+                        // silently falls back to Magnification if DX11 init failed, and that fallback is
+                        // invisible to screen-capture tools (OBS/Discord). Persist it so the Settings page
+                        // can tell the user instead of hiding it. Also persist the categorised failure
+                        // reason + message so the Settings page shows an actionable hint, not just
+                        // "Fallback mode" with no context.
             _settings.OverlayMode = OverlayModeResolver.Resolve(_overlay);
+            _settings.DxFailure = (_overlay as IDisplayOverlay)?.LastFailure ?? DxInitFailureKind.None;
+            _settings.DxFailureMessage = (_overlay as IDisplayOverlay)?.LastFailureMessage ?? "";
             _store.Save(_settings);
 
             // Rebuild a previously chosen image background + its derived palette before
@@ -93,15 +108,21 @@ namespace VibranceHud
             if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), ReRegisterHotkey);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey);
 
             _hotkeyWindow = new HotkeyWindow();
-            _hotkeyWindow.HotkeyPressed += (s, e) => ShowVibrancePopup();
+            _hotkeyWindow.HotkeyPressed += (s, e) =>
+            {
+            // Distinguish which hotkey fired by the WM_HOTKEY wParam (id field) -
+            // HotkeyWindow forwards that as HotkeyEventArgs.HotkeyId.
+            if (e is HotkeyEventArgs he && he.HotkeyId == MAIN_HOTKEY_ID) ShowMainWindow();
+            else ShowVibrancePopup();
+            };
 
+            // The popup hotkey always registers. A registration failure is non-fatal -
+            // another app may already own this combo; the tray menu still works.
             if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, _settings.HotkeyModifierMask, _settings.HotkeyVirtualKey))
             {
-            // Not fatal - another app may already own this combo. The tray menu
-            // still works either way, so just let the user know why the hotkey is quiet.
             MessageBox.Show(
             $"Couldn't register {GetHotkeyDisplay()} (another app may already be using it). " +
             "You can still open the slider from the tray icon.",
@@ -110,9 +131,19 @@ namespace VibranceHud
             MessageBoxIcon.Warning);
             }
 
+            // The main-window hotkey is opt-in (the picker on the Vibrance page enables
+            // it the moment the user picks a combo). Until then we don't try to bind.
+            if (_settings.MainHotkeyEnabled)
+            TryRegisterMainHotkey();
+
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open", null, (s, e) => _window.ShowAndFocus());
             _hotkeyMenuItem = menu.Items.Add($"Quick vibrance  ({GetHotkeyDisplay()})", null, (s, e) => ShowVibrancePopup());
+            _mainHotkeyMenuItem = (ToolStripMenuItem)menu.Items.Add(
+        $"Open main window  ({GetMainHotkeyDisplay()})",
+        null,
+        (s, e) => ShowMainWindow());
+            UpdateMainHotkeyMenuItem();
             menu.Items.Add("Reset vibrance", null, (s, e) => _engine.Reset());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Check for updates", null, async (s, e) => await UpdateService.CheckManuallyAsync());
@@ -138,6 +169,7 @@ namespace VibranceHud
             _splash.Shown += async (s, e) => await RunStartupAsync();
             _splash.Show();
         }
+
 
         /// <summary>
         /// NVIDIA's driver vibrance (NVAPI) only exists on NVIDIA hardware with the driver
@@ -193,10 +225,10 @@ namespace VibranceHud
             // blocks silent installs from a live parent.
             if (UpdateService.RunPendingUpdateIfAny(_settings))
             {
-                // Installer is running and will close us shortly. Hand control back to
-                // the message loop so it has time to do its work before we shut down.
-                Application.Exit();
-                return;
+        // Installer is running and will close us shortly. Hand control back to
+        // the message loop so it has time to do its work before we shut down.
+        Application.Exit();
+        return;
             }
 
             _splash.SetStatus("Checking for updates…");
@@ -295,11 +327,15 @@ namespace VibranceHud
         /// while it's still handling the toggle's event.
         /// </summary>
         private void ApplyTheme(string themeName)
-        {
-            _settings.ThemeName = themeName;
-            _settings.LightTheme = ThemeCatalog.ByName(themeName).IsLight; // keep legacy flag consistent
-            _store.Save(_settings);
-            Theme.Apply(themeName);
+                {
+                    _settings.ThemeName = themeName;
+                    // LightTheme was the legacy bool used before theme names existed; it's
+                    // kept on AppSettings as a one-way migration aid (TrayApplicationContext
+                    // reads it once at startup to seed ThemeCatalog.Resolve). New code
+                    // doesn't read the field, so back-writing it here is dead-store churn
+                    // on the settings.json file.
+                    _store.Save(_settings);
+                    Theme.Apply(themeName);
 
             var deferred = new System.Windows.Forms.Timer { Interval = 1 };
             deferred.Tick += (s, e) =>
@@ -314,7 +350,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, ReRegisterHotkey);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey);
             _window.ShowAndFocus();
             old.Dispose();
         }
@@ -330,6 +366,14 @@ namespace VibranceHud
             _vibrancePopup = new VibrancePopup(_engine, _settings, _store);
             _vibrancePopup.Show();
             _vibrancePopup.Activate();
+        }
+
+        /// <summary>Show or focus the main window. Wired to the second global hotkey
+        /// (Ctrl+Shift+M by default) so the user has a one-press path to the full app
+        /// distinct from the popup.</summary>
+        private void ShowMainWindow()
+        {
+            _window.ShowAndFocus();
         }
 
         /// <summary>
@@ -355,7 +399,7 @@ namespace VibranceHud
 
             var watcher = new GameProcessWatcher(idToExe);
             var applyEngine = new ProfileApplyEngine(_engine, new GameHubApplier());
-            var coordinator = new ProfileEngineCoordinator(watcher, applyEngine, new GameProfileApplyGate());
+            var coordinator = new ProfileEngineCoordinator(watcher, applyEngine, new GameProfileApplyGate(_settings));
             coordinator.Start();
 
             _profileCoordinator = coordinator;
@@ -367,7 +411,11 @@ namespace VibranceHud
             _crosshair.Dispose(); // never leave an overlay floating on screen
             _vibrancePopup?.Dispose();
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
+            UnregisterHotKey(_hotkeyWindow.Handle, MAIN_HOTKEY_ID);
             _profileCoordinator?.Stop();  // tear down the polling loop before the engine disappears
+            // Manual override is a runtime-only flag: cleared on shutdown so a brand-new
+            // launch always starts from the saved profile, not from a stale tweak.
+            _settings.ManualOverrideActive = false;
             _store.Save(_settings);
             (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
@@ -393,21 +441,90 @@ namespace VibranceHud
         /// Called from the picker on the Vibrance page; safe to call at any point after
         /// the hotkey window handle exists.</summary>
         public void ReRegisterHotkey(uint mask, uint vk)
-        {
-            UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
-            _settings.HotkeyModifierMask = mask;
-            _settings.HotkeyVirtualKey = vk;
-            _store.Save(_settings);
-            RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, mask, vk);
-            if (_hotkeyMenuItem != null)
-            _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()})";
-        }
+                {
+                    UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
+                    _settings.HotkeyModifierMask = mask;
+                    _settings.HotkeyVirtualKey = vk;
+                    _store.Save(_settings);
+                    // Detect a duplicate combo: if the main-window hotkey already owns the
+                    // same (mask, vk), don't try to re-register - Windows would silently
+                    // drop the new binding and the user would see one hotkey not firing
+                    // with no explanation. Disable the popup binding for this combo so
+                    // the two never collide.
+                    if (_settings.MainHotkeyEnabled
+                        && _settings.MainHotkeyVirtualKey == vk
+                        && _settings.MainHotkeyModifierMask == mask)
+                    {
+                        if (_hotkeyMenuItem != null)
+                            _hotkeyMenuItem.Text = $"Quick vibrance  (conflicts with main window)";
+                        return;
+                    }
+                    if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, mask, vk))
+                    {
+                        if (_hotkeyMenuItem != null)
+                            _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()} - unavailable)";
+                    }
+                    else if (_hotkeyMenuItem != null)
+                        _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()})";
+                }
+
+                /// <summary>Variant for the second (main-window) hotkey. Toggles registration on
+                /// or off depending on <see cref="AppSettings.MainHotkeyEnabled"/>: the Vibrance
+                /// page's "Main window" picker calls this with <c>enabled=true</c> when the user
+                /// picks a combo, and with <c>enabled=false</c> if they unbind it.</summary>
+                public void ReRegisterMainHotkey(uint mask, uint vk, bool enabled)
+                {
+                    UnregisterHotKey(_hotkeyWindow.Handle, MAIN_HOTKEY_ID);
+                    _settings.MainHotkeyModifierMask = mask;
+                    _settings.MainHotkeyVirtualKey = vk;
+                    _settings.MainHotkeyEnabled = enabled;
+                    _store.Save(_settings);
+                    if (enabled)
+                        TryRegisterMainHotkey();
+                    UpdateMainHotkeyMenuItem();
+                }
+
+                private void TryRegisterMainHotkey()
+                {
+                    if (_settings.MainHotkeyVirtualKey == 0) return; // nothing to bind yet
+                    // Detect collision with the quick hotkey. RegisterHotKey returns false
+                    // silently when the OS already owns the combo, but we can detect the
+                    // case ourselves and tell the user via the tray menu label so the
+                    // "doesn't fire" mystery isn't silent.
+                    bool conflict = _settings.HotkeyVirtualKey == _settings.MainHotkeyVirtualKey
+                                 && _settings.HotkeyModifierMask == _settings.MainHotkeyModifierMask;
+                    if (conflict)
+                    {
+                        if (_mainHotkeyMenuItem != null)
+                            _mainHotkeyMenuItem.Text = $"Open main window  (conflicts with quick vibrance)";
+                        return;
+                    }
+                    if (!RegisterHotKey(_hotkeyWindow.Handle, MAIN_HOTKEY_ID,
+                        _settings.MainHotkeyModifierMask, _settings.MainHotkeyVirtualKey))
+                    {
+                        if (_mainHotkeyMenuItem != null)
+                            _mainHotkeyMenuItem.Text = $"Open main window  ({GetMainHotkeyDisplay()} - unavailable)";
+                    }
+                    else if (_mainHotkeyMenuItem != null)
+                        _mainHotkeyMenuItem.Text = $"Open main window  ({GetMainHotkeyDisplay()})";
+                }
+
+                private void UpdateMainHotkeyMenuItem()
+                {
+                    if (_mainHotkeyMenuItem == null) return;
+                    _mainHotkeyMenuItem.Text = _settings.MainHotkeyEnabled
+                        ? $"Open main window  ({GetMainHotkeyDisplay()})"
+                        : "Open main window";
+                }
 
         /// <summary>Render the user's bound combo for the tray menu and the
         /// couldn't-register warning. Routes through the same static helper the picker
         /// uses, so the two displays can never disagree.</summary>
         private string GetHotkeyDisplay() => HotkeyPicker.GetDisplay(
             _settings.HotkeyModifierMask, _settings.HotkeyVirtualKey);
+
+        private string GetMainHotkeyDisplay() => HotkeyPicker.GetDisplay(
+            _settings.MainHotkeyModifierMask, _settings.MainHotkeyVirtualKey);
     }
 
     /// <summary>
@@ -429,10 +546,22 @@ namespace VibranceHud
         {
             if (m.Msg == WM_HOTKEY)
             {
-            HotkeyPressed?.Invoke(this, EventArgs.Empty);
+            // m.WParam carries the hotkey id we passed to RegisterHotKey - propagate it
+            // via a typed event so the TrayApplicationContext handler can route to the
+            // popup vs the main window.
+            var id = m.WParam.ToInt32();
+            HotkeyPressed?.Invoke(this, new HotkeyEventArgs(id));
             }
 
             base.WndProc(ref m);
         }
+    }
+
+    /// <summary>Carries the hotkey id (the wParam from WM_HOTKEY) up to the handler so
+    /// it knows which combo fired.</summary>
+    internal sealed class HotkeyEventArgs : EventArgs
+    {
+        public int HotkeyId { get; }
+        public HotkeyEventArgs(int id) { HotkeyId = id; }
     }
 }

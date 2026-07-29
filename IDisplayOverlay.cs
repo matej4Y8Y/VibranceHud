@@ -19,5 +19,15 @@ namespace VibranceHud
     public interface IDisplayOverlay
     {
         OverlayMode ActiveMode { get; }
+
+        /// <summary>Categorised reason DX11 init failed (None if it succeeded
+        /// or if this isn't the DX11 path). Read by TrayApplicationContext after
+        /// construction and persisted to <see cref="AppSettings.DxFailure"/> so
+        /// the Settings page can show an actionable reason.</summary>
+        DxInitFailureKind LastFailure { get; }
+
+        /// <summary>Short, user-facing label for the last failure (empty when
+        /// DX11 succeeded).</summary>
+        string LastFailureMessage { get; }
     }
 }

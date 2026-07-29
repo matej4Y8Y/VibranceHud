@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using VibranceHud.Nvidia;
 
 namespace VibranceHud.SystemTweaks
 {
@@ -11,17 +10,18 @@ namespace VibranceHud.SystemTweaks
     /// Each entry names the exact registry values it writes, verified against documented
     /// Windows behaviour. Reversible: every setting carries its stock value (or null = the
     /// value simply isn't there by default, so reverting deletes it).
+    ///
+    /// Previously also accepted an NvAppRustProfileTweak for NVIDIA Experience per-game
+    /// profile tweaks, but that path was removed in v0.9.0 (the tweak didn't work on
+    /// the user's machine - see docs/design/specs/2026-07-29-remove-nvidia-tweaks.md).
     /// </summary>
     public sealed class SystemTweakCatalog
     {
         private readonly IRegistryAccess _reg;
-        private readonly NvAppRustProfileTweak? _nvAppTweak;
 
-        public SystemTweakCatalog(IRegistryAccess reg) : this(reg, null) { }
-        public SystemTweakCatalog(IRegistryAccess reg, NvAppRustProfileTweak? nvAppTweak)
+        public SystemTweakCatalog(IRegistryAccess reg)
         {
             _reg = reg;
-            _nvAppTweak = nvAppTweak;
         }
 
         private const string GameConfig = @"System\GameConfigStore";
@@ -33,7 +33,7 @@ namespace VibranceHud.SystemTweaks
         {
             get
             {
-                var tweaks = new List<ISystemTweak>
+                return new List<ISystemTweak>
                 {
                     // ---- Safe: clean, reversible, real ----
                     new RegistryTweak(_reg, "game-dvr", "Disable Game DVR",
@@ -57,9 +57,6 @@ namespace VibranceHud.SystemTweaks
                         "System", TweakTier.Safe, "Game scheduling boosted",
                         new RegistrySetting(RegistryRoot.LocalMachine, GamesTask, "Priority", "6", "2")),
 
-                    // ---- NVIDIA Experience per-game profile (AppData; no admin) ----
-                    _nvAppTweak ?? new NvAppRustProfileTweak(),
-
                     // ---- Advanced: real but situational (off by default, flagged in the UI) ----
                     new RegistryTweak(_reg, "game-mode", "Disable Windows Game Mode",
                         "Game Mode helps on some PCs and hurts on others. Turn it off if you see stutter with it on.",
@@ -67,7 +64,6 @@ namespace VibranceHud.SystemTweaks
                         new RegistrySetting(RegistryRoot.CurrentUser, @"Software\Microsoft\GameBar",
                             "AllowAutoGameMode", "0", "1")),
                 };
-                return tweaks;
             }
         }
     }

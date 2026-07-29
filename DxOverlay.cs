@@ -27,6 +27,13 @@ namespace VibranceHud
     {
         public OverlayMode ActiveMode => OverlayMode.Dx;
 
+        // Forward the categorised failure from the device that did (or didn't)
+        // initialise. If DX11 succeeded the device's LastFailure stays None
+        // and we report None here too. The Settings page reads these so the
+        // user gets a real reason instead of "Fallback mode" with nothing else.
+        public DxInitFailureKind LastFailure => _device?.LastFailure ?? DxInitFailureKind.None;
+        public string LastFailureMessage => _device?.LastFailureMessage ?? "";
+
         private static readonly float[] Identity = new float[]
         {
             1f, 0f, 0f, 0f, 0f,

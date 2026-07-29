@@ -60,21 +60,107 @@ namespace VibranceHud.Pages
             };
             general.Controls.Add(startupToggle);
 
-            // Surfaces a silent DX11 -> Magnification fallback (see OverlayModeResolver) -
-            // the fallback still saturates the screen but is invisible to OBS/Discord capture.
-            bool usingFallback = _settings.OverlayMode == VibranceHud.OverlayMode.Mag;
-            general.Controls.Add(new Label
-            {
-                Text = usingFallback
-                    ? "Display engine: Fallback mode (not visible in screen capture)"
-                    : "Display engine: DX11 (visible in screen capture)",
-                ForeColor = usingFallback ? Theme.Accent : Theme.TextDim,
-                BackColor = Color.Transparent,
-                Font = new Font(Theme.FontFamily, 8.5f),
-                Location = new Point(18, 78),
-                AutoSize = true
-            });
-            Controls.Add(general);
+            // Surfaces a silent DX11 -> Magnification fallback (see OverlayModeResolver).
+                        // DX11 is the capture-friendly path (works in OBS Display Capture, Discord,
+                        // ShadowPlay, Windows Graphics Capture). Magnification is the silent fallback
+                        // used when DX11 init fails - it shows on the monitor and in OBS Monitor
+                        // Capture but is NOT captured by OBS Game Capture, Discord screen share,
+                        // or ShadowPlay. The "Retry display engine" button restarts PlexusX so the
+                        // DX11 init can run again.
+                        //
+                        // When DX11 failed with a categorised reason (DxFailure != None), we also
+                        // surface two extra lines - a short "why" label and a one-sentence hint
+                        // - so the user has something actionable to read instead of staring at
+                        // "Fallback" wondering what's wrong.
+                        bool usingFallback = _settings.OverlayMode == VibranceHud.OverlayMode.Mag;
+                        general.Controls.Add(new Label
+                        {
+                            Text = usingFallback
+                                ? "Display engine: Fallback (hidden from OBS Game Capture / Discord)"
+                                : "Display engine: DX11 (works in OBS, Discord, ShadowPlay)",
+                            ForeColor = usingFallback ? Theme.Accent : Theme.TextDim,
+                            BackColor = Color.Transparent,
+                            Font = new Font(Theme.FontFamily, 8.5f),
+                            Location = new Point(18, 78),
+                            AutoSize = true
+                        });
+                        if (usingFallback && _settings.DxFailure != DxInitFailureKind.None
+                            && !string.IsNullOrEmpty(_settings.DxFailureMessage))
+                        {
+                            // "Why" - one short line under the engine label.
+                            general.Controls.Add(new Label
+                            {
+                                Text = "Why:  " + _settings.DxFailureMessage,
+                                ForeColor = Theme.Accent,
+                                BackColor = Color.Transparent,
+                                Font = new Font(Theme.FontFamily, 8.5f),
+                                Location = new Point(18, 96),
+                                AutoSize = true
+                            });
+                            // "Hint" - what the user can do about it. Looked up from the
+                            // categorised kind so the suggestion is concrete, not "try
+                            // something" hand-waving. We don't have the original HRESULT
+                            // here (just the kind) so we look up the hint by synthesising
+                            // a representative HRESULT for each kind.
+                            string hint = DxInitFailureMapper.HintForKind(_settings.DxFailure);
+                            general.Controls.Add(new Label
+                            {
+                                Text = "Try:  " + hint,
+                                ForeColor = Theme.TextDim,
+                                BackColor = Color.Transparent,
+                                Font = new Font(Theme.FontFamily, 8.5f),
+                                Location = new Point(18, 114),
+                                AutoSize = true
+                            });
+                        }
+                        if (usingFallback)
+                        {
+                            var retryBtn = new Button
+                            {
+                                Text = "Retry display engine",
+                                // AutoSize so the button always shows the full label
+                                // regardless of theme font width. A fixed Size(140,24)
+                                // clipped "Retry" -> "Retrv" and "display" -> "disblav"
+                                // when the theme font was wider than the dev machine's.
+                                AutoSize = true,
+                                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                                Padding = new Padding(12, 4, 12, 4),
+                                MinimumSize = new Size(160, 28),
+                                Location = new Point(width - 180, 70),
+                                FlatStyle = FlatStyle.Flat,
+                                BackColor = Color.Transparent,
+                                ForeColor = Theme.Accent,
+                                Cursor = Cursors.Hand
+                            };
+                            retryBtn.FlatAppearance.BorderColor = Theme.Border;
+                            retryBtn.FlatAppearance.BorderSize = 1;
+                            retryBtn.Click += (s, e) =>
+                            {
+                                // Restart the process so the DX11 init runs again. This is the only
+                                // reliable way to retry - the overlay is constructed once at startup,
+                                // and tearing it down + rebuilding mid-session risks leaving the
+                                // DWM-composited window stranded on the user's desktop.
+                                try
+                                {
+                                    var exe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                                    if (exe == null) return;
+                                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                                    {
+                                        FileName = exe,
+                                        UseShellExecute = true
+                                    });
+                                    Application.Exit();
+                                }
+                                catch
+                                {
+                                    // If the relaunch itself failed (no interactive session, AV
+                                    // blocking Process.Start, etc.), the user still has the
+                                    // diagnostic hint to read.
+                                }
+                            };
+                            general.Controls.Add(retryBtn);
+                        }
+                        Controls.Add(general);
 
             // ---- Theme picker (colour swatches) ----
             var themeCard = new CardPanel { Location = new Point(40, 172), Size = new Size(width, 120) };

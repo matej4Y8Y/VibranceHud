@@ -17,7 +17,7 @@ Thumbs.db
 .DS_Store
 
 # Local scratch - never commit
-.hermes/
+.local/
 chicken.jpg
 installer/release-state.json
 installer/create_release.py
@@ -25,5 +25,9 @@ installer/PlexusX-Setup-0.7.0.exe
 installer/PlexusX-Setup-0.7.2.exe
 *.tmp.py
 
-# Local debug tools (DX probes, scratch projects, etc.)
-tools/
+# Screenshots. This repo is PUBLIC and screen captures routinely pick up whatever
+# else was on screen - chat windows, terminal prompts with the Windows username,
+# other apps. Never commit them; describe the UI in text instead.
+docs/qa/screenshots/
+*.png
+!brand/**/*.png

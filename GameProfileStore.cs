@@ -64,7 +64,12 @@ namespace VibranceHud
         }
 
         /// <summary>Upserts a profile for its <see cref="GameProfile.GameId"/> and writes
-        /// the whole file back atomically.</summary>
+        /// the whole file back atomically (write to .tmp, then File.Replace so a
+        /// partial write never leaves the user with a corrupt profiles.json and
+        /// a wiped profile set). The previous direct <c>File.WriteAllText</c>
+        /// could lose every saved profile if PlexusX crashed mid-save - the
+        /// single worst bug this class could have once users start saving
+        /// per-game configurations.</summary>
         public static void Set(GameProfile profile) => Set(profile, StorePath);
 
         /// <summary>Test-friendly overload.</summary>
@@ -74,8 +79,28 @@ namespace VibranceHud
             var idx = all.FindIndex(p => p.GameId == profile.GameId);
             profile.LastUpdated = DateTime.UtcNow;
             if (idx >= 0) all[idx] = profile; else all.Add(profile);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, SerializeAll(all));
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // Same atomic-write pattern as SettingsStore.Save: .tmp + File.Replace,
+            // fallback to plain copy if Replace fails on a weird filesystem.
+            var json = SerializeAll(all);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, json);
+            try
+            {
+                if (File.Exists(path))
+                    File.Replace(tmp, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                else
+                    File.Move(tmp, path);
+            }
+            catch (Exception) when (File.Exists(tmp))
+            {
+                // Same fallback SettingsStore uses - over the network or on a
+                // filesystem where Replace fails, a plain overwrite still
+                // beats losing the save entirely.
+                File.Copy(tmp, path, overwrite: true);
+                try { File.Delete(tmp); } catch { /* best effort */ }
+            }
         }
 
         public static void Remove(string gameId) => Remove(gameId, StorePath);

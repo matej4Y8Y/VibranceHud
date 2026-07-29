@@ -1,6 +1,6 @@
 # PlexusX 0.6.0 Capture-Aware Saturation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax so progress can be tracked in-place.
 
 **Goal:** Replace the Windows Magnification API saturation path with a DirectX 11 swap-chain overlay so the tier-2 100–200% saturation is visible in OBS, Discord, NVIDIA ShadowPlay, and every other standard Windows capture tool.
 

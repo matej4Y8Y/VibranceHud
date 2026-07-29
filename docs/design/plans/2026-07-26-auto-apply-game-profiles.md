@@ -1,6 +1,6 @@
 # PlexusX 0.7.0 Auto-Apply Game Profiles Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Steps use checkbox (`- [ ]`) syntax so progress can be tracked in-place.
 
 **Goal:** When the user launches a supported game (Rust, CS2, ...), PlexusX applies that game's saved profile (visual sliders + Game-Hub options). On game close, desktop defaults return. The trigger is process-based polling — no Steam dependency, no anti-cheat surface.
 

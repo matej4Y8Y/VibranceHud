@@ -67,18 +67,34 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void DraggingASlider_DoesNotPersistUntilSaveIsClicked()
+        public void DraggingASlider_FlipsTheManualOverrideFlag_AndAutosavesAfterDebounce()
         {
+            // Post alt-tab fix: a slider drag in the popup immediately flips
+            // ManualOverrideActive (so the coordinator can skip the saved profile next
+            // time the same game launches) and the values are autosaved to disk via a
+            // short debounce. The old behaviour was "only the Save button persists" -
+            // which made closing the popup without clicking Save look like "values
+            // went away" whenever anything later re-read the settings file.
             var engine = new FakeEngine();
             var store = new SettingsStore(_dir);
             var settings = new AppSettings();
             using var popup = new VibrancePopup(engine, settings, store);
 
-            popup.VibranceSlider.Value = 55;
+            popup.SaturationSlider.Value = 160;
 
-            // A live slider drag must never itself write to disk - only the explicit Save
-            // button does. Confirmed by nothing existing on disk yet.
-            Assert.False(File.Exists(Path.Combine(_dir, "settings.json")));
+            // Manual override flag must flip immediately - the coordinator doesn't
+            // wait on the debounce to decide whether to skip the saved profile.
+            Assert.True(settings.ManualOverrideActive);
+
+            // Wait past the autosave debounce so the timer thread writes the file.
+            // 400ms is comfortably past the 250ms debounce used by the popup.
+            var deadline = DateTime.UtcNow.AddMilliseconds(400);
+            while (!File.Exists(Path.Combine(_dir, "settings.json")) && DateTime.UtcNow < deadline)
+                System.Threading.Thread.Sleep(20);
+
+            Assert.True(File.Exists(Path.Combine(_dir, "settings.json")));
+            var reloaded = store.Load();
+            Assert.Equal(160, reloaded.SaturationPercent);
         }
 
         [Fact]
@@ -114,11 +130,11 @@ namespace VibranceHud.Tests
             var popupType = typeof(VibrancePopup);
 
             foreach (var field in popupType.GetFields(System.Reflection.BindingFlags.Instance
-                | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public))
+        | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public))
             {
-                Assert.DoesNotContain("ProfileApplyEngine", field.FieldType.FullName ?? "");
-                Assert.DoesNotContain("ProfileEngineCoordinator", field.FieldType.FullName ?? "");
-                Assert.DoesNotContain("GameProfileStore", field.FieldType.FullName ?? "");
+        Assert.DoesNotContain("ProfileApplyEngine", field.FieldType.FullName ?? "");
+        Assert.DoesNotContain("ProfileEngineCoordinator", field.FieldType.FullName ?? "");
+        Assert.DoesNotContain("GameProfileStore", field.FieldType.FullName ?? "");
             }
         }
     }

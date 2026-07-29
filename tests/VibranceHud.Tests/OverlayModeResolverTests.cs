@@ -6,11 +6,13 @@ namespace VibranceHud.Tests
     public class OverlayModeResolverTests
     {
         private sealed class FakeOverlay : ISaturationOverlay, IDisplayOverlay
-        {
-            public OverlayMode ActiveMode { get; set; }
-            public void Apply(float[] matrix) { }
-            public void Clear() { }
-        }
+                {
+                    public OverlayMode ActiveMode { get; set; }
+                    public DxInitFailureKind LastFailure { get; set; } = DxInitFailureKind.None;
+                    public string LastFailureMessage { get; set; } = "";
+                    public void Apply(float[] matrix) { }
+                    public void Clear() { }
+                }
 
         private sealed class ReportlessOverlay : ISaturationOverlay
         {

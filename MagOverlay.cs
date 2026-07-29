@@ -57,6 +57,13 @@ namespace VibranceHud
         /// <summary>True when the Magnification runtime is available; false means "tier-1 only".</summary>
         public bool IsAvailable => _initialized;
 
+        // Mag is the fallback, not the preferred path - the LastFailure value
+        // comes from the DxOverlay that failed and got us here. We expose None
+        // because there's no failure on the Mag path itself; the actual cause
+        // is the upstream DX11 attempt that we DON'T know about from here.
+        public DxInitFailureKind LastFailure => DxInitFailureKind.None;
+        public string LastFailureMessage => "";
+
         public MagOverlay()
         {
             _initialized = MagInitialize();

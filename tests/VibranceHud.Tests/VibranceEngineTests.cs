@@ -198,7 +198,51 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void Reset_RestoresDriverDefault_AndNeutralAdjustments()
+                public void SuspendOverlay_StopsSubsequentValueWrites_UntilResume()
+                {
+                    // Post alt-tab fix: ScheduleOverlayApply must respect _overlaySuspended so
+                    // the moment PlexusX loses focus and someone calls SuspendOverlay (Clear()),
+                    // a value change while focus is elsewhere (popup open over a game, etc.)
+                    // cannot silently re-enable the overlay. ResumeOverlay flushes the value
+                    // back once focus returns.
+                    var (engine, _, ovl) = NewEngine();
+                    engine.Saturation = 160;
+                    int appliedBeforeSuspend = ovl.Applied.Count;
+
+                    engine.SuspendOverlay();
+                    // A value change while suspended must NOT push a new matrix to the overlay.
+                    engine.Saturation = 180;
+                    Assert.Equal(appliedBeforeSuspend, ovl.Applied.Count);
+
+                    // Resuming flushes the current value once.
+                    engine.ResumeOverlay();
+                    Assert.True(ovl.Applied.Count > appliedBeforeSuspend);
+                }
+
+                [Fact]
+                public void VibranceSlider_Drag_EngineUpdates_ValueDuringDrag_FlushOnEndDrag()
+                {
+                    // Belt-and-braces for the "user drags saturation in popup over a game" path:
+                    // BeginDrag suppresses overlay writes during the drag (no per-tick flood),
+                    // EndDrag flushes the final value. This is the same flag dance the popup
+                    // relies on - locked in here so a future refactor can't break the
+                    // chip-tracks-cursor-1:1 contract.
+                    var (engine, _, ovl) = NewEngine();
+                    engine.BeginDrag();
+                    int appliedBefore = ovl.Applied.Count;
+
+                    for (int s = 110; s <= 170; s += 10)
+                    {
+                        engine.Saturation = s;
+                        Assert.Equal(appliedBefore, ovl.Applied.Count); // drag suppresses
+                    }
+
+                    engine.EndDrag();
+                    Assert.True(ovl.Applied.Count > appliedBefore); // single flush at the end
+                }
+
+                [Fact]
+                public void Reset_RestoresDriverDefault_AndNeutralAdjustments()
         {
             var (engine, ctrl, ovl) = NewEngine();
             ctrl.DefaultLevel = 50;

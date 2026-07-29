@@ -289,28 +289,46 @@ namespace VibranceHud
         /// <summary>Manual check from Settings / the tray: reports either way.</summary>
         public static async Task CheckManuallyAsync()
         {
-            var update = await TryGetUpdateAsync();
-            if (update == null)
+            // Prevent double-launch: two rapid clicks on "Check for updates" would
+            // otherwise run two parallel calls, double-download the installer,
+            // and pop two dialogs. Static lock + UI-thread guard.
+            lock (_checkLock)
             {
-                MessageBox.Show($"You're on the latest version ({CurrentVersion}).",
-                    "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
+                if (_isChecking) return;
+                _isChecking = true;
             }
-
-            var choice = MessageBox.Show(
-                $"PlexusX {update.Version} is available (you have {CurrentVersion}).\n\n" +
-                "Download and install it now? PlexusX will restart.",
-                "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-            if (choice != DialogResult.Yes) return;
-
-            var file = await DownloadAsync(update, _ => { });
-            if (file == null || !RunInstallerSilently(file))
+            try
             {
-                MessageBox.Show("The update couldn't be downloaded. You can grab it from the releases page.",
-                    "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                var update = await TryGetUpdateAsync();
+                if (update == null)
+                {
+                    MessageBox.Show($"You're on the latest version ({CurrentVersion}).",
+                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var choice = MessageBox.Show(
+                    $"PlexusX {update.Version} is available (you have {CurrentVersion}).\n\n" +
+                    "Download and install it now? PlexusX will restart.",
+                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                if (choice != DialogResult.Yes) return;
+
+                var file = await DownloadAsync(update, _ => { });
+                if (file == null || !RunInstallerSilently(file))
+                {
+                    MessageBox.Show("The update couldn't be downloaded. You can grab it from the releases page.",
+                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                Application.Exit();
             }
-            Application.Exit();
+            finally
+            {
+                _isChecking = false;
+            }
         }
+
+        private static readonly object _checkLock = new();
+        private static bool _isChecking;
     }
 }

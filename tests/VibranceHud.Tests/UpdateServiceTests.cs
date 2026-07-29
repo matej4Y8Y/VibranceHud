@@ -33,7 +33,7 @@ namespace VibranceHud.Tests
         public void IsValidInstaller_ReturnsFalseForMultipartEnvelope()
         {
             // GitHub's CDN was once returning the multipart upload envelope
-            // (------hermesv075...) as the asset body when the redirect target was
+            // (------WebKitFormBoundary...) as the asset body when the redirect target was
             // cached incorrectly. That has the "------" boundary as its first two
             // bytes, which is 0x2D 0x2D, NOT 0x4D 0x5A ("MZ").
             var temp = Path.Combine(Path.GetTempPath(), $"plexusx-multipart-{Guid.NewGuid():N}.exe");

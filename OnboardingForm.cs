@@ -142,6 +142,33 @@ namespace VibranceHud
             _primary.Click += (s, e) => Advance();
             Controls.Add(_primary);
 
+            // Skip button - explicit "I'll set this up later" path so the user
+            // doesn't have to find the X in the corner. Skips write the bare-
+            // minimum OnboardingComplete=true and use the current theme, so a
+            // power user who just wants the app on screen is one click away from
+            // the main window.
+            var skip = new LinkLabel
+            {
+                Text = "Skip — I'll set up later",
+                LinkColor = Theme.TextDim,
+                ActiveLinkColor = Theme.Accent,
+                LinkBehavior = LinkBehavior.NeverUnderline,
+                Location = new Point(cx - 80, 510),
+                AutoSize = true,
+                BackColor = Color.Transparent,
+            };
+            skip.Click += (s, e) =>
+            {
+                // Mark onboarding done without persisting the unconfirmed toggles
+                // (startup stays where StartupManager already reports it; theme
+                // stays at the default the field is rendering).
+                _settings.OnboardingComplete = true;
+                _store.Save(_settings);
+                DialogResult = DialogResult.OK;
+                Close();
+            };
+            Controls.Add(skip);
+
             _back = new LinkLabel
             {
                 Text = "‹ Back",
@@ -198,7 +225,11 @@ namespace VibranceHud
         private void Finish()
         {
             _settings.ThemeName = Theme.CurrentName;
-            _settings.LightTheme = ThemeCatalog.ByName(Theme.CurrentName).IsLight;
+            // LightTheme was a legacy bool used before theme names existed; it's
+            // kept as a field on AppSettings for one-way migration of old
+            // settings.json files (see ThemeCatalog.Resolve) but new code never
+            // reads it. Writing it here would be dead-store churn on the JSON
+            // file, so we deliberately skip the back-write.
             _settings.StartWithWindows = _startup.Checked;
             StartupManager.SetEnabled(_startup.Checked);
             _settings.FavoriteGame = _favoriteGame;
@@ -235,6 +266,19 @@ namespace VibranceHud
                 DrawCentered(g, "Welcome to PlexusX", TitleFont, Theme.Text, 205);
                 DrawCentered(g, AppInfo.Tagline, SubFont, Theme.TextDim, 246);
                 DrawCentered(g, "Sharper colors and more FPS, in one app. Let's set it up.", SubFont, Theme.TextDim, 274);
+
+                // Surface the DX11 / Magnification fallback status right at the
+                // first screen so the user knows up-front whether the saturation
+                // effect will show in OBS / Discord screen share, or only on their
+                // monitor. Without this line, the first time they check a stream
+                // and don't see the boost they blame PlexusX - because nothing
+                // on the Welcome screen hinted the fallback was in play.
+                bool dx11 = _settings.OverlayMode == OverlayMode.Dx;
+                var statusText = dx11
+                    ? "Display engine: DX11 - saturation visible in OBS / Discord"
+                    : "Display engine: Fallback - saturation on monitor only, NOT in OBS Game Capture";
+                var statusColor = dx11 ? Theme.TextDim : Theme.Accent;
+                DrawCentered(g, statusText, SubFont, statusColor, 302);
             }
             else if (_step == 1)
             {

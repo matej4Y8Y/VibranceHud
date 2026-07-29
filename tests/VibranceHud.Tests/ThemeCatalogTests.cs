@@ -53,9 +53,9 @@ namespace VibranceHud.Tests
         }
 
         [Fact]
-        public void Resolve_DefaultsToViolet_ForAFreshInstall()
+        public void Resolve_DefaultsToLight_ForAFreshInstall()
         {
-            Assert.Equal("Violet", ThemeCatalog.Resolve(null, legacyLight: false).Name);
+            Assert.Equal("Light", ThemeCatalog.Resolve(null, legacyLight: false).Name);
         }
 
         [Fact]

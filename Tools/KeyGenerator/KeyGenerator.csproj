@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>false</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PlexusX.Tools.KeyGenerator</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="**\*.cs" />
+
+    <!-- Link the REAL license sources rather than keeping a copy under
+         LicenseEmbed\. KeyGenerator signs keys and the shipped app verifies them,
+         so these files must be byte-identical in both - and when they were two
+         separate copies they drifted twice, each time producing keys that no
+         install could activate. Linking makes that class of bug impossible: there
+         is now exactly one definition of the key format and the HMAC derivation.
+         Only these four are listed because the rest of License\ pulls in WinForms,
+         which this console tool deliberately does not reference. -->
+    <Compile Include="..\..\License\LicenseKey.cs" Link="License\LicenseKey.cs" />
+    <Compile Include="..\..\License\LicenseKeyDerivation.cs" Link="License\LicenseKeyDerivation.cs" />
+    <Compile Include="..\..\License\LicenseRecord.cs" Link="License\LicenseRecord.cs" />
+    <Compile Include="..\..\License\LicenseState.cs" Link="License\LicenseState.cs" />
+
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -11,10 +11,10 @@
     <!-- Bumped for every release; the running app compares this against the newest
          GitHub release to decide whether to update itself. The display version in
          the bottom-left of the UI reads from AssemblyVersion via UpdateService. -->
-    <Version>0.8.2</Version>
-    <AssemblyVersion>0.8.2.0</AssemblyVersion>
-    <FileVersion>0.8.2.0</FileVersion>
-    <InformationalVersion>0.8.2</InformationalVersion>
+    <Version>0.9.0-rc1</Version>
+    <AssemblyVersion>0.9.0.0</AssemblyVersion>
+    <FileVersion>0.9.0.0</FileVersion>
+    <InformationalVersion>0.9.0-rc1</InformationalVersion>
     <ApplicationIcon>brand\PlexusX.ico</ApplicationIcon>
 
     <!-- Self-contained so a friend's PC needs nothing pre-installed (no .NET Desktop
@@ -39,6 +39,10 @@
        the app's compilation (they reference xUnit, which the app doesn't). -->
   <ItemGroup>
     <Compile Remove="tests\**" />
+    <Compile Remove="Tools\**\*.cs" />
+    <Compile Remove="Tools\**\*.csproj" />
+    <Compile Remove="Tools\**\Program.cs" />
+    <Compile Remove="Tools\**\KeyGenerator.csproj" />
     <Content Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />
     <None Remove="tests\**" />
@@ -52,6 +56,9 @@
     <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
     <PackageReference Include="SharpDX.DXGI" Version="4.2.0" />
     <PackageReference Include="SharpDX.D3DCompiler" Version="4.2.0" />
+    <!-- WMI, used by the license hardware fingerprint. Not in the .NET 8 shared
+         framework any more, so it has to come in as a package. -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

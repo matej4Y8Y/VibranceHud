@@ -53,6 +53,20 @@ namespace VibranceHud
 
         public bool IsAvailable => Targets.Count > 0;
 
+        /// <summary>Categorised reason DX11 init failed (None if it succeeded).
+        /// Read by TrayApplicationContext after construction and persisted into
+        /// <see cref="AppSettings.DxFailure"/> so the Settings page can show
+        /// an actionable reason instead of "Fallback mode" with no context.
+        /// Defaults to <see cref="DxInitFailureKind.None"/> - on success the
+        /// property stays at None, so callers can use `!= None` as the failure
+        /// predicate.</summary>
+        public DxInitFailureKind LastFailure { get; private set; } = DxInitFailureKind.None;
+
+        /// <summary>Short, human-readable label for <see cref="LastFailure"/>
+        /// (e.g. "Display driver doesn't support DX11"). Empty when DX11
+        /// succeeded.</summary>
+        public string LastFailureMessage { get; private set; } = "";
+
         // --- Win32 overlay window plumbing -------------------------------------------------
         private const int WS_POPUP = unchecked((int)0x80000000);
         private const int WS_VISIBLE = 0x10000000;
@@ -118,6 +132,7 @@ namespace VibranceHud
                 _factory = new Factory2();
                 EnsureWindowClass();
 
+                int adapterCount = 0;
                 for (int i = 0; ; i++)
                 {
                     Adapter1 adapter;
@@ -129,6 +144,7 @@ namespace VibranceHud
                     {
                         break; // no more adapters
                     }
+                    adapterCount++;
 
                     using (adapter)
                     {
@@ -139,17 +155,63 @@ namespace VibranceHud
                             // compositing.
                             device = new Device(adapter, DeviceCreationFlags.BgraSupport);
                         }
-                        catch (Exception)
+                        catch (SharpDXException sdex)
                         {
-                            continue; // this adapter has no usable D3D11 driver - skip it
+                            // Categorise the failure so the Settings page can show
+                            // an actionable reason. Don't bail - other adapters
+                            // might work (e.g. integrated + discrete GPU).
+                            var (kind, short_, hint) = DxInitFailureMapper.Map(sdex);
+                            LastFailure = kind;
+                            LastFailureMessage = short_;
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            // Non-SharpDX failure (rare; e.g. ArgumentException
+                            // from a bad adapter description). Drill one level
+                            // for an inner SharpDXException before giving up.
+                            var (kind, short_, hint) = DxInitFailureMapper.MapGeneric(ex);
+                            LastFailure = kind;
+                            LastFailureMessage = short_;
+                            continue;
                         }
 
                         int before = Targets.Count;
-                        CreateSwapChainsForOutputs(adapter, device);
+                        try
+                        {
+                            CreateSwapChainsForOutputs(adapter, device);
+                        }
+                        catch (SharpDXException sdex)
+                        {
+                            var (kind, short_, hint) = DxInitFailureMapper.Map(sdex);
+                            LastFailure = kind;
+                            LastFailureMessage = short_;
+                        }
+                        catch (Exception ex)
+                        {
+                            var (kind, short_, hint) = DxInitFailureMapper.MapGeneric(ex);
+                            LastFailure = kind;
+                            LastFailureMessage = short_;
+                        }
 
                         if (Targets.Count > before) _devices.Add(device);
                         else device.Dispose(); // adapter had no usable output
                     }
+                }
+
+                if (adapterCount == 0)
+                {
+                    LastFailure = DxInitFailureKind.NoCompatibleAdapter;
+                    LastFailureMessage = "No GPU with a usable driver was found";
+                }
+                else if (Targets.Count == 0 && LastFailure == DxInitFailureKind.None)
+                {
+                    // Adapters existed but none produced a swap-chain. The per-adapter
+                    // catch above should have set a kind, but if the failure was
+                    // generic (e.g. inner exception that isn't SharpDX) we'd land
+                    // here with no diagnosis - fill in a sane default.
+                    LastFailure = DxInitFailureKind.NoOutputs;
+                    LastFailureMessage = "No usable display output was found";
                 }
 
                 if (Targets.Count == 0)
@@ -159,9 +221,20 @@ namespace VibranceHud
                     Dispose();
                 }
             }
-            catch (Exception)
+            catch (SharpDXException sdex)
             {
-                // DX11 init failure - the caller checks IsAvailable and falls back to MagOverlay.
+                // Top-level init failure (most often the Factory2 constructor
+                // itself throws when the OS has no D3D runtime at all).
+                var (kind, short_, hint) = DxInitFailureMapper.Map(sdex);
+                LastFailure = kind;
+                LastFailureMessage = short_;
+                Dispose();
+            }
+            catch (Exception ex)
+            {
+                var (kind, short_, hint) = DxInitFailureMapper.MapGeneric(ex);
+                LastFailure = kind;
+                LastFailureMessage = short_;
                 Dispose();
             }
         }

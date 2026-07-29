@@ -176,16 +176,23 @@ namespace VibranceHud
             }
 
         private void ScheduleOverlayApply()
-                {
-            // During a slider drag, skip the overlay write entirely. The chip on the
-            // page tracks the cursor 1:1 via WinForms' own repaint cycle, so the user
-            // still sees the value change. The expensive MagSetFullscreenColorEffect
-            // syscall would otherwise block the UI thread for ~10-30ms per call, which
-            // is what makes the slider feel jumpy on Mag-path systems. EndDrag flushes
-            // the final value in a single write.
-            if (_dragging) return;
-            ApplyOverlay();
-                }
+                        {
+                    // During a slider drag, skip the overlay write entirely. The chip on the
+                    // page tracks the cursor 1:1 via WinForms' own repaint cycle, so the user
+                    // still sees the value change. The expensive MagSetFullscreenColorEffect
+                    // syscall would otherwise block the UI thread for ~10-30ms per call, which
+                    // is what makes the slider feel jumpy on Mag-path systems. EndDrag flushes
+                    // the final value in a single write.
+                    if (_dragging) return;
+                    // While the host form has lost focus the overlay is gated off (Clear() at
+                    // SuspendOverlay time). Re-applying here would silently re-enable the
+                    // effect and undo the suspend - the alt-tab-from-game case then ends up
+                    // with the saturation disappearing the next time the form is deactivated.
+                    // ResumeOverlay flushes the current value back to the overlay on
+                    // OnActivated, so dropping this write is the correct behaviour.
+                    if (_overlaySuspended) return;
+                    ApplyOverlay();
+                        }
 
         private void ApplyOverlay()
         {

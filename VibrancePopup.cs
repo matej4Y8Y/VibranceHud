@@ -22,16 +22,24 @@ namespace VibranceHud
     /// nothing from the auto-apply path (<c>ProfileApplyEngine</c>, <c>GameProfileStore</c>,
     /// <c>ProfileEngineCoordinator</c>) - a quick manual tweak here must never register as,
     /// or get silently clobbered by, a game's auto-applied profile.
+    ///
+    /// As of the v0.9.x alt-tab fix, every slider drag also autosaves to AppSettings via a
+    /// short debounce (250ms) and flags <see cref="AppSettings.ManualOverrideActive"/> so
+    /// the auto-apply coordinator knows to skip re-clobbering the user's last-tweaked
+    /// values on the next launch of the same game. The Save button is kept for symmetry
+    /// with older screenshots but is now equivalent to "flush now and close".
     /// </summary>
     public sealed class VibrancePopup : Form
     {
         private const int CornerRadius = 16;
         private const int RowStride = 56;   // caption + slider per row
         private const int Pad = 24;   // named Pad, not Margin: Form.Margin already exists
+        private const int AutosaveDebounceMs = 250;
 
         private readonly IVibranceEngine _engine;
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
+        private readonly DebouncedAction _autosaveDebounce;
 
         // Its own field (the popup is a standalone top-level window, so it can't share
         // MainWindow's). Fewer nodes than the main window - the surface is much smaller.
@@ -58,37 +66,38 @@ namespace VibranceHud
             _engine = engine;
             _settings = settings;
             _store = store;
+            _autosaveDebounce = new DebouncedAction(Save, AutosaveDebounceMs);
 
             FormBorderStyle = FormBorderStyle.None;
-                        StartPosition = FormStartPosition.CenterScreen;
-                        ShowInTaskbar = false;
-                        TopMost = true;
-                        ClientSize = new Size(360, 364);
-                        DoubleBuffered = true;
+            StartPosition = FormStartPosition.CenterScreen;
+            ShowInTaskbar = false;
+            TopMost = true;
+            ClientSize = new Size(360, 364);
+            DoubleBuffered = true;
 
-                        // Reduce paint flicker during slider drags. The popup repaints on every
-                        // ValueChanged (the value readout in OnPaint) and continuously from the
-                        // animation tick, so without AllPaintingInWmPaint + OptimizedDoubleBuffer
-                        // each repaint flashes. ResizeRedraw keeps the rounded region in sync on
-                        // DPI / maximize changes; UserPaint is what makes OnPaint run at all when
-                        // there are no child-controls invalidating the form.
-                        SetStyle(
-                            ControlStyles.OptimizedDoubleBuffer |
-                            ControlStyles.AllPaintingInWmPaint |
-                            ControlStyles.UserPaint |
-                            ControlStyles.ResizeRedraw,
-                            true);
+            // Reduce paint flicker during slider drags. The popup repaints on every
+            // ValueChanged (the value readout in OnPaint) and continuously from the
+            // animation tick, so without AllPaintingInWmPaint + OptimizedDoubleBuffer
+            // each repaint flashes. ResizeRedraw keeps the rounded region in sync on
+            // DPI / maximize changes; UserPaint is what makes OnPaint run at all when
+            // there are no child-controls invalidating the form.
+            SetStyle(
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
 
-                        // Drive per-message-tick repaints: every message that goes through the
-                                                // pump (mouse move during a drag, timer tick, focus change) leaves the
-                                                // queue idle, so this fires after each one and gets the value readout
-                                                // drawn in OnPaint to the screen within the same frame as the slider
-                                                // chip itself. Without this, repaints only happened on the 33ms particle
-                                                // timer, which made the chip feel a frame or two behind the cursor.
-                                                Shown += (s, e) => Application.Idle += OnIdleRepaint;
-                                                FormClosed += (s, e) => Application.Idle -= OnIdleRepaint;
+            // Drive per-message-tick repaints: every message that goes through the
+            // pump (mouse move during a drag, timer tick, focus change) leaves the
+            // queue idle, so this fires after each one and gets the value readout
+            // drawn in OnPaint to the screen within the same frame as the slider
+            // chip itself. Without this, repaints only happened on the 33ms particle
+            // timer, which made the chip feel a frame or two behind the cursor.
+            Shown += (s, e) => Application.Idle += OnIdleRepaint;
+            FormClosed += (s, e) => Application.Idle -= OnIdleRepaint;
 
-                        Icon = AppIcon.Value;
+            Icon = AppIcon.Value;
 
             int y = 56;
             int vibY = y;
@@ -181,6 +190,18 @@ namespace VibranceHud
             {
                 onChange(slider.Value);
                 Invalidate();   // repaint the value readout drawn in OnPaint
+                // Autosave so the slider tweaks survive a restart / re-launch of the
+                // same game. Before this, the Save button was the only path - closing
+                // the popup without clicking Save left the settings file stale, so any
+                // future auto-apply loaded the old snapshot and "the values went away".
+                // 250ms debounce so a continuous drag still costs us one disk write,
+                // not hundreds.
+                _autosaveDebounce.Trigger();
+                // Mark that the user has manually overridden whatever a game profile
+                // may have applied. The coordinator checks this on the next launch of
+                // the same game and skips re-clobbering the user's last-tweaked values
+                // until they opt back into the saved profile.
+                _settings.ManualOverrideActive = true;
             };
             Controls.Add(slider);
 
@@ -230,8 +251,10 @@ namespace VibranceHud
         }
 
         /// <summary>Persists the four sliders' current values to AppSettings. Slider drags
-        /// already updated the live engine; this just makes them survive a restart.
-        /// Internal (not private) so tests can trigger it without simulating a click.</summary>
+        /// already updated the live engine and triggered the autosave debounce; this is
+        /// the synchronous flush, called from the Save button and from FormClosing so
+        /// the last drag is never lost on shutdown. Internal (not private) so tests can
+        /// trigger it without simulating a click.</summary>
         internal void Save()
         {
             _settings.VibrancePercent = VibranceSlider.Value;
@@ -241,9 +264,25 @@ namespace VibranceHud
             _store.Save(_settings);
         }
 
+        /// <summary>Force-flush any pending debounced autosave before the form goes away,
+        /// so a drag that fired 50ms before the user clicked Close still lands on disk.
+        /// Also flags the manual override so the coordinator skips re-applying the saved
+        /// game profile next launch.</summary>
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // The debounce timer may not have fired yet on a drag-then-immediately-close
+            // sequence. Trigger() schedules a delayed call; we want it now.
+            Save();
+            base.OnFormClosing(e);
+        }
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _timer?.Dispose();
+            if (disposing)
+            {
+                _timer?.Dispose();
+                _autosaveDebounce.Dispose();
+            }
             base.Dispose(disposing);
         }
     }

@@ -31,4 +31,4 @@ The app talks directly to your NVIDIA driver, so it needs an actual GPU with the
 - `bin\Release\net8.0-windows\win-x64\PlexusX.exe` - the app
 - `installer\PlexusX-Setup-0.7.2.exe` - the installer
 - `docs\` - design notes, releases, roadmap
-- `docs\superpowers\` - internal stuff I wrote for myself, ignore it
+- `docs\design\` - internal stuff I wrote for myself, ignore it

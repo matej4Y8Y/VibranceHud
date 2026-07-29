@@ -11,7 +11,7 @@ namespace VibranceHud
     /// </summary>
     public static class ThemeCatalog
     {
-        public const string DefaultName = "Violet";
+        public const string DefaultName = "Light";
 
         private static ThemePalette Dark(string name, Color accent, Color accentDim,
             Color nodeA, Color nodeB, Color line) => new(
@@ -27,21 +27,25 @@ namespace VibranceHud
             Accent: accent, AccentDim: accentDim,
             PlexusNodeA: nodeA, PlexusNodeB: nodeB, PlexusLine: line);
 
+        // Plexus-style: pure white surface, near-black text, subtle grey borders, accent
+        // is pure black. No purple, no gradients, no decoration. The dark themes (Violet,
+        // Emerald, etc.) keep the matte-black base but add a colored accent stripe; Light
+        // is the basic monochrome look that matches the Plexus brand spec.
         private static readonly ThemePalette Light = new(
             "Light", IsLight: true,
-            Background: Color.FromArgb(244, 244, 247),
+            Background: Color.FromArgb(252, 252, 253),
             Surface: Color.FromArgb(255, 255, 255),
-            SurfaceHover: Color.FromArgb(230, 230, 236),
-            Border: Color.FromArgb(203, 203, 212),
+            SurfaceHover: Color.FromArgb(240, 240, 244),
+            Border: Color.FromArgb(218, 218, 224),
             GlassFill: Color.FromArgb(255, 255, 255),
-            GlassEdge: Color.FromArgb(120, 120, 132),
-            Text: Color.FromArgb(20, 20, 26),
-            TextDim: Color.FromArgb(108, 108, 120),
-            Accent: Color.FromArgb(26, 26, 32),
-            AccentDim: Color.FromArgb(66, 66, 76),
-            PlexusNodeA: Color.FromArgb(70, 70, 80),
-            PlexusNodeB: Color.FromArgb(120, 120, 132),
-            PlexusLine: Color.FromArgb(95, 95, 106));
+            GlassEdge: Color.FromArgb(180, 180, 188),
+            Text: Color.FromArgb(16, 16, 22),
+            TextDim: Color.FromArgb(96, 96, 108),
+            Accent: Color.FromArgb(0, 0, 0),
+            AccentDim: Color.FromArgb(48, 48, 56),
+            PlexusNodeA: Color.FromArgb(60, 60, 68),
+            PlexusNodeB: Color.FromArgb(110, 110, 120),
+            PlexusLine: Color.FromArgb(170, 170, 180));
 
         public const string CustomName = "Custom";
 

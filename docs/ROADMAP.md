@@ -67,4 +67,4 @@ These are blocking. Don't take a single cent until they're done.
 7. Beta with 5–10 friends.
 8. Public launch.
 
-Roughly 50–80 hours of your time across the items, mostly the legal/business side Claude can't do for you.
+Roughly 50–80 hours across the items, mostly the legal/business side.

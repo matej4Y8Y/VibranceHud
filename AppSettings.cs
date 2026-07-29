@@ -46,6 +46,17 @@ namespace VibranceHud
         /// isn't hidden from the user. See <see cref="OverlayModeResolver"/>.</summary>
         public OverlayMode OverlayMode { get; set; } = OverlayMode.Dx;
 
+        /// <summary>Categorised reason DX11 init failed last launch. Used by the
+        /// Settings page to show an actionable message instead of "Fallback
+        /// mode" with no context. Persisted so the warning survives a restart
+        /// (the user may not look at Settings until after the failure).</summary>
+        public DxInitFailureKind DxFailure { get; set; } = DxInitFailureKind.None;
+
+        /// <summary>Short, human-readable label for the last DX11 failure
+        /// ("Display driver doesn't support DX11" etc.). Kept short because
+        /// it lives in a single-line Settings card alongside the kind.</summary>
+        public string DxFailureMessage { get; set; } = "";
+
         // ---- Custom image theme ----
 
         /// <summary>File name of the background image inside the app's own data folder.
@@ -148,5 +159,29 @@ namespace VibranceHud
         /// Range: 0x30..0x5A (top-row 0-9, A-Z), 0x60..0x87 (numpad 0-9), 0x70..0x7B (F1-F12),
         /// plus a handful of named keys.</summary>
         public uint HotkeyVirtualKey { get; set; } = HotkeyKeys.V;
+
+        // ---- Main window hotkey (separate from the quick-popup hotkey) ----
+
+        /// <summary>Whether the user opted into a second global hotkey that opens the full
+        /// main window. Off by default so existing users don't get a surprise binding on
+        /// first launch after upgrade. The Vibrance page's "Main window" hotkey picker
+        /// sets this to true the moment the user picks a combo.</summary>
+        public bool MainHotkeyEnabled { get; set; }
+
+        /// <summary>Modifier mask for the main-window hotkey. Default: Ctrl+Shift (distinct
+        /// from the popup's Ctrl+Alt+V default so the two never collide out of the box).</summary>
+        public uint MainHotkeyModifierMask { get; set; } = HotkeyModifiers.Control | HotkeyModifiers.Shift;
+
+        /// <summary>Virtual key for the main-window hotkey. Default: M (Ctrl+Shift+M).
+        /// Zero means "no binding" until the user picks one.</summary>
+        public uint MainHotkeyVirtualKey { get; set; } = HotkeyKeys.M;
+
+        /// <summary>True when the user has manually tweaked values from the popup while a
+        /// game profile is currently applied. The auto-apply coordinator consults this
+        /// flag so a fresh launch of the same game doesn't immediately clobber the user's
+        /// last manual override - the user has to opt back into the saved profile (or the
+        /// flag has to expire). Cleared on PlexusX shutdown so it never persists across
+        /// reboots.</summary>
+        public bool ManualOverrideActive { get; set; }
     }
 }
