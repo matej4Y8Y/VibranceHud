@@ -5,7 +5,15 @@ namespace VibranceHud
 {
     /// <summary>A published release on GitHub, as far as the updater cares.</summary>
     /// <param name="Notes">The release body ("what's new"), shown after updating.</param>
-    public sealed record ReleaseInfo(Version Version, string Tag, string InstallerUrl, string PageUrl, string Notes);
+    public sealed record ReleaseInfo(
+        Version Version,
+        string Tag,
+        string InstallerUrl,
+        string PageUrl,
+        string Notes,
+        string? Sha256 = null,
+        string? MirrorUrl = null,
+        string? RawMirrorUrl = null);
 
     /// <summary>
     /// Parses GitHub's "latest release" JSON and decides whether it's newer than what's

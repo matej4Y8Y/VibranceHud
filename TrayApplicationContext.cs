@@ -28,6 +28,7 @@ namespace VibranceHud
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
         private readonly NotifyIcon _trayIcon;
+        private BackgroundUpdateChecker? _backgroundChecker;
         private readonly HotkeyWindow _hotkeyWindow;
         private readonly IVibranceController _controller;
         private readonly ISaturationOverlay _overlay;
@@ -168,6 +169,12 @@ namespace VibranceHud
             _splash = new SplashForm();
             _splash.Shown += async (s, e) => await RunStartupAsync();
             _splash.Show();
+
+            // Background update checker - polls every 6 hours, notifies via systray
+            // balloon when a new version appears. Doesn't auto-install (user picks
+            // the moment via the tray notification).
+            _backgroundChecker = new BackgroundUpdateChecker(_settings, _store, _trayIcon);
+            _backgroundChecker.Start();
         }
 
 
@@ -283,7 +290,7 @@ namespace VibranceHud
             string label = $"Downloading update {update.Version}…";
             _splash.SetStatus(label, 0);
 
-            var file = await UpdateService.DownloadAsync(update, p => _splash.SetStatus(label, p));
+            var file = await UpdateService.DownloadAndStageAsync(update, new Progress<int>(p => _splash.SetStatus(label, p)));
             if (file == null) return false; // download failed - carry on into the app
 
             // Stash the installer path so the NEXT launch picks it up. Running it from
