@@ -223,12 +223,15 @@ namespace VibranceHud
             // reliable way to self-update - launching the installer from a running
             // PlexusX (the previous design) silently fails on Windows because the OS
             // blocks silent installs from a live parent.
-            if (UpdateService.RunPendingUpdateIfAny(_settings))
+            // Async path: verifies against GitHub releases/latest before launching the
+            // installer, so we never silently downgrade the user to an older build that
+            // happened to be lying around in %TEMP%.
+            if (await UpdateService.RunPendingUpdateIfAnyAsync(_settings))
             {
-        // Installer is running and will close us shortly. Hand control back to
-        // the message loop so it has time to do its work before we shut down.
-        Application.Exit();
-        return;
+                // Installer is running and will close us shortly. Hand control back to
+                // the message loop so it has time to do its work before we shut down.
+                Application.Exit();
+                return;
             }
 
             _splash.SetStatus("Checking for updates…");

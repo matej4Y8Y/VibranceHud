@@ -31,3 +31,10 @@ installer/PlexusX-Setup-0.7.2.exe
 docs/qa/screenshots/
 *.png
 !brand/**/*.png
+
+# Debug logs (CEF browser, NVIDIA app, etc.) - never commit
+debug.log
+*.log
+
+# Tools/KeyGenerator embedded copies - rebuilt from License/*.cs on demand
+Tools/KeyGenerator/LicenseEmbed/

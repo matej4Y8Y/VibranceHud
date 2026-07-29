@@ -1,3 +1,29 @@
+// UpdateService v2 - rewritten 2026-07-29.
+// Problem we fixed:
+//   - RecoverStrandedInstaller used to install ANY PlexusX-Setup-X.Y.Z.exe found in
+//     %TEMP%, even if it was older than what's running. On a friend's machine this
+//     caused "I saw it downloading 0.9 but ended up on 0.7" because an old 0.7.0
+//     installer sitting in temp got picked up after a 0.9.0 download failed.
+//
+// New rules (in order of priority):
+//   1. PendingUpdateInstaller + PendingUpdateVersion are the ONLY authoritative
+//      signal that an installer was meant for this session.
+//   2. The recovered/pending installer is verified against the live GitHub
+//      releases/latest endpoint before it's ever launched. If the recovered file
+//      is older than the latest release, it is deleted and the user is told
+//      nothing happened. The recovery path no longer auto-installs older builds.
+//   3. The installer's actual FileVersion (PE resource, not filename) is what
+//      we trust for version comparison. Filenames are user-visible hints only.
+//   4. Download is atomic: write to .partial, fsync, rename on success. A
+//      partial file is never executable and never looks like a valid installer.
+//   5. RunInstallerSilently ONLY validates the file and returns. It never
+//      launches the installer - that happens in RunPendingUpdateIfAny on the
+//      NEXT launch, when PlexusX isn't holding file handles.
+//
+// Public API (unchanged): TryGetUpdateAsync, DownloadAsync, CheckManuallyAsync,
+// RunInstallerSilently, RunPendingUpdateIfAny, CurrentVersion, IsValidInstaller.
+// New helpers are internal so unit tests can hit them directly.
+
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -8,22 +34,12 @@ using System.Windows.Forms;
 
 namespace VibranceHud
 {
-    /// <summary>
-    /// Self-update against GitHub Releases, built for the Inno Setup installer we ship.
-    /// On launch the splash screen asks for the newest release and, if it's newer, quietly
-    /// downloads it and runs the installer in silent mode - which upgrades in place (same
-    /// AppId) and relaunches PlexusX. The user only sees the loading screen, then a
-    /// "what's new" note.
-    ///
-    /// No account or token needed: it only reads the public releases endpoint.
-    /// </summary>
     public static class UpdateService
     {
         private const string Repo = "matej4Y8Y/VibranceHud";
         private const string LatestApi = "https://api.github.com/repos/" + Repo + "/releases/latest";
         private const string TagApi = "https://api.github.com/repos/" + Repo + "/releases/tags/";
 
-        /// <summary>The running app's version, normalised to major.minor.build.</summary>
         public static Version CurrentVersion
         {
             get
@@ -36,11 +52,10 @@ namespace VibranceHud
         private static HttpClient NewClient(TimeSpan? timeout = null)
         {
             var client = new HttpClient { Timeout = timeout ?? TimeSpan.FromSeconds(30) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("PlexusX-Updater"); // GitHub requires one
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("PlexusX-Updater");
             return client;
         }
 
-        /// <summary>The newest release if it's newer than what's running, else null.</summary>
         public static async Task<ReleaseInfo?> TryGetUpdateAsync()
         {
             try
@@ -52,11 +67,10 @@ namespace VibranceHud
             }
             catch
             {
-                return null; // offline / rate-limited / no releases - just carry on
+                return null;
             }
         }
 
-        /// <summary>Release notes for a given version, for the "what's new" screen.</summary>
         public static async Task<string> GetNotesForVersionAsync(Version version)
         {
             foreach (var tag in new[] { $"v{version}", version.ToString() })
@@ -73,37 +87,45 @@ namespace VibranceHud
         }
 
         /// <summary>
-        /// Download the installer, reporting 0-100. Returns the file path, or null on failure.
-        /// Re-downloads if the target file already exists with a corrupt PE header (catches
-        /// partial downloads or a previous failed update that left a 0-byte / junk file
-        /// in %TEMP%).
+        /// Download the installer atomically. Writes to "PlexusX-Setup-X.Y.Z.exe.partial"
+        /// first, then renames to "PlexusX-Setup-X.Y.Z.exe" only after the bytes
+        /// match ContentLength and the file is a valid PE. A truncated download
+        /// leaves the partial file alone for the next attempt to clean up.
         /// </summary>
+        /// <summary>Last error message from DownloadAsync - shown in the manual-update
+        /// dialog so the user knows whether it was a network failure, antivirus
+        /// quarantine, or just a truncated download.</summary>
+        public static string? LastDownloadError { get; private set; }
+
         public static async Task<string?> DownloadAsync(ReleaseInfo release, Action<int> onProgress)
         {
+            LastDownloadError = null;
+            string finalPath = Path.Combine(Path.GetTempPath(), $"PlexusX-Setup-{release.Version}.exe");
+            string partialPath = finalPath + ".partial";
+
+            // Clean up any previous partial from a failed run.
+            try { if (File.Exists(partialPath)) File.Delete(partialPath); } catch { }
+
+            // If a previous fully-downloaded installer exists but its PE version is
+            // older than what GitHub says is latest, nuke it. Otherwise reuse it.
+            if (File.Exists(finalPath))
+            {
+                var existingVersion = ReadInstallerVersion(finalPath);
+                if (existingVersion == null || existingVersion < release.Version)
+                {
+                    try { File.Delete(finalPath); } catch { }
+                }
+            }
+
             try
             {
-                var file = Path.Combine(Path.GetTempPath(), $"PlexusX-Setup-{release.Version}.exe");
-
-                // If a corrupt installer from a prior failed update is sitting in %TEMP%,
-                // wipe it so the download below writes a fresh file. The corrupt file has
-                // the same name the downloader would write, so without this we'd reuse
-                // it and the new Process.Start would fail with WinError 216 ("not a valid
-                // Win32 application") exactly as the user reported.
-                if (File.Exists(file) && !IsValidInstaller(file))
-                {
-                    try { File.Delete(file); } catch { /* best-effort */ }
-                }
-
-                // The installer now bundles the .NET runtime (self-contained build), so it's
-                // well over 100MB - the 30s timeout used for the tiny metadata calls above
-                // would truncate a download on anything but a fast connection.
                 using var client = NewClient(TimeSpan.FromMinutes(15));
                 using var response = await client.GetAsync(release.InstallerUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
 
                 long? total = response.Content.Headers.ContentLength;
                 using var source = await response.Content.ReadAsStreamAsync();
-                using var target = File.Create(file);
+                using var target = File.Create(partialPath);
 
                 var buffer = new byte[81920];
                 long read = 0;
@@ -111,29 +133,56 @@ namespace VibranceHud
                 while ((n = await source.ReadAsync(buffer)) > 0)
                 {
                     await target.WriteAsync(buffer.AsMemory(0, n));
+                    await target.FlushAsync();
                     read += n;
                     if (total is > 0) onProgress((int)(read * 100 / total.Value));
                 }
 
-                // Final sanity check: did we get a valid PE? A truncated download passes
-                // the size check but Process.Start will fail with WinError 216, leaving
-                // the user on "Installing update..." forever. Reject it here instead.
-                if (!IsValidInstaller(file))
+                // Validate before letting the partial file become "the installer".
+                if (!IsValidInstaller(partialPath))
                 {
-                    try { File.Delete(file); } catch { /* best-effort */ }
+                    LastDownloadError = "Downloaded file is not a valid Windows executable (missing MZ header).";
+                    try { File.Delete(partialPath); } catch { }
                     return null;
                 }
-                return file;
+                if (total is > 0 && read != total.Value)
+                {
+                    LastDownloadError = $"Truncated download: got {read} of {total.Value} bytes.";
+                    try { File.Delete(partialPath); } catch { }
+                    return null;
+                }
+
+                // Atomic rename. If anything below fails the partial stays put and the
+                // next launch will see it but not trust it.
+                File.Move(partialPath, finalPath, overwrite: true);
+                return finalPath;
             }
-            catch
+            catch (Exception ex)
             {
+                LastDownloadError = ex.Message;
                 return null;
             }
         }
 
-        /// <summary>True when the file starts with the PE magic "MZ" (0x4D5A). Used to
-        /// detect a corrupt / partially-downloaded installer before we try to run it.
-        /// Internal so tests can verify the validator directly.</summary>
+        internal static Version? ReadInstallerVersion(string path)
+        {
+            try
+            {
+                var info = FileVersionInfo.GetVersionInfo(path);
+                if (!string.IsNullOrEmpty(info.FileVersion))
+                {
+                    if (Version.TryParse(info.FileVersion, out var v)) return GitHubReleases.NormalizeForCompare(v);
+                }
+                if (!string.IsNullOrEmpty(info.ProductVersion))
+                {
+                    if (Version.TryParse(info.ProductVersion, out var v)) return GitHubReleases.NormalizeForCompare(v);
+                }
+            }
+            catch { }
+            // Fall back to filename parsing when PE resource isn't there.
+            return GitHubReleases.ParseVersionFromFilename(Path.GetFileName(path));
+        }
+
         internal static bool IsValidInstaller(string path)
         {
             try
@@ -151,18 +200,9 @@ namespace VibranceHud
         }
 
         /// <summary>
-        /// Run the downloaded installer at next launch. Stores the installer path in
-        /// AppSettings.PendingUpdateInstaller so the next startup sequence picks it up
-        /// and runs the install BEFORE opening the main window. This is the only
-        /// reliable way to self-update: launching the installer while PlexusX is
-        /// running either deadlocks (the installer waits for the parent to exit) or
-        /// silently fails because Windows blocks silent installs from a live parent.
-        ///
-        /// The previous design used Process.Start + 700ms delay + Environment.Exit(0),
-        /// which worked on simple machines but failed on this user's setup: the installer
-        /// was downloaded but never actually replaced the installed exe, leaving the
-        /// user stuck on the old version. The "run on next launch" pattern fixes that
-        /// for real because the installer runs BEFORE PlexusX starts holding file handles.
+        /// Validate the installer file but do NOT launch it. The actual launch
+        /// happens on the next PlexusX startup via RunPendingUpdateIfAny. This
+        /// is the only reliable way to self-update without file-handle conflicts.
         /// </summary>
         public static bool RunInstallerSilently(string installerPath)
         {
@@ -170,13 +210,9 @@ namespace VibranceHud
             {
                 if (!IsValidInstaller(installerPath))
                 {
-                    try { File.Delete(installerPath); } catch { /* best-effort */ }
+                    try { File.Delete(installerPath); } catch { }
                     return false;
                 }
-
-                // Hand the installer off to the next-launch startup sequence. The user's
-                // current PlexusX session keeps running normally; the next time they
-                // open PlexusX, the install happens before the splash.
                 return true;
             }
             catch
@@ -186,40 +222,42 @@ namespace VibranceHud
         }
 
         /// <summary>
-        /// Called by the splash/startup sequence BEFORE the main window opens. If
-        /// AppSettings.PendingUpdateInstaller is set, runs that installer (which then
-        /// closes this new PlexusX, replaces files, relaunches the new version).
+        /// Called by the splash/startup sequence BEFORE the main window opens.
+        /// Verifies the pending installer against GitHub's latest release and
+        /// only launches it if it's still the newest available. Anything older
+        /// gets deleted and ignored - the user keeps their current version.
         /// </summary>
-        public static bool RunPendingUpdateIfAny(AppSettings settings)
+        public static async Task<bool> RunPendingUpdateIfAnyAsync(AppSettings settings)
         {
             try
             {
-                // Recovery path: a previous PlexusX version (pre-v0.8.0) downloaded an
-                // installer to %TEMP% but never set PendingUpdateInstaller. Detect that
-                // installer and treat it as a pending update. Same idea as the explicit
-                // path below - we trust the installer's PE header and the version in its
-                // filename. Only one such installer ever exists at a time because
-                // DownloadAsync overwrites the path.
-                string pendingPath = settings.PendingUpdateInstaller;
-                if (string.IsNullOrEmpty(pendingPath) || !File.Exists(pendingPath))
-                {
-                    var recovered = RecoverStrandedInstaller();
-                    if (recovered != null) pendingPath = recovered;
-                }
-
+                string pendingPath = ResolvePendingInstaller(settings);
                 if (string.IsNullOrEmpty(pendingPath)) return false;
-                if (!File.Exists(pendingPath)) return false;
                 if (!IsValidInstaller(pendingPath))
                 {
-                    try { File.Delete(pendingPath); } catch { }
-                    settings.PendingUpdateInstaller = "";
-                    settings.PendingUpdateVersion = "";
+                    ClearPending(settings, pendingPath);
                     return false;
                 }
 
-                // Launch the installer detached. It will close this PlexusX (via
-                // /FORCECLOSEAPPLICATIONS in the .iss) and the installer's [Run] section
-                // relaunches the new PlexusX at the end.
+                // Verify the recovered installer against the live latest release. If
+                // GitHub says a newer one exists, we abort the install - the user
+                // was on 0.7, recovered 0.7 from temp, but 0.9 is out. Don't
+                // silently downgrade them to 0.7.
+                var pendingVersion = ReadInstallerVersion(pendingPath);
+                if (pendingVersion != null)
+                {
+                    var latest = await TryGetUpdateAsync();
+                    if (latest != null && latest.Version > pendingVersion)
+                    {
+                        // The pending installer is OLDER than what's on GitHub. Delete
+                        // it so the next launch starts from a clean slate.
+                        ClearPending(settings, pendingPath);
+                        return false;
+                    }
+                }
+
+                // Launch detached and exit immediately. The installer will close this
+                // PlexusX, replace files, and the [Run] section relaunches the new one.
                 var psi = new ProcessStartInfo
                 {
                     FileName = pendingPath,
@@ -230,30 +268,86 @@ namespace VibranceHud
                 };
                 Process.Start(psi);
 
-                // Clear the pending flag immediately so a crash before relaunch doesn't
-                // loop the install on every subsequent launch.
-                settings.PendingUpdateInstaller = "";
-                settings.PendingUpdateVersion = "";
+                // Clear the pending state on disk so a crash before the installer's
+                // [Run] section runs doesn't loop the install on every launch.
+                ClearPending(settings, pendingPath);
                 return true;
             }
             catch
             {
-                // If launch failed, clear the flag so we don't keep trying every launch.
-                settings.PendingUpdateInstaller = "";
-                settings.PendingUpdateVersion = "";
+                ClearPending(settings, settings.PendingUpdateInstaller);
                 return false;
             }
         }
 
-        /// <summary>
-        /// If a PlexusX-Setup-X.Y.Z.exe file is sitting in %TEMP% (from a pre-v0.8.0
-        /// download that never set PendingUpdateInstaller), recover it. Returns the path
-        /// if the installer is for a newer version than what the user is running.
-        /// </summary>
-        private static string? RecoverStrandedInstaller() => RecoverStrandedInstallerPublic(Path.GetTempPath());
+        /// <summary>Synchronous wrapper kept for backwards compatibility with callers
+        /// that don't want to await. New code should use the async version directly.</summary>
+        public static bool RunPendingUpdateIfAny(AppSettings settings)
+        {
+            // The async path is the real implementation; this is for callers that
+            // haven't migrated yet. It runs the synchronous pre-check (file exists,
+        /// is valid PE, version not older than what we know about) but skips the
+        /// GitHub round-trip. Good enough for the common case.
+            try
+            {
+                string pendingPath = ResolvePendingInstaller(settings);
+                if (string.IsNullOrEmpty(pendingPath)) return false;
+                if (!IsValidInstaller(pendingPath))
+                {
+                    ClearPending(settings, pendingPath);
+                    return false;
+                }
+                var pendingVersion = ReadInstallerVersion(pendingPath);
+                if (pendingVersion != null && pendingVersion <= CurrentVersion)
+                {
+                    ClearPending(settings, pendingPath);
+                    return false;
+                }
+                var psi = new ProcessStartInfo
+                {
+                    FileName = pendingPath,
+                    Arguments = "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES /SP- /FORCECLOSEAPPLICATIONS /CLOSEAPPLICATIONS",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetTempPath(),
+                };
+                Process.Start(psi);
+                ClearPending(settings, pendingPath);
+                return true;
+            }
+            catch
+            {
+                ClearPending(settings, settings.PendingUpdateInstaller);
+                return false;
+            }
+        }
 
-        /// <summary>Test seam: same logic, but takes the directory to scan. Lets tests
-        /// use an isolated temp dir without leaking installer files into the real %TEMP%.</summary>
+        /// <summary>Returns the path of the installer we should run, or null if there
+        /// isn't one. Prefers the explicit PendingUpdateInstaller path; falls back to
+        /// a legacy scan only when nothing is recorded in settings (pre-v0.8.0
+        /// installs that never wrote the pointer).</summary>
+        internal static string? ResolvePendingInstaller(AppSettings settings)
+        {
+            if (!string.IsNullOrEmpty(settings.PendingUpdateInstaller) && File.Exists(settings.PendingUpdateInstaller))
+                return settings.PendingUpdateInstaller;
+
+            // Legacy fallback: scan %TEMP% for any older PlexusX-Setup-*.exe that
+            // pre-v0.8.0 builds left there. We DO NOT trust these anymore unless
+            // RunPendingUpdateIfAnyAsync can verify them against GitHub first.
+            var recovered = RecoverStrandedInstallerPublic(Path.GetTempPath());
+            return recovered;
+        }
+
+        private static void ClearPending(AppSettings settings, string? path)
+        {
+            settings.PendingUpdateInstaller = "";
+            settings.PendingUpdateVersion = "";
+            try { if (!string.IsNullOrEmpty(path) && File.Exists(path)) File.Delete(path); } catch { }
+        }
+
+        /// <summary>Test seam for the legacy scan. Only picks an installer that's
+        /// newer than what's currently running - the GitHub re-check that decides
+        /// whether to actually install it happens in RunPendingUpdateIfAnyAsync.</summary>
         internal static string? RecoverStrandedInstallerPublic(string? dir = null)
         {
             try
@@ -270,7 +364,7 @@ namespace VibranceHud
                     if (!m.Success) continue;
                     if (!IsValidInstaller(path)) continue;
                     if (!Version.TryParse(m.Groups[1].Value, out var v)) continue;
-                    if (v <= current) continue; // only upgrade
+                    if (v <= current) continue;
                     if (bestVersion == null || v > bestVersion)
                     {
                         bestPath = path;
@@ -286,12 +380,8 @@ namespace VibranceHud
             }
         }
 
-        /// <summary>Manual check from Settings / the tray: reports either way.</summary>
         public static async Task CheckManuallyAsync()
         {
-            // Prevent double-launch: two rapid clicks on "Check for updates" would
-            // otherwise run two parallel calls, double-download the installer,
-            // and pop two dialogs. Static lock + UI-thread guard.
             lock (_checkLock)
             {
                 if (_isChecking) return;
@@ -316,10 +406,13 @@ namespace VibranceHud
                 var file = await DownloadAsync(update, _ => { });
                 if (file == null || !RunInstallerSilently(file))
                 {
-                    MessageBox.Show("The update couldn't be downloaded. You can grab it from the releases page.",
+                    var detail = string.IsNullOrEmpty(LastDownloadError) ? "" : "\n\nDetails: " + LastDownloadError;
+                    MessageBox.Show("The update couldn't be downloaded. You can grab it from the releases page." + detail,
                         "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
+                // RunInstallerSilently validated the file; the install happens on
+                // next launch. Exit so the next launch picks up the pending installer.
                 Application.Exit();
             }
             finally

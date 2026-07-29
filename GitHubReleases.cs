@@ -87,5 +87,9 @@ namespace VibranceHud
         /// <summary>Collapse to major.minor.build so 0.2 and 0.2.0.0 compare equal.</summary>
         private static Version Normalize(Version v) =>
             new(v.Major, v.Minor, Math.Max(v.Build, 0));
+
+        /// <summary>Public version of Normalize for callers that need a comparable Version
+        /// (UpdateService.ReadInstallerVersion, etc.). -1 build means "no build component".</summary>
+        public static Version NormalizeForCompare(Version v) => Normalize(v);
     }
 }
