@@ -141,6 +141,7 @@ namespace VibranceHud.License
                 LicenseState.Expired => "⚠ Current license expired. Enter a new key below.",
                 LicenseState.WrongMachine => "⚠ Current license is bound to a different machine. Enter a new key.",
                 LicenseState.Tampered => "⚠ License file is corrupted. Enter a valid key.",
+                LicenseState.Revoked => "⚠ This key has been deactivated by the developer. Contact support if you believe this is a mistake.",
                 LicenseState.DebuggerDetected => "⚠ Debugger detected. Close it and try again.",
                 _ => "Enter the key you received from the developer (looks like AAAA-R-F-XXXXXXXX-XXXXXXXX).",
             };
@@ -171,6 +172,10 @@ namespace VibranceHud.License
                     break;
                 case LicenseState.Tampered:
                     _statusLabel.Text = "✗ Key rejected (signature mismatch).";
+                    _statusLabel.ForeColor = Theme.TextDim;
+                    break;
+                case LicenseState.Revoked:
+                    _statusLabel.Text = "✗ This key has been deactivated and can no longer be used.";
                     _statusLabel.ForeColor = Theme.TextDim;
                     break;
                 default:

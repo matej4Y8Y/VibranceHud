@@ -241,6 +241,25 @@ namespace VibranceHud
                 return;
             }
 
+            // Pull the latest revocation list while we're already online for the update
+            // check. LicenseService.Load() (which ran before this window existed) used the
+            // cached copy, so a key revoked since the last launch is only caught here -
+            // hence the re-check below rather than waiting for the next start.
+            if (await RevocationService.RefreshAsync() && _license.HasValidLicense)
+            {
+                _license.Load();
+                if (_license.State == LicenseState.Revoked)
+                {
+                    _splash.Close();
+                    MessageBox.Show(
+                        "This license key has been deactivated by the developer.\n\n" +
+                        "If you believe this is a mistake, please get in touch.",
+                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    ExitThread();
+                    return;
+                }
+            }
+
             _splash.SetStatus("Checking for updates…");
             var update = await UpdateService.TryGetUpdateAsync();
 

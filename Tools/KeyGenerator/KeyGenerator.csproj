@@ -24,6 +24,9 @@
     <Compile Include="..\..\License\LicenseKeyDerivation.cs" Link="License\LicenseKeyDerivation.cs" />
     <Compile Include="..\..\License\LicenseRecord.cs" Link="License\LicenseRecord.cs" />
     <Compile Include="..\..\License\LicenseState.cs" Link="License\LicenseState.cs" />
+    <!-- Linked for the same reason: the tool writes the revocation list the app reads,
+         so both sides must hash serials identically. -->
+    <Compile Include="..\..\License\RevocationList.cs" Link="License\RevocationList.cs" />
 
     <Compile Include="Program.cs" />
   </ItemGroup>

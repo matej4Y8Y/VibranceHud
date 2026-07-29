@@ -26,5 +26,11 @@ namespace VibranceHud.License
 
         /// <summary>A debugger or known reverse-engineering tool is attached.</summary>
         DebuggerDetected,
+
+        /// <summary>The key's serial appears on the developer-maintained revocation
+        /// list (see <see cref="RevocationList"/>). Distinct from Tampered/InvalidKey -
+        /// the signature is genuinely valid, the developer chose to cut this specific
+        /// key off after the fact.</summary>
+        Revoked,
     }
 }

@@ -149,6 +149,13 @@ namespace VibranceHud.License
                 return;
             }
 
+            if (RevocationList.IsRevoked(payload.Serial, RevocationService.LoadCached()))
+            {
+                LogFailure($"serial is on the revocation list: {payload.Serial}");
+                State = LicenseState.Revoked;
+                return;
+            }
+
             Current = payload;
             KeyText = record.KeyText;
             State = LicenseState.Valid;
@@ -166,6 +173,15 @@ namespace VibranceHud.License
             if (!LicenseKeyDerivation.VerifySignature(key.SignedPayload, key.Checksum, masterKey))
             {
                 return LicenseState.InvalidKey;
+            }
+
+            // Block a revoked key at activation too, not just on load - otherwise a
+            // revoked key still "works" once on a fresh machine (it would write a valid
+            // license file, and only get caught on the NEXT launch).
+            if (RevocationList.IsRevoked(key.Serial, RevocationService.LoadCached()))
+            {
+                LogFailure($"activation refused, serial revoked: {key.Serial}");
+                return LicenseState.Revoked;
             }
 
             var hw = LicenseKeyDerivation.GetHardwareFingerprintHash();
