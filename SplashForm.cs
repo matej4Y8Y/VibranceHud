@@ -141,7 +141,15 @@ namespace VibranceHud
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _timer?.Dispose();
+            if (disposing)
+            {
+                // Stop before Dispose: Dispose alone doesn't discard a WM_TIMER already
+                // sitting in the message queue, and every tick handler here touches the
+                // form, so a tick landing after teardown surfaces as a crash dialog on
+                // what was a clean exit.
+                _timer?.Stop();
+                _timer?.Dispose();
+            }
             base.Dispose(disposing);
         }
     }

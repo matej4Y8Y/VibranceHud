@@ -280,6 +280,10 @@ namespace VibranceHud
         {
             if (disposing)
             {
+                // Stop before Dispose - a queued WM_TIMER is still dispatched, and this
+                // popup is created and destroyed repeatedly via the global hotkey, so it's
+                // the most likely place to catch a tick mid-teardown.
+                _timer?.Stop();
                 _timer?.Dispose();
                 _autosaveDebounce.Dispose();
             }

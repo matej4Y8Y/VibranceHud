@@ -17,11 +17,20 @@ namespace VibranceHud.License
 {
     public sealed class LicenseService
     {
-        private static readonly string LicenseDir = Path.Combine(
+        private static string DefaultLicenseDir => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PlexusX");
 
-        private static readonly string LicensePath = Path.Combine(LicenseDir, "license.json");
+        // Per-instance rather than static so a test can point at a temp folder.
+        //
+        // These used to be static readonly paths to the one real licence file, so every test
+        // that activated or deactivated a licence wrote to - and Deactivate() outright
+        // DELETED - the developer's own licence. Running the suite silently signed you out of
+        // your own app, and left the next launch sitting on the activation dialog. That cost
+        // real debugging time more than once, because a stale settings.json then looked like
+        // a display-engine bug.
+        private readonly string _licenseDir;
+        private readonly string _licensePath;
 
         private static readonly string[] ForbiddenProcesses = new[]
         {
@@ -48,8 +57,15 @@ namespace VibranceHud.License
             }
         }
 
-        public LicenseService()
+        public LicenseService() : this(null) { }
+
+        /// <param name="licenseDir">Where license.json lives. Null uses the real
+        /// %LocalAppData%\PlexusX. Tests pass a temp directory so they can't clobber the
+        /// developer's own licence.</param>
+        public LicenseService(string? licenseDir)
         {
+            _licenseDir = licenseDir ?? DefaultLicenseDir;
+            _licensePath = Path.Combine(_licenseDir, "license.json");
             Load();
         }
 
@@ -85,7 +101,7 @@ namespace VibranceHud.License
                 catch { /* ignore - we don't want to crash the app for a missing process */ }
             }
 
-            if (!File.Exists(LicensePath))
+            if (!File.Exists(_licensePath))
             {
                 return;
             }
@@ -93,7 +109,7 @@ namespace VibranceHud.License
             LicenseRecord? record;
             try
             {
-                var json = File.ReadAllText(LicensePath);
+                var json = File.ReadAllText(_licensePath);
                 record = JsonSerializer.Deserialize<LicenseRecord>(json);
             }
             catch (Exception ex)
@@ -208,7 +224,7 @@ namespace VibranceHud.License
 
             try
             {
-                Directory.CreateDirectory(LicenseDir);
+                Directory.CreateDirectory(_licenseDir);
                 var record = new LicenseRecord
                 {
                     Payload = payloadJson,
@@ -216,7 +232,7 @@ namespace VibranceHud.License
                     KeyText = key.Serial,
                 };
                 var json = JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(LicensePath, json);
+                File.WriteAllText(_licensePath, json);
             }
             catch (Exception ex)
             {
@@ -234,7 +250,7 @@ namespace VibranceHud.License
         {
             try
             {
-                if (File.Exists(LicensePath)) File.Delete(LicensePath);
+                if (File.Exists(_licensePath)) File.Delete(_licensePath);
             }
             catch { /* ignore */ }
             Current = null;
@@ -311,11 +327,11 @@ namespace VibranceHud.License
         }
 
 
-        private static void LogFailure(string reason)
+        private void LogFailure(string reason)
         {
             try
             {
-                var dir = Path.Combine(LicenseDir, "crashes");
+                var dir = Path.Combine(_licenseDir, "crashes");
                 Directory.CreateDirectory(dir);
                 var path = Path.Combine(dir, "license-fail.log");
                 File.AppendAllText(path,

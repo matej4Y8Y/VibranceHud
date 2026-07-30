@@ -16,6 +16,8 @@ namespace VibranceHud.Tests
     [Collection(LicenseTestCollection.Name)]
     public sealed class LicenseRevocationTests : IDisposable
     {
+        private readonly TempLicenseDir _dir = new();
+
         private static readonly string CachePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "PlexusX", "revocations-cache.json");
@@ -38,7 +40,8 @@ namespace VibranceHud.Tests
                 else if (File.Exists(CachePath)) File.Delete(CachePath);
             }
             catch { /* best-effort restore */ }
-            new LicenseService().Deactivate();
+            new LicenseService(_dir.Path).Deactivate();
+            _dir.Dispose();
         }
 
         private static string IssueKey(string tierMarker)
@@ -84,13 +87,13 @@ namespace VibranceHud.Tests
             var key = IssueKey("P");
             ClearCache();
 
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Valid, service.TryActivate(key));
 
             // Developer publishes a revocation; the app picks it up on next start.
             WriteCache(key);
 
-            var reloaded = new LicenseService();
+            var reloaded = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Revoked, reloaded.State);
             Assert.False(reloaded.HasValidLicense);
         }
@@ -103,7 +106,7 @@ namespace VibranceHud.Tests
             var key = IssueKey("P");
             WriteCache(key);
 
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Revoked, service.TryActivate(key));
             Assert.False(service.HasValidLicense);
         }
@@ -116,10 +119,10 @@ namespace VibranceHud.Tests
             var untouched = IssueKey("P");
             WriteCache(revoked);
 
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Valid, service.TryActivate(untouched));
 
-            Assert.Equal(LicenseState.Valid, new LicenseService().State);
+            Assert.Equal(LicenseState.Valid, new LicenseService(_dir.Path).State);
         }
 
         /// <summary>No cache on disk (first ever launch, or offline the whole time)
@@ -130,9 +133,9 @@ namespace VibranceHud.Tests
             var key = IssueKey("P");
             ClearCache();
 
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Valid, service.TryActivate(key));
-            Assert.Equal(LicenseState.Valid, new LicenseService().State);
+            Assert.Equal(LicenseState.Valid, new LicenseService(_dir.Path).State);
         }
 
         /// <summary>A corrupt/truncated cache must fail OPEN. Failing closed here would
@@ -142,13 +145,13 @@ namespace VibranceHud.Tests
         {
             var key = IssueKey("P");
             ClearCache();
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Valid, service.TryActivate(key));
 
             Directory.CreateDirectory(Path.GetDirectoryName(CachePath)!);
             File.WriteAllText(CachePath, "{ this is not valid json");
 
-            Assert.Equal(LicenseState.Valid, new LicenseService().State);
+            Assert.Equal(LicenseState.Valid, new LicenseService(_dir.Path).State);
         }
 
         /// <summary>An empty revocation list is the normal steady state - it must not
@@ -158,12 +161,12 @@ namespace VibranceHud.Tests
         {
             var key = IssueKey("P");
             ClearCache();
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             Assert.Equal(LicenseState.Valid, service.TryActivate(key));
 
             WriteCache(); // empty list
 
-            Assert.Equal(LicenseState.Valid, new LicenseService().State);
+            Assert.Equal(LicenseState.Valid, new LicenseService(_dir.Path).State);
         }
 
         /// <summary>Un-revoking (removing the hash again) restores access, so a mistaken
@@ -173,13 +176,13 @@ namespace VibranceHud.Tests
         {
             var key = IssueKey("P");
             ClearCache();
-            Assert.Equal(LicenseState.Valid, new LicenseService().TryActivate(key));
+            Assert.Equal(LicenseState.Valid, new LicenseService(_dir.Path).TryActivate(key));
 
             WriteCache(key);
-            Assert.Equal(LicenseState.Revoked, new LicenseService().State);
+            Assert.Equal(LicenseState.Revoked, new LicenseService(_dir.Path).State);
 
             WriteCache(); // developer removes it again
-            Assert.Equal(LicenseState.Valid, new LicenseService().State);
+            Assert.Equal(LicenseState.Valid, new LicenseService(_dir.Path).State);
         }
     }
 }

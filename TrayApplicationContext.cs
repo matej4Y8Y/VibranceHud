@@ -525,6 +525,16 @@ namespace VibranceHud
             _store.Save(_settings);
             (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
+
+            // Driver Digital Vibrance persists exactly like the gamma ramp above - it's a
+            // setting written into the NVIDIA driver, so closing (or uninstalling) PlexusX
+            // used to leave the user's monitor permanently altered. Measured on a real
+            // machine: DVC sat at 97 with the app shut down, against a driver default of 50.
+            // Beyond being untidy, it made diagnosis a mess - a leftover value looks exactly
+            // like the app still working, which is what made "it works on his PC" so
+            // confusing to chase down.
+            try { _controller.SetLevel(_controller.DefaultLevel); }
+            catch { /* no driver, or it went away - nothing to restore */ }
             _audioEdge?.Dispose(); // hands the user's volume back - never leave it ducked
             _trayIcon.Visible = false;
             _trayIcon.Dispose();

@@ -327,7 +327,13 @@ namespace VibranceHud
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _timer?.Dispose();
+            if (disposing)
+            {
+                // Stop before Dispose - see the note in SplashForm: a queued WM_TIMER still
+                // gets dispatched, and the tick handler touches this form.
+                _timer?.Stop();
+                _timer?.Dispose();
+            }
             base.Dispose(disposing);
         }
     }

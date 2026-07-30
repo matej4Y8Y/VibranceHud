@@ -218,16 +218,42 @@ namespace VibranceHud
             }
         }
 
+        /// <summary>
+        /// Per-scrollable-panel "user stopped scrolling" timers, kept so they can be torn down
+        /// with the window.
+        ///
+        /// These used to be local variables that only disposed themselves from inside their own
+        /// Tick. A window closed mid-scroll therefore left a live timer holding a closure over
+        /// this form, and RebuildWindow (theme switch) disposes the old MainWindow and builds a
+        /// new one - so every theme change leaked another set, each still ticking against a
+        /// disposed form.
+        /// </summary>
+        private readonly List<System.Windows.Forms.Timer> _scrollIdleTimers = new();
+
         private void HookScrollEvents(Control root)
         {
             foreach (Control c in root.Controls)
             {
                 if (c is Panel p && p.AutoScroll)
                 {
-                    p.Scroll += (s, e) => BeginInteraction();
                     var t = new System.Windows.Forms.Timer { Interval = 120 };
-                    t.Tick += (s2, e2) => { _userInteracting = false; t.Stop(); t.Dispose(); };
-                    p.Scroll += (s, e) => { t.Stop(); t.Start(); };
+                    _scrollIdleTimers.Add(t);
+                    t.Tick += (s2, e2) =>
+                    {
+                        t.Stop();
+                        // Don't touch the form once it's going away - Dispose tears these
+                        // down, but a tick can already be queued on the message loop.
+                        if (IsDisposed || Disposing) return;
+                        _userInteracting = false;
+                    };
+                    // One handler, not two: this used to subscribe to Scroll twice per panel,
+                    // so a rebuild multiplied the handlers as well as the timers.
+                    p.Scroll += (s, e) =>
+                    {
+                        BeginInteraction();
+                        t.Stop();
+                        t.Start();
+                    };
                 }
                 if (c.HasChildren) HookScrollEvents(c);
             }
@@ -420,6 +446,16 @@ namespace VibranceHud
                 _timer.Stop();
                 _timer.Tick -= OnAnimationTick;
                 _timer.Dispose();
+
+                // Scroll-idle timers outlive their scope otherwise; RebuildWindow disposes
+                // this form on every theme change, so without this each switch left another
+                // set ticking against a dead window.
+                foreach (var t in _scrollIdleTimers)
+                {
+                    t.Stop();
+                    t.Dispose();
+                }
+                _scrollIdleTimers.Clear();
             }
             base.Dispose(disposing);
         }

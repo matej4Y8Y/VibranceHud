@@ -13,8 +13,11 @@ using Xunit;
 namespace VibranceHud.Tests
 {
     [Collection(LicenseTestCollection.Name)]
-    public sealed class LicensePersistenceTests
+    public sealed class LicensePersistenceTests : IDisposable
     {
+        private readonly TempLicenseDir _dir = new();
+        public void Dispose() => _dir.Dispose();
+
         private static string IssueKey(string tierMarker)
         {
             var masterKey = LicenseKeyDerivation.DeriveMasterKey();
@@ -45,14 +48,14 @@ namespace VibranceHud.Tests
         [Fact]
         public void ActivatedLicense_IsStillValid_OnTheNextLaunch()
         {
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             var original = service.State;
             try
             {
                 Assert.Equal(LicenseState.Valid, service.TryActivate(IssueKey("P")));
 
                 // Simulates the next process start.
-                var reloaded = new LicenseService();
+                var reloaded = new LicenseService(_dir.Path);
                 Assert.Equal(LicenseState.Valid, reloaded.State);
                 Assert.True(reloaded.HasValidLicense);
                 Assert.NotNull(reloaded.Current);
@@ -60,7 +63,7 @@ namespace VibranceHud.Tests
             }
             finally
             {
-                new LicenseService().Deactivate();
+                new LicenseService(_dir.Path).Deactivate();
                 _ = original;
             }
         }
@@ -73,15 +76,15 @@ namespace VibranceHud.Tests
             var key = IssueKey("F");
             try
             {
-                var service = new LicenseService();
+                var service = new LicenseService(_dir.Path);
                 Assert.Equal(LicenseState.Valid, service.TryActivate(key));
 
-                var reloaded = new LicenseService();
+                var reloaded = new LicenseService(_dir.Path);
                 Assert.Equal(key, reloaded.KeyText);
             }
             finally
             {
-                new LicenseService().Deactivate();
+                new LicenseService(_dir.Path).Deactivate();
             }
         }
 
@@ -93,7 +96,7 @@ namespace VibranceHud.Tests
         {
             try
             {
-                var service = new LicenseService();
+                var service = new LicenseService(_dir.Path);
                 Assert.Equal(LicenseState.Valid, service.TryActivate(IssueKey("P")));
 
                 Assert.NotNull(service.ExpiresAt);
@@ -102,7 +105,7 @@ namespace VibranceHud.Tests
             }
             finally
             {
-                new LicenseService().Deactivate();
+                new LicenseService(_dir.Path).Deactivate();
             }
         }
 
@@ -112,23 +115,25 @@ namespace VibranceHud.Tests
         [Fact]
         public void EditedLicenseFile_IsRejectedAsTampered()
         {
-            var path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "PlexusX", "license.json");
+            // The temp copy, not the real one. This used to point at
+            // %LocalAppData%\PlexusX\license.json, so the test edited the developer's own
+            // licence - and once the service moved to a temp dir it was also asserting
+            // against a file the service never read.
+            var path = _dir.LicenseFile;
             try
             {
-                var service = new LicenseService();
+                var service = new LicenseService(_dir.Path);
                 Assert.Equal(LicenseState.Valid, service.TryActivate(IssueKey("F")));
 
                 // Flip the tier to "paid" without re-signing, the obvious attack.
                 var json = File.ReadAllText(path);
                 File.WriteAllText(path, json.Replace("free", "paid"));
 
-                Assert.Equal(LicenseState.Tampered, new LicenseService().State);
+                Assert.Equal(LicenseState.Tampered, new LicenseService(_dir.Path).State);
             }
             finally
             {
-                new LicenseService().Deactivate();
+                new LicenseService(_dir.Path).Deactivate();
             }
         }
     }

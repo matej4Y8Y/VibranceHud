@@ -15,8 +15,11 @@ using Xunit;
 namespace VibranceHud.Tests
 {
     [Collection(LicenseTestCollection.Name)]
-    public sealed class LicenseRoundTripTests
+    public sealed class LicenseRoundTripTests : IDisposable
     {
+        private readonly TempLicenseDir _dir = new();
+        public void Dispose() => _dir.Dispose();
+
         [Fact]
         public void GeneratedKey_ValidatesThroughLicenseService()
         {
@@ -34,7 +37,7 @@ namespace VibranceHud.Tests
             Assert.Equal(checksum, parsed.Checksum);
 
             // Now feed it through the real service and verify it accepts.
-            var service = new LicenseService();
+            var service = new LicenseService(_dir.Path);
             var state = service.TryActivate(key);
             Assert.Equal(LicenseState.Valid, state);
 
