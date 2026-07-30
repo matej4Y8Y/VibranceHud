@@ -16,8 +16,12 @@ using Xunit;
 
 namespace VibranceHud.Tests
 {
-    public sealed class OnboardingThemeTests
+    [Collection(ThemeTestCollection.Name)]
+    public sealed class OnboardingThemeTests : System.IDisposable
     {
+        // Put the palette back so a theme applied here can't leak into another class.
+        public void Dispose() => Theme.Apply("Violet");
+
         /// <summary>Rough perceptual brightness, 0-255. Enough to tell "readable" from
         /// "invisible" without pulling in a colour-science dependency.</summary>
         private static double Luminance(Color c) => 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B;

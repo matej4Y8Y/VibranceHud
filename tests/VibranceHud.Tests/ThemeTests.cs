@@ -5,6 +5,7 @@ using Xunit;
 
 namespace VibranceHud.Tests
 {
+    [Collection(ThemeTestCollection.Name)]
     public class ThemeTests
     {
         private static double Brightness(Color c) => 0.299 * c.R + 0.587 * c.G + 0.114 * c.B;

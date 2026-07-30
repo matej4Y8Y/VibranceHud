@@ -360,14 +360,26 @@ namespace VibranceHud
                 }
 
                 var pendingVersion = ReadInstallerVersion(pendingPath);
-                if (pendingVersion != null)
+
+                // Decide before touching the network. The old code only asked "is something
+                // NEWER published?", which says nothing about whether this installer is older
+                // than what's already running - and that check needed the network, so offline
+                // it was skipped entirely and whatever sat in %TEMP% ran unconditionally. Users
+                // installed 0.9.6 and were silently put back on 0.9.4; an earlier one landed
+                // back on 0.7.x the same way.
+                if (!ShouldRunPendingInstaller(pendingVersion, CurrentVersion, latestOnline: null))
                 {
-                    var latest = await TryGetUpdateAsync();
-                    if (latest != null && latest.Version > pendingVersion)
-                    {
-                        ClearPending(settings, pendingPath);
-                        return false;
-                    }
+                    ClearPending(settings, pendingPath);
+                    return false;
+                }
+
+                // Only now is it worth asking whether something newer has been published, so a
+                // pending build that's already superseded gives way to the real update path.
+                var latest = await TryGetUpdateAsync();
+                if (!ShouldRunPendingInstaller(pendingVersion, CurrentVersion, latest?.Version))
+                {
+                    ClearPending(settings, pendingPath);
+                    return false;
                 }
 
                 var psi = new ProcessStartInfo
@@ -391,6 +403,39 @@ namespace VibranceHud
 
         public static bool RunPendingUpdateIfAny(AppSettings settings) =>
             RunPendingUpdateIfAnyAsync(settings).GetAwaiter().GetResult();
+
+        /// <summary>
+        /// Whether a pending installer is safe to run. Pure, so the rule is testable without a
+        /// network, a registry or an actual installer on disk.
+        ///
+        /// The invariant that matters: never install something at or below the running version.
+        /// It holds regardless of whether the update check succeeded, which is the part the
+        /// previous logic got wrong - it relied entirely on an online comparison, so an offline
+        /// launch would run any leftover installer in %TEMP% and quietly downgrade the user.
+        /// </summary>
+        /// <param name="pendingVersion">Version read out of the installer, or null if unreadable.</param>
+        /// <param name="currentVersion">The version running right now.</param>
+        /// <param name="latestOnline">Newest published version, or null when unknown/offline.</param>
+        internal static bool ShouldRunPendingInstaller(
+            Version? pendingVersion, Version currentVersion, Version? latestOnline)
+        {
+            // Can't read it, don't trust it over a working install.
+            if (pendingVersion == null) return false;
+
+            // The downgrade guard. Also covers equal versions - reinstalling what's already
+            // there gains nothing and still restarts the user's app.
+            if (Normalize(pendingVersion) <= Normalize(currentVersion)) return false;
+
+            // Superseded while it sat there: skip it and let the normal update path fetch the
+            // newer build instead.
+            if (latestOnline != null && Normalize(latestOnline) > Normalize(pendingVersion)) return false;
+
+            return true;
+        }
+
+        /// <summary>Compare on major.minor.build so 0.9.6 and 0.9.6.0 are the same version.</summary>
+        private static Version Normalize(Version v) =>
+            new(v.Major, v.Minor, Math.Max(v.Build, 0));
 
         internal static string? ResolvePendingInstaller(AppSettings settings)
         {
