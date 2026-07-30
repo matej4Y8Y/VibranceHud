@@ -74,9 +74,27 @@ namespace VibranceHud
         private bool _capturing;
         private string _captureError = "";
 
+        // Set when RegisterHotKey refused the combo the user just picked (another app owns
+        // it). Without this the picker showed the new combo as though it were live while
+        // nothing was bound, and the only hint was a "- unavailable" suffix buried in the
+        // tray context menu, which nobody opens. That is the whole experience behind
+        // "the hotkeys don't work".
+        private bool _bindingFailed;
+
         /// <summary>Fires when the user picks a new combo. Argument is
         /// (modifier mask, virtual key).</summary>
         public event Action<uint, uint>? HotkeyChanged;
+
+        /// <summary>
+        /// Tell the picker whether the combo it last raised actually bound. Called by the
+        /// owner after RegisterHotKey, so a combo another app already owns is reported where
+        /// the user is looking instead of only in the tray menu.
+        /// </summary>
+        public void ReportBindingResult(bool succeeded)
+        {
+            _bindingFailed = !succeeded;
+            Invalidate();
+        }
 
         public HotkeyPicker()
         {
@@ -132,24 +150,141 @@ namespace VibranceHud
             return string.Join("+", parts);
         }
 
-        private static string KeyName(uint vk)
+        /// <summary>
+        /// Human-readable name for a virtual-key code.
+        ///
+        /// This used to know only A-Z, 0-9, F1-F12 and the numpad digits, so anything else -
+        /// PageDown, Home, the arrows - rendered as a raw "0x22". Now that a bare key can be
+        /// bound, those are exactly the keys people reach for, and a hex code is not something
+        /// a user can act on.
+        /// </summary>
+        public static string KeyName(uint vk)
         {
             // Letters A-Z
             if (vk >= 0x41 && vk <= 0x5A) return ((char)vk).ToString();
             // Top-row digits 0-9
             if (vk >= 0x30 && vk <= 0x39) return ((char)vk).ToString();
-            // Function keys F1-F12
-            if (vk >= 0x70 && vk <= 0x7B) return "F" + (vk - 0x6F);
-            // Numpad digits 0-9 (VK_NUMPAD0..9 = 0x60..0x69)
+            // Function keys. F1-F12 = 0x70-0x7B, and F13-F24 = 0x7C-0x87 (macro keyboards
+            // expose these, and they're ideal bare hotkeys since nothing else uses them).
+            if (vk >= 0x70 && vk <= 0x87) return "F" + (vk - 0x6F);
+            // Numpad digits 0-9
             if (vk >= 0x60 && vk <= 0x69) return "Num" + (vk - 0x60);
-            // Anything else - render as hex so we never lie about what's bound.
+
+            switch (vk)
+            {
+                // Navigation / editing - the keys most likely to be picked as a bare hotkey.
+                case 0x21: return "PageUp";
+                case 0x22: return "PageDown";
+                case 0x23: return "End";
+                case 0x24: return "Home";
+                case 0x2D: return "Insert";
+                case 0x2E: return "Delete";
+                case 0x25: return "Left";
+                case 0x26: return "Up";
+                case 0x27: return "Right";
+                case 0x28: return "Down";
+
+                case 0x20: return "Space";
+                case 0x09: return "Tab";
+                case 0x0D: return "Enter";
+                case 0x08: return "Backspace";
+                case 0x1B: return "Esc";
+                case 0x14: return "CapsLock";
+                case 0x91: return "ScrollLock";
+                case 0x90: return "NumLock";
+                case 0x13: return "Pause";
+                case 0x2C: return "PrintScreen";
+
+                // Numpad operators.
+                case 0x6A: return "Num*";
+                case 0x6B: return "Num+";
+                case 0x6D: return "Num-";
+                case 0x6E: return "Num.";
+                case 0x6F: return "Num/";
+
+                // Punctuation, by their US-layout faces. OEM codes are layout-dependent, so
+                // these labels can be wrong on a non-US keyboard - still far better than hex.
+                case 0xBA: return ";";
+                case 0xBB: return "=";
+                case 0xBC: return ",";
+                case 0xBD: return "-";
+                case 0xBE: return ".";
+                case 0xBF: return "/";
+                case 0xC0: return "`";
+                case 0xDB: return "[";
+                case 0xDC: return "\\";
+                case 0xDD: return "]";
+                case 0xDE: return "'";
+
+                // Media / browser keys, common on gaming keyboards.
+                case 0xAD: return "Mute";
+                case 0xAE: return "VolumeDown";
+                case 0xAF: return "VolumeUp";
+                case 0xB0: return "NextTrack";
+                case 0xB1: return "PrevTrack";
+                case 0xB2: return "StopMedia";
+                case 0xB3: return "PlayPause";
+
+                // Not a key. This is what an unbound hotkey looks like, and it used to render
+                // as the meaningless "Ctrl+Shift+0x0".
+                case 0x00: return "(none)";
+            }
+
+            // Genuinely unrecognised - hex, so we never claim a binding we can't name.
             return "0x" + vk.ToString("X");
+        }
+
+        /// <summary>
+        /// Whether (mask, vk) is a hotkey we're willing to bind, and why not if it isn't.
+        ///
+        /// Notably a mask of 0 is fine. The picker used to refuse a bare key with "Pick at
+        /// least one modifier", on the reasoning that a lone key can't be a global hotkey -
+        /// that's simply not true, RegisterHotKey takes fsModifiers = 0 quite happily. The
+        /// real consequence is that the key is then taken system-wide, so typing it anywhere
+        /// fires the hotkey; that's the user's call to make, and for PageDown / F13-F24 /
+        /// media keys it's exactly what people want.
+        ///
+        /// Pure and public so the rules are unit-testable without driving a real control.
+        /// </summary>
+        public static bool IsBindable(uint modifierMask, uint virtualKey, out string error)
+        {
+            error = "";
+
+            if (virtualKey == 0)
+            {
+                error = "Press a key to bind.";
+                return false;
+            }
+
+            if (IsModifierOnly(virtualKey))
+            {
+                // Still mid-chord: they're holding Ctrl and haven't reached the key yet.
+                error = "Now press the key.";
+                return false;
+            }
+
+            // Escape is the picker's own cancel key. Binding it bare would leave no way to
+            // back out of capture mode.
+            if (modifierMask == 0 && virtualKey == 0x1B)
+            {
+                error = "Esc cancels - pick another key.";
+                return false;
+            }
+
+            if (IsReservedCombo(modifierMask, virtualKey))
+            {
+                error = "That combination is reserved by Windows.";
+                return false;
+            }
+
+            return true;
         }
 
         private void EnterCapture()
         {
             _capturing = true;
             _captureError = "";
+            _bindingFailed = false; // stale once they're picking a new one
             Focus(); // so KeyDown actually fires
             Invalidate();
         }
@@ -190,44 +325,25 @@ namespace VibranceHud
                 return;
             }
 
-            // Reject Windows-reserved combos: those are owned by the shell / SAS, not by
-            // user-mode apps. Trying to bind them looks like it worked until the user
-            // notices their hotkey never fires.
-            if (IsReservedCombo(e.Modifiers, e.KeyCode))
-            {
-                _captureError = "That combination is reserved by Windows.";
-                Invalidate();
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-                return;
-            }
-
-            // Convert WinForms Keys enum to a RegisterHotKey modifier mask. Same bits as
-            // HotkeyModifiers, so the assignment is mechanical - we just sanity-check that
-            // Keys.Control/Shift/Alt really do map to MOD_CONTROL/MOD_SHIFT/MOD_ALT.
+            // Convert WinForms' Keys to a RegisterHotKey modifier mask. Win isn't in
+            // Keys.Modifiers at all, so it's read from the live key state - without this the
+            // picker had no way to produce a Win+ binding.
             uint mods = 0;
             if (e.Control) mods |= HotkeyModifiers.Control;
             if (e.Alt) mods |= HotkeyModifiers.Alt;
             if (e.Shift) mods |= HotkeyModifiers.Shift;
+            if ((ModifierKeys & Keys.LWin) != 0 || (ModifierKeys & Keys.RWin) != 0
+                || IsKeyDown(Keys.LWin) || IsKeyDown(Keys.RWin))
+                mods |= HotkeyModifiers.Win;
 
             uint vk = (uint)e.KeyCode;
 
-            // Reject bare modifier presses (no actual key picked yet). One of Ctrl/Alt/
-            // Shift/Win alone is what the user gets while they're still holding the
-            // modifiers down before the key; we wait.
-            if (IsModifierOnly(vk))
+            // A bare key is allowed now - see IsBindable.
+            if (!IsBindable(mods, vk, out var why))
             {
-                // Allow the user to keep holding modifiers - just don't commit yet.
-                e.Handled = true;
-                e.SuppressKeyPress = true;
-                return;
-            }
-
-            // Require at least one modifier so a single key on its own doesn't get bound
-            // (you can't reliably register "press V" as a global hotkey anyway).
-            if (mods == 0)
-            {
-                _captureError = "Pick at least one modifier (Ctrl, Alt, Shift or Win).";
+                // "Now press the key" while they're still holding modifiers isn't an error
+                // worth shouting about; keep the prompt calm and wait for the real key.
+                _captureError = IsModifierOnly(vk) ? "" : why;
                 Invalidate();
                 e.Handled = true;
                 e.SuppressKeyPress = true;
@@ -241,6 +357,13 @@ namespace VibranceHud
             e.SuppressKeyPress = true;
             HotkeyChanged?.Invoke(_modifierMask, _virtualKey);
         }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        /// <summary>Win isn't reported through KeyEventArgs, so it has to be sampled
+        /// directly to allow a Win+ binding.</summary>
+        private static bool IsKeyDown(Keys key) => (GetAsyncKeyState((int)key) & 0x8000) != 0;
 
         /// <summary>True when the user only has a modifier pressed (no real key yet).</summary>
         private static bool IsModifierOnly(uint vk)
@@ -258,19 +381,30 @@ namespace VibranceHud
                 || vk == (uint)Keys.RWin;
         }
 
-        /// <summary>Combos the OS intercepts before our app ever sees the hotkey
-        /// message. Trying to bind these would silently never fire.</summary>
-        private static bool IsReservedCombo(Keys mods, Keys key)
+        /// <summary>
+        /// Combos the OS intercepts before our app ever sees the hotkey message. Binding
+        /// these looks like it worked and then never fires.
+        ///
+        /// Takes the RegisterHotKey mask rather than WinForms' Keys, because the old
+        /// Keys-based version checked <c>mods.HasFlag(Keys.LWin)</c> - and Keys.Modifiers
+        /// never carries the Win key, so the Win+L guard could not ever have matched.
+        /// </summary>
+        private static bool IsReservedCombo(uint mask, uint vk)
         {
-            // Ctrl+Alt+Del -> handled by SAS, not user-mode.
-            if (mods.HasFlag(Keys.Control) && mods.HasFlag(Keys.Alt) && key == Keys.Delete) return true;
-            // Ctrl+Esc -> opens Start menu (Windows reserved).
-            if (mods.HasFlag(Keys.Control) && key == Keys.Escape) return true;
-            // Alt+Tab, Alt+Esc, Alt+F4 -> task switcher / Start menu / close-app.
-            if (mods.HasFlag(Keys.Alt) && (key == Keys.Tab || key == Keys.Escape || key == Keys.F4)) return true;
-            // Win+L -> lock workstation.
-            if (mods.HasFlag(Keys.LWin) && key == Keys.L) return true;
-            if (mods.HasFlag(Keys.RWin) && key == Keys.L) return true;
+            bool ctrl = (mask & HotkeyModifiers.Control) != 0;
+            bool alt = (mask & HotkeyModifiers.Alt) != 0;
+            bool win = (mask & HotkeyModifiers.Win) != 0;
+
+            const uint VK_TAB = 0x09, VK_ESC = 0x1B, VK_DELETE = 0x2E, VK_F4 = 0x73, VK_L = 0x4C;
+
+            // Ctrl+Alt+Del - Secure Attention Sequence, not available to user-mode.
+            if (ctrl && alt && vk == VK_DELETE) return true;
+            // Ctrl+Esc - Start menu.
+            if (ctrl && vk == VK_ESC) return true;
+            // Alt+Tab / Alt+Esc / Alt+F4 - task switcher, window cycle, close.
+            if (alt && (vk == VK_TAB || vk == VK_ESC || vk == VK_F4)) return true;
+            // Win+L - lock workstation.
+            if (win && vk == VK_L) return true;
             return false;
         }
 
@@ -291,12 +425,27 @@ namespace VibranceHud
             var comboRect = new RectangleF(
                 ChipPadding, 0,
                 Math.Max(60, Width - ButtonWidth - ChipPadding * 3), Height);
-            string comboText = _capturing
-                ? (_captureError.Length > 0 ? _captureError : "Press new shortcut (Esc to cancel)")
-                : GetDisplay(_modifierMask, _virtualKey);
-            var comboColor = _capturing
-                ? (_captureError.Length > 0 ? Theme.Accent : Theme.Text)
-                : Theme.Text;
+            string comboText;
+            Color comboColor;
+            if (_capturing)
+            {
+                comboText = _captureError.Length > 0
+                    ? _captureError
+                    : "Press any key (Esc to cancel)";
+                comboColor = _captureError.Length > 0 ? Theme.Accent : Theme.Text;
+            }
+            else if (_bindingFailed)
+            {
+                // Say it where the user is actually looking, and name the cause - an
+                // in-use combo is the overwhelmingly common reason.
+                comboText = GetDisplay(_modifierMask, _virtualKey) + "  - in use by another app";
+                comboColor = Theme.Accent;
+            }
+            else
+            {
+                comboText = GetDisplay(_modifierMask, _virtualKey);
+                comboColor = Theme.Text;
+            }
             TextRenderer.DrawText(g, comboText, ComboFont,
                 Rectangle.Round(comboRect), comboColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter

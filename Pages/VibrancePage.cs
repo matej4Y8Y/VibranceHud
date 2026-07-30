@@ -65,8 +65,11 @@ namespace VibranceHud.Pages
 
         /// <summary>Raised when the user picks a new quick-vibrance hotkey combo. The
         /// tray forwards to <see cref="TrayApplicationContext.ReRegisterHotkey"/> so the
-        /// OS-level RegisterHotKey is swapped without a restart.</summary>
-        public event Action<uint, uint>? HotkeyChanged;
+        /// OS-level RegisterHotKey is swapped without a restart.
+        ///
+        /// Returns whether the combo actually bound, so the picker can say "in use by
+        /// another app" instead of displaying a dead hotkey as if it were live.</summary>
+        public event Func<uint, uint, bool>? HotkeyChanged;
 
         /// <summary>Raised when the user picks a new main-window hotkey combo (or disables
         /// the existing one). Argument is (modifier mask, virtual key, enabled). The tray
@@ -153,7 +156,12 @@ namespace VibranceHud.Pages
                 _settings.HotkeyModifierMask = mask;
                 _settings.HotkeyVirtualKey = vk;
                 _store.Save(_settings);
-                HotkeyChanged?.Invoke(mask, vk);
+                // Feed the registration result straight back to the picker so a combo
+                // another app owns is reported where the user is looking. With no listener
+                // attached (tests, standalone use) assume success rather than showing a
+                // spurious failure.
+                bool bound = HotkeyChanged?.Invoke(mask, vk) ?? true;
+                _hotkeyPicker.ReportBindingResult(bound);
             };
             Controls.Add(_hotkeyPicker);
 

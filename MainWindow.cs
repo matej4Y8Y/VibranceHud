@@ -52,7 +52,7 @@ namespace VibranceHud
             Crosshair.CrosshairService? crosshair = null,
             ProfileEngineCoordinator? profileCoordinator = null,
             LicenseService? license = null,
-            Action<uint, uint>? onHotkeyChanged = null,
+            Func<uint, uint, bool>? onHotkeyChanged = null,
             Action<uint, uint, bool>? onMainHotkeyChanged = null)
         {
             _crosshair = crosshair ?? new Crosshair.CrosshairService();
@@ -97,7 +97,7 @@ namespace VibranceHud
             Controls.Add(_titleBar);
 
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
-            _vibrancePage.HotkeyChanged += (mask, vk) => onHotkeyChanged?.Invoke(mask, vk);
+            _vibrancePage.HotkeyChanged += (mask, vk) => onHotkeyChanged?.Invoke(mask, vk) ?? true;
             _vibrancePage.MainHotkeyChanged += (mask, vk, en) => onMainHotkeyChanged?.Invoke(mask, vk, en);
             _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged,
                 custom, onBackgroundChanged: RefreshBackdrop);

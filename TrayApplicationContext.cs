@@ -546,7 +546,10 @@ namespace VibranceHud
         /// refresh the tray menu so the visible shortcut stays in sync with what's bound.
         /// Called from the picker on the Vibrance page; safe to call at any point after
         /// the hotkey window handle exists.</summary>
-        public void ReRegisterHotkey(uint mask, uint vk)
+        /// <returns>True when the combo actually bound. The picker uses this to tell the user
+        /// their new hotkey is in use by another app, instead of showing it as though it were
+        /// live while nothing is bound.</returns>
+        public bool ReRegisterHotkey(uint mask, uint vk)
                 {
                     UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
                     _settings.HotkeyModifierMask = mask;
@@ -563,15 +566,17 @@ namespace VibranceHud
                     {
                         if (_hotkeyMenuItem != null)
                             _hotkeyMenuItem.Text = $"Quick vibrance  (conflicts with main window)";
-                        return;
+                        return false;
                     }
                     if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, mask, vk))
                     {
                         if (_hotkeyMenuItem != null)
                             _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()} - unavailable)";
+                        return false;
                     }
-                    else if (_hotkeyMenuItem != null)
+                    if (_hotkeyMenuItem != null)
                         _hotkeyMenuItem.Text = $"Quick vibrance  ({GetHotkeyDisplay()})";
+                    return true;
                 }
 
                 /// <summary>Variant for the second (main-window) hotkey. Toggles registration on
