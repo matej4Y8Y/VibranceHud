@@ -24,6 +24,7 @@ namespace VibranceHud
 
         private readonly Button _primary;
         private readonly LinkLabel _back;
+        private readonly LinkLabel _skip;
         private readonly List<SwatchButton> _swatches = new();
         private readonly List<Label> _swatchLabels = new();
         private readonly ToggleSwitch _startup;
@@ -71,6 +72,14 @@ namespace VibranceHud
                     Theme.Apply(swatch.Palette.Name);
                     foreach (var b in _swatches) b.Active = ReferenceEquals(b, swatch);
                     RefreshSwatchLabels();
+                    // Stock WinForms controls hold whatever colour they were given at
+                    // construction - unlike the owner-drawn ones, which read Theme at paint
+                    // time. Picking a theme here therefore left them on the previous palette:
+                    // the reported symptom was "Start PlexusX when Windows starts" turning
+                    // invisible after switching to a dark theme, because the label was still
+                    // painting the light theme's dark text on a now-dark background. The user
+                    // was left with a toggle and no idea what it did.
+                    ReapplyThemeColors();
                     Invalidate(true);
                 };
                 _swatches.Add(swatch);
@@ -147,7 +156,7 @@ namespace VibranceHud
             // minimum OnboardingComplete=true and use the current theme, so a
             // power user who just wants the app on screen is one click away from
             // the main window.
-            var skip = new LinkLabel
+            _skip = new LinkLabel
             {
                 Text = "Skip — I'll set up later",
                 LinkColor = Theme.TextDim,
@@ -157,7 +166,7 @@ namespace VibranceHud
                 AutoSize = true,
                 BackColor = Color.Transparent,
             };
-            skip.Click += (s, e) =>
+            _skip.Click += (s, e) =>
             {
                 // Mark onboarding done without persisting the unconfirmed toggles
                 // (startup stays where StartupManager already reports it; theme
@@ -167,7 +176,7 @@ namespace VibranceHud
                 DialogResult = DialogResult.OK;
                 Close();
             };
-            Controls.Add(skip);
+            Controls.Add(_skip);
 
             _back = new LinkLabel
             {
@@ -245,6 +254,35 @@ namespace VibranceHud
             for (int i = 0; i < _swatchLabels.Count; i++)
                 _swatchLabels[i].ForeColor =
                     _swatches[i].Palette.Name == Theme.CurrentName ? Theme.Text : Theme.TextDim;
+        }
+
+        /// <summary>
+        /// Re-read every theme colour held by a stock WinForms control.
+        ///
+        /// The owner-drawn controls on this form (swatches, toggle, chips) sample Theme inside
+        /// OnPaint, so they follow a theme change for free. Plain Labels, LinkLabels and
+        /// Buttons don't - they keep the colour assigned when they were constructed. Since step
+        /// 1 of onboarding is a theme picker, every one of those was left rendering the
+        /// palette the form happened to open with.
+        ///
+        /// Called on every theme switch. Any stock control added here later needs a line in
+        /// this method too, or it will silently go stale the same way.
+        /// </summary>
+        private void ReapplyThemeColors()
+        {
+            BackColor = Theme.Background;
+
+            // The one users actually reported: invisible on a dark theme after switching.
+            _startupLabel.ForeColor = Theme.Text;
+
+            _primary.BackColor = Theme.AccentDim;
+            _primary.ForeColor = Theme.Text;
+
+            foreach (var link in new[] { _back, _skip })
+            {
+                link.LinkColor = Theme.TextDim;
+                link.ActiveLinkColor = Theme.Accent;
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
