@@ -24,6 +24,12 @@ namespace VibranceHud
         DriverIssue,
         SdkIssue,
         OutOfMemory,
+
+        /// <summary>Desktop Duplication is already taken on this display by another
+        /// capture app (OBS Display Capture, ShadowPlay, overlay tools). Distinct from
+        /// DriverIssue because the fix is "close the other capture", not "update a driver".</summary>
+        CaptureInUse,
+
         Unknown,
     }
 
@@ -61,6 +67,13 @@ namespace VibranceHud
                     return (DxInitFailureKind.DriverIssue,
                         "GPU driver crashed",
                         "Reinstall or update your GPU driver.");
+                case unchecked((int)0x887A0022): // DXGI_ERROR_NOT_CURRENTLY_AVAILABLE
+                    // Desktop Duplication is already in use on this display. Very common for
+                    // exactly our users: OBS "Display Capture", ShadowPlay and several overlay
+                    // tools all use this same API, and the slots per output are limited.
+                    return (DxInitFailureKind.CaptureInUse,
+                        "Another app is capturing this display",
+                        "Close or stop other screen-capture sources (OBS Display Capture, ShadowPlay, overlay tools), then reopen PlexusX.");
                 case unchecked((int)0x8007000E): // E_OUTOFMEMORY
                     return (DxInitFailureKind.OutOfMemory,
                         "Not enough GPU memory",
@@ -108,6 +121,7 @@ namespace VibranceHud
                 case DxInitFailureKind.DriverIssue:      representative = unchecked((int)0x887A0004); break;
                 case DxInitFailureKind.SdkIssue:         representative = unchecked((int)0x887A0027); break;
                 case DxInitFailureKind.OutOfMemory:      representative = unchecked((int)0x8007000E); break;
+                case DxInitFailureKind.CaptureInUse:     representative = unchecked((int)0x887A0022); break;
                 case DxInitFailureKind.NoCompatibleAdapter:
                 case DxInitFailureKind.DeviceCreationFailed:
                 case DxInitFailureKind.Unknown:

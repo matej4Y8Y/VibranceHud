@@ -27,12 +27,12 @@ namespace VibranceHud
     {
         public OverlayMode ActiveMode => OverlayMode.Dx;
 
-        // Forward the categorised failure from the device that did (or didn't)
-        // initialise. If DX11 succeeded the device's LastFailure stays None
-        // and we report None here too. The Settings page reads these so the
-        // user gets a real reason instead of "Fallback mode" with nothing else.
-        public DxInitFailureKind LastFailure => _device?.LastFailure ?? DxInitFailureKind.None;
-        public string LastFailureMessage => _device?.LastFailureMessage ?? "";
+        // The categorised reason DX11 couldn't be used. Stored in fields rather than read
+        // through _device, because every failure path disposes the device and sets it to
+        // null - so a computed property would report None precisely when a reason exists,
+        // which is the whole thing the Settings page needs. Set once during construction.
+        public DxInitFailureKind LastFailure { get; private set; } = DxInitFailureKind.None;
+        public string LastFailureMessage { get; private set; } = "";
 
         private static readonly float[] Identity = new float[]
         {
@@ -51,9 +51,22 @@ namespace VibranceHud
         private const int ActiveSleepMs = 16;   // ~60 Hz while actually saturating
         private const int IdleSleepMs = 250;    // coarse poll while suspended at identity
 
+        /// <summary>One monitor we can actually render: its swap-chain target plus the shader
+        /// and desktop-duplication capture built against that target's own device.
+        ///
+        /// These used to be three index-parallel lists (_shaders[i] / _captures[i] /
+        /// Targets[i]). Grouping them removes the requirement that all three stay the same
+        /// length, which is what made it impossible to skip a single broken monitor without
+        /// silently pairing one monitor's capture with another monitor's swap-chain.</summary>
+        private sealed class ActiveOutput
+        {
+            public DxDevice.OutputTarget Target = null!;
+            public DxShader Shader = null!;
+            public DxCapture Capture = null!;
+        }
+
         private readonly DxDevice _device;
-        private readonly List<DxShader> _shaders;
-        private readonly List<DxCapture> _captures;
+        private readonly List<ActiveOutput> _active;
         private readonly CancellationTokenSource _cts = null!;
         private readonly Task _renderLoop = null!;
         private readonly object _matrixLock = new object();
@@ -70,38 +83,60 @@ namespace VibranceHud
 
         public DxOverlay()
         {
-            _shaders = new List<DxShader>();
-            _captures = new List<DxCapture>();
+            _active = new List<ActiveOutput>();
             _currentMatrix = Identity;
 
             _device = new DxDevice();
             if (!_device.IsAvailable)
             {
                 IsAvailable = false;
+                LastFailure = _device.LastFailure;
+                LastFailureMessage = _device.LastFailureMessage;
                 _device.Dispose();
                 _device = null!;
                 return;
             }
 
-            try
-            {
-                // A shader (compiled against the target's own device) and a desktop-
-                // duplication capture per monitor, one output at a time - a target on a
-                // secondary GPU adapter needs both created against ITS device, not
-                // whichever adapter happened to be enumerated first.
-                foreach (var target in _device.Targets)
+            // A shader (compiled against the target's own device) and a desktop-duplication
+            // capture per monitor - a target on a secondary GPU adapter needs both created
+            // against ITS device, not whichever adapter happened to be enumerated first.
+            //
+            // Built per-monitor and tolerant of individual failures. This used to be one
+            // try/catch around the whole loop, so a single monitor that couldn't be
+            // duplicated tore down every other monitor and dropped the user to the
+            // Magnification fallback, which no capture tool can see. Desktop Duplication
+            // failing for one output is ordinary: something else may already be duplicating
+            // it (OBS "Display Capture" uses this same API, as do ShadowPlay and various
+            // overlays), or it's a virtual/phantom display that can't be duplicated at all.
+            Exception? firstFailure = null;
+            TolerantOutputBuilder.Build(_device.Targets.Count,
+                i =>
                 {
-                    _shaders.Add(new DxShader(target.Device, target.Device.ImmediateContext));
-                    _captures.Add(new DxCapture(target.Device, target.Output));
-                }
-            }
-            catch (Exception)
+                    var target = _device.Targets[i];
+                    DxShader? shader = null;
+                    try
+                    {
+                        shader = new DxShader(target.Device, target.Device.ImmediateContext);
+                        var capture = new DxCapture(target.Device, target.Output);
+                        _active.Add(new ActiveOutput { Target = target, Shader = shader, Capture = capture });
+                    }
+                    catch
+                    {
+                        // Don't leak the half-built shader when the capture is what failed.
+                        shader?.Dispose();
+                        throw;
+                    }
+                },
+                (i, ex) => firstFailure ??= ex);
+
+            if (_active.Count == 0)
             {
-                // Any init failure (duplication unavailable, shader compile, etc.) -> fall back.
-                foreach (var cap in _captures) cap.Dispose();
-                _captures.Clear();
-                foreach (var shader in _shaders) shader.Dispose();
-                _shaders.Clear();
+                // Not one monitor could be rendered - this is the one case where falling back
+                // to Magnification is the right answer.
+                var (kind, label, _) = DxInitFailureMapper.MapGeneric(
+                    firstFailure ?? new InvalidOperationException("No renderable display output"));
+                LastFailure = kind;
+                LastFailureMessage = label;
                 _device.Dispose();
                 _device = null!;
                 IsAvailable = false;
@@ -133,10 +168,12 @@ namespace VibranceHud
             if (!IsAvailable) return;
             _cts.Cancel();
             try { _renderLoop.Wait(TimeSpan.FromSeconds(2)); } catch { }
-            foreach (var cap in _captures) cap.Dispose();
-            _captures.Clear();
-            foreach (var shader in _shaders) shader.Dispose();
-            _shaders.Clear();
+            foreach (var o in _active)
+            {
+                o.Capture.Dispose();
+                o.Shader.Dispose();
+            }
+            _active.Clear();
             _device.Dispose();
         }
 
@@ -182,11 +219,14 @@ namespace VibranceHud
                 idle = false;
                 _isRendering = true;
 
-                for (int i = 0; i < _device.Targets.Count && i < _captures.Count; i++)
+                // Only the monitors that actually built. A monitor whose duplication failed
+                // keeps the fully-transparent frame the idle branch presented, so it shows
+                // the untouched desktop rather than a stale or garbage overlay.
+                foreach (var o in _active)
                 {
-                    var target = _device.Targets[i];
-                    var cap = _captures[i];
-                    var shader = _shaders[i];
+                    var target = o.Target;
+                    var cap = o.Capture;
+                    var shader = o.Shader;
                     var context = target.Device.ImmediateContext;
 
                     shader.ApplyMatrix(matrix);

@@ -209,6 +209,34 @@ namespace VibranceHud
             Vibrance = DefaultLevel;
         }
 
+        /// <summary>
+        /// How much software vibrance to fold into the colour matrix for a given slider value.
+        /// 1.0 means "leave chroma alone".
+        ///
+        /// With an NVIDIA driver the 0-100 range belongs to NVAPI's Digital Vibrance, so the
+        /// software term stays neutral there - applying both would double up. Above 100 the
+        /// driver is pinned at its ceiling and software carries the remainder.
+        ///
+        /// Without a driver (AMD, Intel, or NVIDIA with no driver installed) the whole 0-200
+        /// range goes through software instead. Previously this returned 1.0 below 100 on
+        /// those machines while NullVibranceController's SetLevel did nothing, so both paths
+        /// were inert simultaneously and the slider's entire default range was dead - it
+        /// changed nothing on screen, in capture, or anywhere else.
+        ///
+        /// Note this is not identical to DVC: NVIDIA's curve is non-linear and deliberately
+        /// spares skin tones, whereas this scales chroma linearly. The same number therefore
+        /// looks slightly different on AMD than on NVIDIA. That's an accepted trade against a
+        /// control that does nothing at all.
+        ///
+        /// Public + static so it can be unit-tested without a GPU, and so ApplyOverlay and
+        /// the identity check can't drift apart about what counts as neutral.
+        /// </summary>
+        public static float SoftwareVibranceFactor(int vibrance, bool driverAvailable)
+        {
+            if (driverAvailable && vibrance <= DriverVibranceCeiling) return 1f;
+            return vibrance / (float)DriverVibranceCeiling;
+        }
+
         /// <summary>Push the current vibrance to the driver. Called directly outside a drag
         /// and once from EndDrag; never per mouse-move.</summary>
         private void ApplyDriverVibrance() =>
@@ -250,9 +278,9 @@ namespace VibranceHud
 
         private void ApplyOverlay()
         {
-            float vibrance = _vibrance > DriverVibranceCeiling
-                ? _vibrance / (float)DriverVibranceCeiling
-                : 1f;
+            // On a machine with no NVIDIA driver this now covers the whole 0-200 range,
+            // rather than leaving 0-100 to a driver that isn't there.
+            float vibrance = SoftwareVibranceFactor(_vibrance, _controller.IsAvailable);
             float saturation = _saturation / 100f;
             float brightness = _brightness / 100f;
             float warmth = _eyeCare ? EyeCareWarmth : 0f;
