@@ -10,6 +10,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Globalization;
 using System.Text.Json;
 
 namespace VibranceHud.License
@@ -35,12 +36,17 @@ namespace VibranceHud.License
 
         /// <summary>When the current license stops being valid, or null when there is no
         /// current license. Exposed so the Account page can show it without duplicating
-        /// the tier-to-month table that <see cref="IsExpired"/> uses - two copies of that
+        /// the tier duration table that <see cref="IsExpiredAt"/> uses - two copies of that
         /// table would eventually drift and disagree about what "expired" means.</summary>
-        public DateTime? ExpiresAt =>
-            Current != null && DateTime.TryParse(Current.Issued + "-01", out var issued)
-                ? issued.AddMonths(MonthsForTier(Current.Tier))
-                : null;
+        public DateTime? ExpiresAt
+        {
+            get
+            {
+                if (Current == null) return null;
+                var issued = ParseIssued(Current.Issued);
+                return issued == null ? null : issued.Value + DurationForTier(Current.Tier);
+            }
+        }
 
         public LicenseService()
         {
@@ -189,7 +195,7 @@ namespace VibranceHud.License
             {
                 Serial = key.Serial,
                 Tier = key.GetKind().ToString().ToLowerInvariant(),
-                Issued = DateTime.UtcNow.ToString("yyyy-MM"),
+                Issued = FormatIssued(DateTime.UtcNow),
                 HardwareId = hw ?? "",
             };
 
@@ -243,23 +249,67 @@ namespace VibranceHud.License
             return JsonSerializer.Serialize(p);
         }
 
-        private static bool IsExpired(LicensePayload p)
+        private static bool IsExpired(LicensePayload p) =>
+            IsExpiredAt(p.Tier, ParseIssued(p.Issued), DateTime.UtcNow);
+
+        /// <summary>
+        /// Expiry as a pure function of tier, issue instant and "now", so the rules are
+        /// unit-testable without writing a licence file or waiting six hours.
+        /// Fails closed: an issue date we can't read counts as expired.
+        /// </summary>
+        public static bool IsExpiredAt(string tier, DateTime? issuedUtc, DateTime nowUtc)
         {
-            if (string.IsNullOrEmpty(p.Issued)) return true;
-            if (!DateTime.TryParse(p.Issued + "-01", out var issued)) return true;
-            var expiresAt = issued.AddMonths(MonthsForTier(p.Tier));
-            return DateTime.UtcNow > expiresAt;
+            if (issuedUtc == null) return true;
+            return nowUtc >= issuedUtc.Value + DurationForTier(tier);
         }
 
-        /// <summary>The single source of truth for how long each tier lasts. Shared by
-        /// <see cref="IsExpired"/> and <see cref="ExpiresAt"/> so there is exactly one
-        /// place that can get the free/trial/paid durations wrong.</summary>
-        private static int MonthsForTier(string tier) => tier switch
+        /// <summary>
+        /// How long each tier lasts. The single source of truth for
+        /// <see cref="IsExpiredAt"/> and <see cref="ExpiresAt"/>.
+        ///
+        /// A TimeSpan rather than a month count, because "yyyy-MM" + AddMonths made one
+        /// calendar month the shortest expressible licence - a short demo key was impossible.
+        /// Unknown tiers deliberately get the shortest of the long windows rather than
+        /// unlimited access, so a typo can't mint a forever key.
+        /// </summary>
+        public static TimeSpan DurationForTier(string tier) => tier switch
         {
-            "trial" => 1,
-            "paid" => 24,
-            _ => 12, // free
+            "temp" => TimeSpan.FromHours(6),
+            "trial" => TimeSpan.FromDays(30),
+            "paid" => TimeSpan.FromDays(730),
+            _ => TimeSpan.FromDays(365), // free, and anything unrecognised
         };
+
+        /// <summary>Round-trip format for the issue instant: full precision UTC.</summary>
+        public static string FormatIssued(DateTime utc) =>
+            utc.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// Read an issue date, accepting both the current full-precision form and the legacy
+        /// "yyyy-MM" written before short-lived keys existed. Dropping legacy support would
+        /// make every already-activated install read as expired the moment it updated.
+        /// </summary>
+        public static DateTime? ParseIssued(string? issued)
+        {
+            if (string.IsNullOrWhiteSpace(issued)) return null;
+            issued = issued.Trim();
+
+            // Legacy "yyyy-MM" - treat as the first instant of that month. Checked by shape
+            // first so it can't be mistaken for a partial ISO timestamp.
+            if (issued.Length == 7 && issued[4] == '-')
+            {
+                return DateTime.TryParse(issued + "-01", CultureInfo.InvariantCulture,
+                    DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var month)
+                    ? month
+                    : null;
+            }
+
+            return DateTime.TryParse(issued, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var exact)
+                ? exact
+                : null;
+        }
+
 
         private static void LogFailure(string reason)
         {

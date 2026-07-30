@@ -307,9 +307,17 @@ namespace VibranceHud
                     Usage = Usage.RenderTargetOutput,
                     BufferCount = 2,
                     Scaling = Scaling.Stretch,
-                    // Flip model is mandatory for a premultiplied-alpha swap-chain.
                     SwapEffect = SwapEffect.FlipSequential,
-                    AlphaMode = AlphaMode.Premultiplied,
+                    // MUST be Ignore (or Unspecified) for an HWND swap-chain. DXGI only
+                    // permits Premultiplied on a *composition* swap-chain
+                    // (CreateSwapChainForComposition), so requesting it here failed with
+                    // DXGI_ERROR_INVALID_CALL (0x887A0001) on every machine, every launch -
+                    // verified by probing all three modes against real hardware. That single
+                    // wrong enum is why DX11 has never once initialised in the field and why
+                    // every install has silently run on the capture-invisible Magnification
+                    // fallback. Opaque is correct anyway: the shader draws a full
+                    // colour-corrected copy of the desktop, so there is nothing to blend.
+                    AlphaMode = AlphaMode.Ignore,
                     Flags = SwapChainFlags.None,
                 };
 

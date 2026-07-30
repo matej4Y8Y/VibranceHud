@@ -49,6 +49,11 @@ namespace VibranceHud.License
             Free,
             Trial,
             Paid,
+
+            /// <summary>Short-lived demo key - hours, not months. Marker 'H'. Exists so a key
+            /// can be handed out for a session without relying on the revocation list being
+            /// fetched (and without having to remember to revoke it).</summary>
+            Temp,
         }
 
         public Kind GetKind()
@@ -58,6 +63,7 @@ namespace VibranceHud.License
                 case 'F': return Kind.Free;
                 case 'T': return Kind.Trial;
                 case 'P': return Kind.Paid;
+                case 'H': return Kind.Temp;
                 default: return Kind.Free;
             }
         }
