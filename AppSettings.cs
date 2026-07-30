@@ -28,6 +28,18 @@ namespace VibranceHud
         public int ResolvedSaturation => SaturationPercent ?? (Level > 100 ? Level : 100);
 
         public bool StartWithWindows { get; set; }
+
+        /// <summary>
+        /// Hold a 1x1 topmost window so Windows keeps compositing the desktop, which is what
+        /// makes the colour effect appear in screen capture (OBS, Discord share, Medal). See
+        /// <see cref="CompositionKeeper"/> for why this is needed and why it varies by machine.
+        ///
+        /// Defaults on: without it, whether a user's colours show up for viewers is decided by
+        /// their GPU and display setup rather than by anything they can control. Kept as a
+        /// setting because it does mean one always-topmost window exists, and if that ever
+        /// upsets a specific game the user needs a way to switch it off.
+        /// </summary>
+        public bool KeepDesktopComposited { get; set; } = true;
         public int OpacityPercent { get; set; } = 85;
         /// <summary>Legacy light/dark flag. Kept only to migrate old saved settings into
         /// <see cref="ThemeName"/>; new code reads ThemeName.</summary>

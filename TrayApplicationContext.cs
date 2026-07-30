@@ -46,6 +46,7 @@ namespace VibranceHud
         private VibrancePopup? _vibrancePopup;
         private ToolStripItem? _hotkeyMenuItem;
         private ToolStripMenuItem? _mainHotkeyMenuItem;
+        private CompositionKeeper? _compositionKeeper;
 
         public TrayApplicationContext(LicenseService? license = null)
         {
@@ -76,6 +77,13 @@ namespace VibranceHud
             // after _store/_settings exist, because a successful upgrade persists the
             // corrected mode so Settings stops warning about it.
             StartOverlayUpgradeWatch();
+
+            // Keep the desktop composited so the colour effect lands in what capture tools
+            // read. Without this, whether a user's colours reach their viewers is decided by
+            // their GPU and display config - which is why an identical build worked in some
+            // people's screen shares and not others.
+            if (_settings.KeepDesktopComposited)
+                _compositionKeeper = new CompositionKeeper();
 
             // Rebuild a previously chosen image background + its derived palette before
             // the theme is resolved, so "Custom" is a known name by the time it's applied.
@@ -523,6 +531,7 @@ namespace VibranceHud
             // launch always starts from the saved profile, not from a stale tweak.
             _settings.ManualOverrideActive = false;
             _store.Save(_settings);
+            _compositionKeeper?.Dispose();  // drops the 1x1 topmost pixel
             (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
 
