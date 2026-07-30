@@ -197,6 +197,16 @@ namespace VibranceHud.License
                 return LicenseState.InvalidKey;
             }
 
+            // A validly signed key can still carry a tier this build doesn't know - a marker
+            // added in a later version, or simply wrong. Refuse it rather than guessing: the
+            // old code defaulted unknown tiers to Free, which is the 365-day tier, so an
+            // unrecognised marker handed out a full year.
+            if (!key.TryGetKind(out var tierKind))
+            {
+                LogFailure($"activation refused, unknown tier marker '{key.TierMarker}': {key.Serial}");
+                return LicenseState.InvalidKey;
+            }
+
             // Block a revoked key at activation too, not just on load - otherwise a
             // revoked key still "works" once on a fresh machine (it would write a valid
             // license file, and only get caught on the NEXT launch).
@@ -210,7 +220,7 @@ namespace VibranceHud.License
             var payload = new LicensePayload
             {
                 Serial = key.Serial,
-                Tier = key.GetKind().ToString().ToLowerInvariant(),
+                Tier = tierKind.ToString().ToLowerInvariant(),
                 Issued = FormatIssued(DateTime.UtcNow),
                 HardwareId = hw ?? "",
             };

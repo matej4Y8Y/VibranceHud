@@ -34,12 +34,17 @@ namespace VibranceHud
         /// makes the colour effect appear in screen capture (OBS, Discord share, Medal). See
         /// <see cref="CompositionKeeper"/> for why this is needed and why it varies by machine.
         ///
-        /// Defaults on: without it, whether a user's colours show up for viewers is decided by
-        /// their GPU and display setup rather than by anything they can control. Kept as a
-        /// setting because it does mean one always-topmost window exists, and if that ever
-        /// upsets a specific game the user needs a way to switch it off.
+        /// Defaults OFF. It was shipped on, on the theory that forcing composition would put
+        /// the colour effect into what capture tools read - but the effect currently comes from
+        /// the Magnification API, which applies *after* composition, so there was nothing in the
+        /// composed frame for this to help with. Confirmed by a user on a 3060 Ti: no change.
+        ///
+        /// Kept rather than deleted because it becomes necessary the moment the DX11 overlay
+        /// actually renders - that path draws into the composed frame, and would then be
+        /// bypassed by Independent Flip without this. Until then it's an always-topmost window
+        /// for no benefit, which isn't worth the risk of upsetting a fullscreen game.
         /// </summary>
-        public bool KeepDesktopComposited { get; set; } = true;
+        public bool KeepDesktopComposited { get; set; } = false;
         public int OpacityPercent { get; set; } = 85;
         /// <summary>Legacy light/dark flag. Kept only to migrate old saved settings into
         /// <see cref="ThemeName"/>; new code reads ThemeName.</summary>

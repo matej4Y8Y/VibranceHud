@@ -60,31 +60,34 @@ namespace VibranceHud.Pages
             };
             general.Controls.Add(startupToggle);
 
-            // Surfaces a silent DX11 -> Magnification fallback (see OverlayModeResolver).
-                        // DX11 is the capture-friendly path (works in OBS Display Capture, Discord,
-                        // ShadowPlay, Windows Graphics Capture). Magnification is the silent fallback
-                        // used when DX11 init fails - it shows on the monitor and in OBS Monitor
-                        // Capture but is NOT captured by OBS Game Capture, Discord screen share,
-                        // or ShadowPlay. The "Retry display engine" button restarts PlexusX so the
-                        // DX11 init can run again.
-                        //
-                        // When DX11 failed with a categorised reason (DxFailure != None), we also
-                        // surface two extra lines - a short "why" label and a one-sentence hint
-                        // - so the user has something actionable to read instead of staring at
-                        // "Fallback" wondering what's wrong.
+            // DX11 is deliberately disabled (see the note in DxDevice) because the
+                        // overlay initialises but renders nothing, so every install runs the
+                        // Magnification path. That used to surface here as an orange "Fallback"
+                        // warning plus a failure reason and a Retry button - i.e. every single
+                        // user was told their PC had a problem, and offered a retry that could
+                        // never succeed. Now it states the known limitation plainly instead of
+                        // dressing a shipped decision up as a fault on their machine.
                         bool usingFallback = _settings.OverlayMode == VibranceHud.OverlayMode.Mag;
                         general.Controls.Add(new Label
                         {
                             Text = usingFallback
-                                ? "Display engine: Fallback (hidden from OBS Game Capture / Discord)"
-                                : "Display engine: DX11 (works in OBS, Discord, ShadowPlay)",
-                            ForeColor = usingFallback ? Theme.Accent : Theme.TextDim,
+                                ? "Colour effect shows on your monitor. Capturing it in OBS / Discord isn't supported yet."
+                                : "Display engine: DX11",
+                            ForeColor = Theme.TextDim,
                             BackColor = Color.Transparent,
                             Font = new Font(Theme.FontFamily, 8.5f),
                             Location = new Point(18, 78),
                             AutoSize = true
                         });
-                        if (usingFallback && _settings.DxFailure != DxInitFailureKind.None
+                        // A reason and a Retry button are only meaningful when DX11 failed for a
+                        // machine-specific cause the user could act on. The DX path is currently
+                        // disabled by design, so it always "fails" for the same reason on every
+                        // PC - showing that as a diagnosis would just alarm people about a
+                        // decision we made. Flip this back on with the DX overlay.
+                        const bool DxDiagnosticsAreMeaningful = false;
+
+                        if (DxDiagnosticsAreMeaningful && usingFallback
+                            && _settings.DxFailure != DxInitFailureKind.None
                             && !string.IsNullOrEmpty(_settings.DxFailureMessage))
                         {
                             // "Why" - one short line under the engine label.
@@ -113,7 +116,9 @@ namespace VibranceHud.Pages
                                 AutoSize = true
                             });
                         }
-                        if (usingFallback)
+                        // Same reasoning as the diagnostics above: a Retry that relaunches the
+                        // app can never change the outcome while the DX path is switched off.
+                        if (DxDiagnosticsAreMeaningful && usingFallback)
                         {
                             var retryBtn = new Button
                             {

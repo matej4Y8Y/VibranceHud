@@ -46,6 +46,12 @@ namespace VibranceHud.License
 
         public enum Kind
         {
+            /// <summary>Zero value on purpose, so `default(Kind)` is "no tier" rather than a
+            /// real one. Free used to occupy zero, which meant any uninitialised or
+            /// failed-to-resolve Kind silently read as the 365-day tier - the most generous
+            /// one. Nothing should ever be granted on the strength of this value.</summary>
+            Unknown = 0,
+
             Free,
             Trial,
             Paid,
@@ -61,18 +67,39 @@ namespace VibranceHud.License
             Week,
         }
 
-        public Kind GetKind()
+        /// <summary>
+        /// Resolve the tier marker, or fail if this build doesn't recognise it.
+        ///
+        /// GetKind used to fall through to Free for anything unknown - and Free is the 365-day
+        /// tier, so an unrecognised marker granted a full year. That's the opposite of failing
+        /// safe, and it was real rather than hypothetical: 'W' (week) was added after 0.9.7
+        /// shipped, so a week key given to anyone still on 0.9.7 would have been read as a year.
+        ///
+        /// A build genuinely cannot know how long a tier it's never heard of is meant to last,
+        /// so refusing is the only honest answer. The signature check is unaffected - this is
+        /// about a validly signed key whose tier is from the future or simply wrong.
+        /// </summary>
+        public bool TryGetKind(out Kind kind)
         {
             switch (TierMarker)
             {
-                case 'F': return Kind.Free;
-                case 'T': return Kind.Trial;
-                case 'P': return Kind.Paid;
-                case 'H': return Kind.Temp;
-                case 'W': return Kind.Week;
-                default: return Kind.Free;
+                case 'F': kind = Kind.Free; return true;
+                case 'T': kind = Kind.Trial; return true;
+                case 'P': kind = Kind.Paid; return true;
+                case 'H': kind = Kind.Temp; return true;
+                case 'W': kind = Kind.Week; return true;
+                default: kind = default; return false;
             }
         }
+
+        /// <summary>Tier for a marker already known to be valid. Callers that haven't checked
+        /// should use <see cref="TryGetKind"/> - this throws rather than inventing a tier.</summary>
+        public Kind GetKind() =>
+            TryGetKind(out var kind)
+                ? kind
+                : throw new InvalidOperationException(
+                    $"Unrecognised licence tier marker '{TierMarker}'. This key was likely issued " +
+                    "by a newer version of PlexusX.");
 
         public static LicenseKey? Parse(string s)
         {
