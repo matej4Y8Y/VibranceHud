@@ -308,16 +308,25 @@ namespace VibranceHud
                     BufferCount = 2,
                     Scaling = Scaling.Stretch,
                     SwapEffect = SwapEffect.FlipSequential,
-                    // MUST be Ignore (or Unspecified) for an HWND swap-chain. DXGI only
-                    // permits Premultiplied on a *composition* swap-chain
-                    // (CreateSwapChainForComposition), so requesting it here failed with
-                    // DXGI_ERROR_INVALID_CALL (0x887A0001) on every machine, every launch -
-                    // verified by probing all three modes against real hardware. That single
-                    // wrong enum is why DX11 has never once initialised in the field and why
-                    // every install has silently run on the capture-invisible Magnification
-                    // fallback. Opaque is correct anyway: the shader draws a full
-                    // colour-corrected copy of the desktop, so there is nothing to blend.
-                    AlphaMode = AlphaMode.Ignore,
+                    // DELIBERATELY left as Premultiplied, which DXGI rejects on an HWND
+                    // swap-chain (it is only legal on a composition swap-chain), so this
+                    // whole DX11 path fails init and the engine falls back to MagOverlay.
+                    //
+                    // That sounds absurd, so: changing it to Ignore does make DX11
+                    // initialise - but the resulting overlay produces NO visible effect and
+                    // takes over from the Magnification path that does work, so the app ends
+                    // up doing nothing at all. Measured with DXGI Desktop Duplication:
+                    // saturation at 200% through this overlay left captured chroma unchanged
+                    // (6.8 vs a 9.4 baseline), while moving driver vibrance 50 -> 97 doubled
+                    // it (9.4 -> 18.7). A borderless fullscreen flip-model swap-chain gets
+                    // promoted to independent flip and scans out past DWM composition, so it
+                    // is neither captured nor reliably composited the way this design needs.
+                    //
+                    // Do not "fix" this enum without first making the overlay actually
+                    // change what is on screen. Getting saturation into a screen share needs
+                    // driver-level colour (NVAPI today, AMD ADL / Intel to come), not this.
+                    // See docs/design/specs/2026-07-30-vibrance-on-every-gpu-and-monitor-design.md
+                    AlphaMode = AlphaMode.Premultiplied,
                     Flags = SwapChainFlags.None,
                 };
 
