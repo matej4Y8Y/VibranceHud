@@ -291,6 +291,7 @@ namespace VibranceHud.License
         public static TimeSpan DurationForTier(string tier) => tier switch
         {
             "temp" => TimeSpan.FromHours(6),
+            "week" => TimeSpan.FromDays(7),
             "trial" => TimeSpan.FromDays(30),
             "paid" => TimeSpan.FromDays(730),
             _ => TimeSpan.FromDays(365), // free, and anything unrecognised

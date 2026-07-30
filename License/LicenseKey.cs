@@ -54,6 +54,11 @@ namespace VibranceHud.License
             /// can be handed out for a session without relying on the revocation list being
             /// fetched (and without having to remember to revoke it).</summary>
             Temp,
+
+            /// <summary>One week. Marker 'W'. The useful middle ground between a single
+            /// session and a month - long enough for someone to actually test through a
+            /// weekend, short enough to expire on its own.</summary>
+            Week,
         }
 
         public Kind GetKind()
@@ -64,6 +69,7 @@ namespace VibranceHud.License
                 case 'T': return Kind.Trial;
                 case 'P': return Kind.Paid;
                 case 'H': return Kind.Temp;
+                case 'W': return Kind.Week;
                 default: return Kind.Free;
             }
         }

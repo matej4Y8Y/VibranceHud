@@ -7,6 +7,7 @@
 // tampered/expired after an update.
 
 using System;
+using System.Linq;
 using VibranceHud.License;
 using Xunit;
 
@@ -128,6 +129,34 @@ namespace VibranceHud.Tests
             var issued = LicenseService.ParseIssued(DateTime.UtcNow.AddMonths(-1).ToString("yyyy-MM"));
             Assert.NotNull(issued);
             Assert.False(LicenseService.IsExpiredAt("paid", issued, DateTime.UtcNow));
+        }
+
+        [Fact]
+        public void WeekTier_LastsSevenDays()
+        {
+            Assert.Equal(TimeSpan.FromDays(7), LicenseService.DurationForTier("week"));
+        }
+
+        [Fact]
+        public void WeekKey_IsStillValid_SixDaysIn()
+        {
+            Assert.False(LicenseService.IsExpiredAt("week", DateTime.UtcNow.AddDays(-6), DateTime.UtcNow));
+        }
+
+        [Fact]
+        public void WeekKey_IsExpired_AfterSevenDays()
+        {
+            var now = DateTime.UtcNow;
+            Assert.True(LicenseService.IsExpiredAt("week", now.AddDays(-7).AddMinutes(-1), now));
+        }
+
+        /// <summary>Each tier has to be a distinct length, or one of them is pointless.</summary>
+        [Fact]
+        public void EveryTier_HasItsOwnDuration()
+        {
+            var all = new[] { "temp", "week", "trial", "paid", "free" }
+                .Select(LicenseService.DurationForTier).ToList();
+            Assert.Equal(all.Count, all.Distinct().Count());
         }
     }
 }

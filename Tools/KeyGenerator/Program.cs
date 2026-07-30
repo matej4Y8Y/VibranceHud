@@ -80,7 +80,9 @@ internal static class Program
             "paid" => 'P',
             // Short-lived demo key: 6 hours from activation, no revocation needed.
             "temp" => 'H',
-            _ => throw new ArgumentException($"Unknown tier: {tier}. Use free, trial, paid, or temp."),
+            // One week - long enough to test through a weekend, expires on its own.
+            "week" => 'W',
+            _ => throw new ArgumentException($"Unknown tier: {tier}. Use free, trial, paid, temp, or week."),
         };
 
         if (!overrideYearMonth)
@@ -205,8 +207,8 @@ internal static class Program
         Console.WriteLine("Usage: dotnet run --project Tools/KeyGenerator -- [options]");
         Console.WriteLine();
         Console.WriteLine("Generating keys:");
-        Console.WriteLine("  --tier <free|trial|paid|temp>  Tier (default: free)");
-        Console.WriteLine("                                 free=12mo trial=30d paid=24mo temp=6h");
+        Console.WriteLine("  --tier <free|trial|paid|temp|week>  Tier (default: free)");
+        Console.WriteLine("                                 free=12mo trial=30d paid=24mo temp=6h week=7d");
         Console.WriteLine("  --count <N>                 Number of keys to generate (default: 1)");
         Console.WriteLine("  --year <YYYY>               Override the issue year (default: current UTC)");
         Console.WriteLine("  --month <M>                 Override the issue month (default: current UTC)");
