@@ -318,6 +318,12 @@ namespace VibranceHud
             // Async path: verifies against GitHub releases/latest before launching the
             // installer, so we never silently downgrade the user to an older build that
             // happened to be lying around in %TEMP%.
+            // Bin any downloaded installer now at or below the running version. These used to
+            // pile up in %TEMP% - ~64MB each, several per user - because the recovery scan only
+            // ever looked for NEWER versions and so never removed the old ones. Before the
+            // pending check, so a superseded file isn't even considered.
+            UpdateService.CleanupObsoleteInstallers();
+
             if (await UpdateService.RunPendingUpdateIfAnyAsync(_settings))
             {
                 // Installer is running and will close us shortly. Hand control back to

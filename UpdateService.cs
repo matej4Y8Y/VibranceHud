@@ -437,6 +437,54 @@ namespace VibranceHud
         private static Version Normalize(Version v) =>
             new(v.Major, v.Minor, Math.Max(v.Build, 0));
 
+        /// <summary>
+        /// Delete downloaded installers that can no longer be useful.
+        ///
+        /// The recovery scan only ever looked for versions NEWER than the running one, so
+        /// anything older was ignored - and therefore left on disk forever. Users ended up with
+        /// several ~64MB files in %TEMP%, and before the version guard existed one of those was
+        /// what silently downgraded people. Telling users to go and clear %TEMP% by hand is not
+        /// a fix; the app made the mess and can clean it up on its own.
+        ///
+        /// Newer files are deliberately left: one of them may be a pending update waiting to
+        /// install on the next launch. Anything whose version can't be read from the name is
+        /// left too - deleting on a guess is worse than leaving a stray file.
+        ///
+        /// Runs at startup and must never throw: a locked file or a missing folder cannot be
+        /// allowed to stop the app launching.
+        /// </summary>
+        internal static void CleanupObsoleteInstallers(string directory, Version currentVersion)
+        {
+            try
+            {
+                if (!Directory.Exists(directory)) return;
+
+                foreach (var path in Directory.EnumerateFiles(directory, "PlexusX-Setup-*.exe"))
+                {
+                    try
+                    {
+                        var name = Path.GetFileName(path);
+                        var m = System.Text.RegularExpressions.Regex.Match(
+                            name, @"^PlexusX-Setup-(\d+\.\d+(?:\.\d+)?)\.exe$",
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (!m.Success) continue;
+                        if (!Version.TryParse(m.Groups[1].Value, out var v)) continue;
+
+                        // Only what's at or below what's running - a newer one might be pending.
+                        if (Normalize(v) > Normalize(currentVersion)) continue;
+
+                        File.Delete(path);
+                    }
+                    catch { /* in use, permissions - try again next launch */ }
+                }
+            }
+            catch { /* never block startup over housekeeping */ }
+        }
+
+        /// <summary>Sweep the real temp folder against the running version.</summary>
+        public static void CleanupObsoleteInstallers() =>
+            CleanupObsoleteInstallers(Path.GetTempPath(), CurrentVersion);
+
         internal static string? ResolvePendingInstaller(AppSettings settings)
         {
             if (!string.IsNullOrEmpty(settings.PendingUpdateInstaller) &&

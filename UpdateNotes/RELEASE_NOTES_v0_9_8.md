@@ -10,8 +10,9 @@ online but never checked whether the file it was installing was older than what 
 already had - and with no internet it skipped checking entirely and installed whatever it
 found. It now refuses anything older than what you're running, online or not.
 
-One-time cleanup if it happened to you: press Windows+R, type %TEMP%, press Enter, and
-delete any files starting with PlexusX-Setup. Then install this version.
+You don't need to clean anything up by hand. PlexusX now deletes old downloaded
+installers on startup - they were piling up at around 64 MB each and doing nothing but
+taking space and causing this bug.
 
 WHAT WORKS NOW THAT DIDN'T
 
