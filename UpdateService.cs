@@ -126,7 +126,13 @@ namespace VibranceHud
             var embedded = LoadEmbeddedNotes(version);
             if (!string.IsNullOrWhiteSpace(embedded)) return embedded;
 
-            return $"PlexusX v{version} - see https://github.com/{Repo}/releases/tag/v{version} for details.";
+            // Last-resort text when a release ships without notes. Deliberately no repo link:
+            // this is a paying user's "what's new" screen, not a place to send them to source
+            // code. Points at Discord instead, which is where support actually happens.
+            return $"PlexusX {version.Major}.{version.Minor}.{Math.Max(version.Build, 0)} is installed.\r\n\r\n"
+                 + "This update has no release notes.\r\n\r\n"
+                 + "Come say hi on Discord for changes, help and to report anything broken:\r\n"
+                 + AppInfo.DiscordUrl;
         }
 
         private static string? LoadEmbeddedNotes(Version version)

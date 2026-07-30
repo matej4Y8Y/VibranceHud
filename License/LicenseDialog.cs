@@ -105,11 +105,18 @@ namespace VibranceHud.License
             _getKeyBtn.FlatAppearance.BorderColor = Theme.Border;
             _getKeyBtn.Click += (s, e) =>
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                // Discord, not the source repo. Keys are handed out by the developer, so a
+                // releases page was the wrong destination for someone asking for one - and it
+                // pointed users straight at the code, which isn't where we want them.
+                try
                 {
-                    FileName = "https://github.com/matej4Y8Y/VibranceHud/releases",
-                    UseShellExecute = true,
-                });
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = AppInfo.DiscordUrl,
+                        UseShellExecute = true,
+                    });
+                }
+                catch { /* no browser / blocked - the dialog still explains what's needed */ }
             };
 
             _closeBtn = new Button

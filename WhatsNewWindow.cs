@@ -35,7 +35,7 @@ namespace VibranceHud
 
             Controls.Add(new Label
             {
-                Text = "PlexusX updated automatically.",
+                Text = "PlexusX updated itself in the background - nothing for you to do.",
                 ForeColor = Theme.TextDim,
                 Location = new Point(30, 58),
                 AutoSize = true,
@@ -53,9 +53,15 @@ namespace VibranceHud
                 Font = new Font(Theme.FontFamily, 9.5f),
                 Location = new Point(28, 92),
                 Size = new Size(ClientSize.Width - 56, 250),
+                // Run through ReleaseNotesText so markdown from either notes source doesn't
+                // render its symbols literally in a plain TextBox.
                 Text = string.IsNullOrWhiteSpace(notes)
-                    ? "This release has no notes."
-                    : notes.Replace("\r\n", "\n").Replace("\n", Environment.NewLine),
+                    ? "Thanks for updating.\r\n\r\n"
+                      + "No notes were published for this version. Everything from previous "
+                      + "releases carries over - your profiles, hotkeys and settings are untouched.\r\n\r\n"
+                      + "For changes, help or to report something broken, join the Discord:\r\n"
+                      + AppInfo.DiscordUrl
+                    : ReleaseNotesText.ToPlainText(notes),
                 TabStop = false
             };
             body.GotFocus += (s, e) => body.Select(0, 0);
