@@ -71,6 +71,12 @@ namespace VibranceHud
             _settings.DxFailureMessage = (_overlay as IDisplayOverlay)?.LastFailureMessage ?? "";
             _store.Save(_settings);
 
+            // If we started on the Magnification fallback, keep trying for DX11 in the
+            // background rather than leaving the session capture-invisible. Started here,
+            // after _store/_settings exist, because a successful upgrade persists the
+            // corrected mode so Settings stops warning about it.
+            StartOverlayUpgradeWatch();
+
             // Rebuild a previously chosen image background + its derived palette before
             // the theme is resolved, so "Custom" is a known name by the time it's applied.
             _customTheme = new Theming.CustomThemeService(dataDir, _settings);
@@ -203,15 +209,86 @@ namespace VibranceHud
             }
         }
 
-        private static ISaturationOverlay TryCreateOverlay()
+        /// <summary>One DX11 attempt. Returns null when it isn't available right now, and
+        /// reports WHY through the out params - the failed DxOverlay is disposed here, so
+        /// this is the only chance to capture its reason before it's gone.</summary>
+        private static ISaturationOverlay? TryCreateDxOverlay(
+            out DxInitFailureKind failure, out string failureMessage)
         {
             var dx = new DxOverlay();
-            if (dx.IsAvailable) return dx;
+            if (dx.IsAvailable)
+            {
+                failure = DxInitFailureKind.None;
+                failureMessage = "";
+                return dx;
+            }
+            failure = dx.LastFailure;
+            failureMessage = dx.LastFailureMessage;
             dx.Dispose();
-            // DX11 init failed (no DX11 GPU, broken driver, session locked, etc.) -
-            // fall back to Magnification API. The user sees saturated colors on the
-            // monitor but the effect is not visible in capture tools.
-            return new MagOverlay();
+            return null;
+        }
+
+        /// <summary>Overload for the retry path, which only cares whether it worked.</summary>
+        private static ISaturationOverlay? TryCreateDxOverlay() => TryCreateDxOverlay(out _, out _);
+
+        private static ISaturationOverlay TryCreateOverlay()
+        {
+            var dx = TryCreateDxOverlay(out var failure, out var failureMessage);
+            if (dx != null) return dx;
+
+            // DX11 init failed (no DX11 GPU, broken driver, locked session, GPU memory taken
+            // by a game/OBS that started first, display not ready yet). Fall back to the
+            // Magnification API so the user still sees the effect on their own monitor - but
+            // wrap it, because that path is invisible to OBS/Discord/ShadowPlay and most of
+            // those causes clear up on their own. UpgradingOverlay moves us to DX11 as soon
+            // as it becomes available instead of stranding the session on the fallback.
+            return new UpgradingOverlay(new MagOverlay(), TryCreateDxOverlay, failure, failureMessage);
+        }
+
+        /// <summary>
+        /// Poll for DX11 becoming available after a fallback start, then stop.
+        ///
+        /// Backs off (2s, 4s, 8s, …) so a machine that genuinely has no DX11 isn't building
+        /// throwaway devices forever, and gives up after a handful of tries - by then the
+        /// cause is not transient and the Settings hint is the right answer instead.
+        /// </summary>
+        private void StartOverlayUpgradeWatch()
+        {
+            if (_overlay is not UpgradingOverlay upgrading || !upgrading.CanUpgrade) return;
+
+            int delayMs = 2000;
+            const int maxAttempts = 6;
+            int attempts = 0;
+
+            var timer = new System.Windows.Forms.Timer { Interval = delayMs };
+            timer.Tick += (s, e) =>
+            {
+                attempts++;
+
+                if (upgrading.TryUpgrade())
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    // Persist the good news so Settings stops warning about capture
+                    // invisibility, and reflect it on the page if it's already open.
+                    _settings.OverlayMode = OverlayMode.Dx;
+                    _settings.DxFailure = DxInitFailureKind.None;
+                    _settings.DxFailureMessage = "";
+                    _store.Save(_settings);
+                    return;
+                }
+
+                if (attempts >= maxAttempts || !upgrading.CanUpgrade)
+                {
+                    timer.Stop();
+                    timer.Dispose();
+                    return;
+                }
+
+                delayMs = Math.Min(delayMs * 2, 30_000);
+                timer.Interval = delayMs;
+            };
+            timer.Start();
         }
 
         /// <summary>
