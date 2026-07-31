@@ -3,427 +3,964 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PlexusX — see your game the way it was meant to look</title>
-<meta name="description" content="Digital vibrance, per-game colour profiles and real FPS tweaks for Windows. Four day free trial.">
+<title>PlexusX — see them before they see you</title>
+<meta name="description" content="Digital vibrance, per-game colour profiles and real FPS tweaks for Windows. NVIDIA, AMD and Intel. Four day free trial.">
 
-<meta property="og:title" content="PlexusX">
+<meta property="og:title" content="PlexusX — see them before they see you">
 <meta property="og:description" content="Digital vibrance, per-game colour profiles and real FPS tweaks for Windows.">
 <meta property="og:type" content="website">
+<meta name="theme-color" content="#0a0a0c">
 
 <style>
-/* ---------------------------------------------------------------------------
-   Palette lifted straight from the app's dark theme so the site and the
-   product don't look like two different companies.
---------------------------------------------------------------------------- */
+/* ===========================================================================
+   PlexusX — landing page.
+
+   Self-contained on purpose: no fonts, scripts or styles fetched from anywhere
+   else. The palette is the app's own dark theme, so the site and the product
+   read as one thing.
+
+   Accent discipline: violet marks what is LIVE - the current value, the slider
+   fill, the plan you'd pick, the thing under your cursor. Everything else is
+   grey. That restraint is most of what separates this from a template.
+=========================================================================== */
 :root{
   --bg:#0a0a0c;
+  --bg-2:#0d0d11;
   --surface:#16161b;
   --surface-2:#1e1e25;
+  --surface-3:#262630;
   --border:#2a2a34;
+  --border-lit:#3c3c4a;
   --text:#f0f0f6;
   --dim:#8b8b99;
+  --dimmer:#63636f;
   --accent:#8c6ef0;
   --accent-soft:#a98ff5;
+  --accent-glow:rgba(140,110,240,.25);
   --good:#78dc8c;
-  --radius:14px;
-  --wrap:1120px;
+  --warn:#e0a23c;
+  --r:14px;
+  --wrap:1160px;
+  --ease:cubic-bezier(.2,.7,.3,1);
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
 body{
-  background:var(--bg);
-  color:var(--text);
-  font:400 16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  -webkit-font-smoothing:antialiased;
-  overflow-x:hidden;
+  background:var(--bg);color:var(--text);
+  font:400 16px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
 }
 a{color:inherit;text-decoration:none}
-img,canvas{max-width:100%;display:block}
+canvas,svg{display:block;max-width:100%}
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
 
 .wrap{max-width:var(--wrap);margin:0 auto;padding:0 24px}
 .eyebrow{
-  font:700 11px/1 system-ui,sans-serif;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--accent-soft);margin-bottom:14px;
+  font:700 11px/1 system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent-soft);margin-bottom:16px;display:flex;align-items:center;gap:9px;
 }
-h1,h2,h3{line-height:1.15;letter-spacing:-.02em;font-weight:700}
-h1{font-size:clamp(38px,6.4vw,68px)}
-h2{font-size:clamp(28px,4vw,40px)}
-h3{font-size:19px}
-.lede{color:var(--dim);font-size:clamp(16px,2vw,19px);max-width:56ch}
+.eyebrow::before{content:"";width:18px;height:1px;background:var(--accent);opacity:.7}
+h1,h2,h3,h4{line-height:1.14;letter-spacing:-.025em;font-weight:700}
+h1{font-size:clamp(40px,6.6vw,72px)}
+h2{font-size:clamp(29px,4.2vw,44px)}
+h3{font-size:19px;letter-spacing:-.015em}
+h4{font-size:16px}
+.lede{color:var(--dim);font-size:clamp(16px,1.9vw,19px);max-width:58ch}
+.center{text-align:center;margin-left:auto;margin-right:auto}
+.center .eyebrow{justify-content:center}
+.center .lede{margin-left:auto;margin-right:auto}
 
+/* ---- buttons ------------------------------------------------------------ */
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:9px;
   padding:14px 26px;border-radius:11px;font-weight:600;font-size:15px;
-  border:1px solid transparent;cursor:pointer;transition:transform .12s,filter .12s;
-  white-space:nowrap;
+  border:1px solid transparent;white-space:nowrap;
+  transition:transform .14s var(--ease),filter .14s,background .14s,border-color .14s;
 }
-.btn:hover{transform:translateY(-1px)}
-.btn-primary{background:var(--accent);color:#0b0b10}
-.btn-primary:hover{filter:brightness(1.08)}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(0)}
+.btn-primary{background:var(--accent);color:#0b0b10;box-shadow:0 10px 30px var(--accent-glow)}
+.btn-primary:hover{filter:brightness(1.09);box-shadow:0 14px 38px var(--accent-glow)}
 .btn-ghost{background:transparent;border-color:var(--border);color:var(--text)}
-.btn-ghost:hover{background:var(--surface-2);border-color:#3b3b48}
+.btn-ghost:hover{background:var(--surface-2);border-color:var(--border-lit)}
+.btn-lg{padding:16px 32px;font-size:16px}
+
+/* ---- announcement ------------------------------------------------------- */
+.banner{
+  background:linear-gradient(90deg,#150f28,#1b1435 50%,#150f28);
+  border-bottom:1px solid #2c2145;text-align:center;
+  padding:9px 16px;font-size:13.5px;color:var(--dim);
+}
+.banner b{color:var(--accent-soft);font-weight:600}
+.banner a{color:var(--text);text-decoration:underline;text-underline-offset:3px;text-decoration-color:#4a3d7d}
 
 /* ---- nav ---------------------------------------------------------------- */
-header{
-  position:sticky;top:0;z-index:50;
-  background:rgba(10,10,12,.78);backdrop-filter:blur(14px);
-  border-bottom:1px solid var(--border);
+header{position:sticky;top:0;z-index:60;background:rgba(10,10,12,.72);
+  backdrop-filter:blur(16px);border-bottom:1px solid var(--border)}
+.nav{display:flex;align-items:center;gap:34px;height:68px;position:relative}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18.5px;letter-spacing:-.03em}
+.logo svg{width:23px;height:23px;flex:none}
+.nav-links{display:flex;gap:28px;margin-left:auto;font-size:14.5px;color:var(--dim)}
+.nav-links a{position:relative;padding:4px 0;transition:color .15s}
+.nav-links a:hover,.nav-links a.on{color:var(--text)}
+.nav-links a.on::after{
+  content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;
+  background:var(--accent);border-radius:2px;
 }
-.nav{display:flex;align-items:center;gap:32px;height:66px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:-.02em;font-size:18px}
-.logo-mark{width:22px;height:22px;flex:none}
-.nav-links{display:flex;gap:26px;margin-left:auto;font-size:14.5px;color:var(--dim)}
-.nav-links a:hover{color:var(--text)}
 .nav .btn{padding:9px 18px;font-size:14px}
-@media(max-width:820px){.nav-links{display:none}}
+.burger{display:none;margin-left:auto;padding:8px;color:var(--dim)}
+@media(max-width:900px){
+  .nav-links{display:none}
+  .burger{display:block}
+  .nav>.btn{display:none}
+  .nav-links.open{
+    display:flex;flex-direction:column;position:absolute;top:68px;left:-24px;right:-24px;
+    background:var(--bg);border-bottom:1px solid var(--border);padding:20px 24px;gap:18px;
+  }
+}
 
 /* ---- hero --------------------------------------------------------------- */
-.hero{position:relative;padding:88px 0 72px;overflow:hidden}
-#plexus{position:absolute;inset:0;width:100%;height:100%;opacity:.5;pointer-events:none}
-.hero .wrap{position:relative;z-index:1}
-.hero-grid{display:grid;grid-template-columns:1fr 1fr;gap:56px;align-items:center}
-@media(max-width:940px){.hero-grid{grid-template-columns:1fr;gap:40px}}
-.hero h1 span{
-  background:linear-gradient(96deg,var(--accent) 10%,#e3b0ff 90%);
+.hero{position:relative;padding:76px 0 90px;overflow:hidden}
+#plexus{position:absolute;inset:0;width:100%;height:100%;opacity:.55;pointer-events:none}
+.hero::after{
+  content:"";position:absolute;left:50%;top:-160px;width:900px;height:520px;
+  transform:translateX(-50%);pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(140,110,240,.18),transparent 68%);
+}
+.hero .wrap{position:relative;z-index:2}
+.hero-head{max-width:760px}
+.hero h1 em{
+  font-style:normal;
+  background:linear-gradient(100deg,var(--accent) 5%,#dfb2ff 60%,#8ee6ff 100%);
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
-.hero .lede{margin:22px 0 32px}
+.hero .lede{margin:24px 0 34px;font-size:clamp(17px,2vw,20px)}
 .cta-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.cta-note{color:var(--dim);font-size:13.5px;margin-top:16px}
+.cta-note{color:var(--dimmer);font-size:13.5px;margin-top:18px;display:flex;gap:18px;flex-wrap:wrap}
+.cta-note span{display:flex;align-items:center;gap:7px}
+.cta-note svg{color:var(--good);flex:none}
 
-/* ---- the live demo ------------------------------------------------------ */
-.demo{
-  position:relative;
-  background:linear-gradient(180deg,#1a1a21,var(--surface) 42%);
-  border:1px solid var(--border);
-  border-radius:var(--radius);padding:16px;
-  box-shadow:0 30px 70px rgba(0,0,0,.55);
+/* ---- the app, drawn rather than screenshotted --------------------------- */
+.shot{
+  margin-top:64px;position:relative;border-radius:16px;overflow:hidden;
+  border:1px solid var(--border-lit);background:var(--bg-2);
+  box-shadow:0 50px 110px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03);
 }
-/* The rim: a thin highlight along the top edge only, the way light actually falls. */
-.demo::before,.plan.featured::before{
-  content:"";position:absolute;left:14%;right:14%;top:-1px;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(200,185,255,.5),transparent);
-  pointer-events:none;
+.shot::before{
+  content:"";position:absolute;left:18%;right:18%;top:0;height:1px;z-index:3;
+  background:linear-gradient(90deg,transparent,rgba(200,185,255,.55),transparent);
 }
-.stage{
-  position:relative;height:250px;border-radius:9px;overflow:hidden;
-  background:#0d0d11;transition:filter .06s linear;
-}
-.stage i{position:absolute;display:block;border-radius:50%;filter:blur(30px)}
-.b1{width:60%;height:75%;left:-8%;top:-12%;background:#1d5fd6}
-.b2{width:55%;height:80%;right:-6%;top:6%;background:#c9342f}
-.b3{width:52%;height:62%;left:26%;bottom:-20%;background:#17a05e}
-.b4{width:34%;height:44%;left:8%;bottom:-8%;background:#d69b1e}
-.b5{width:30%;height:40%;right:16%;top:-6%;background:#8c3fd0}
-.swatches{position:absolute;left:0;right:0;bottom:0;display:flex;height:34px}
-.swatches b{flex:1}
+.titlebar{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;
+  background:var(--surface);border-bottom:1px solid var(--border)}
+.titlebar .t{font-size:12.5px;color:var(--dim);font-weight:600;letter-spacing:.02em}
+.titlebar .win{margin-left:auto;display:flex;gap:16px;color:var(--dimmer)}
+.app{display:grid;grid-template-columns:196px 1fr;min-height:430px}
+@media(max-width:760px){.app{grid-template-columns:1fr}.sidebar{display:none}}
 
-.slider-row{display:flex;align-items:center;gap:14px;margin-top:16px}
-.slider-row label{font-size:12.5px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;font-weight:600}
-.val{margin-left:auto;font:700 15px system-ui;color:var(--accent-soft);min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
-input[type=range]{
-  -webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:3px;
-  background:linear-gradient(90deg,#3a3a46,var(--accent));outline:none;cursor:pointer;
-}
-input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none;width:19px;height:19px;border-radius:50%;
-  background:var(--text);border:3px solid var(--accent);cursor:grab;
-}
-input[type=range]::-moz-range-thumb{
-  width:19px;height:19px;border-radius:50%;background:var(--text);
-  border:3px solid var(--accent);cursor:grab;
-}
-.demo-hint{text-align:center;color:var(--dim);font-size:12.5px;margin-top:12px}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:16px 12px}
+.side-cap{font:700 9.5px/1 system-ui;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dimmer);padding:0 10px;margin:6px 0 12px}
+.navitem{display:flex;align-items:center;gap:11px;padding:10px;border-radius:9px;
+  color:var(--dim);font-size:14px;font-weight:500;margin-bottom:3px}
+.navitem svg{width:16px;height:16px;flex:none}
+.navitem.on{background:var(--surface-3);color:var(--text)}
+.navitem.on svg{color:var(--accent-soft)}
+
+.panel{padding:24px 26px;display:flex;flex-direction:column;gap:20px}
+.panel-head{display:flex;align-items:baseline;gap:12px}
+.panel-head h4{font-size:17px}
+.pill{font:700 10px/1 system-ui;letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 9px;border-radius:20px;background:rgba(120,220,140,.12);
+  color:var(--good);border:1px solid rgba(120,220,140,.25)}
+.ctl{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px}
+.ctl-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.ctl-label{font:700 10.5px/1 system-ui;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.ctl-val{font:700 22px/1 system-ui;color:var(--accent-soft);font-variant-numeric:tabular-nums}
+.track{height:6px;border-radius:4px;background:var(--surface-3);position:relative}
+.track i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;
+  background:linear-gradient(90deg,#6b4fd4,var(--accent))}
+.track b{position:absolute;top:50%;width:17px;height:17px;border-radius:50%;
+  transform:translate(-50%,-50%);background:var(--text);border:3px solid var(--accent);
+  box-shadow:0 0 0 5px rgba(140,110,240,.16)}
+.mini-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.mini-row{grid-template-columns:1fr}}
+.mini{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px 16px}
+.mini .k{font:700 9.5px/1 system-ui;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:8px}
+.mini .v{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none;
+  box-shadow:0 0 8px rgba(120,220,140,.7)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:7px 13px;border-radius:9px;background:var(--surface);
+  border:1px solid var(--border);font-size:13px;color:var(--dim);font-weight:500}
+.chip.on{background:rgba(140,110,240,.13);border-color:#4a3d7d;color:var(--accent-soft)}
+
+/* ---- trust strip -------------------------------------------------------- */
+.strip{border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:var(--bg-2);padding:26px 0}
+.strip-in{display:flex;gap:20px;justify-content:space-between;flex-wrap:wrap;align-items:center}
+.stat{display:flex;align-items:center;gap:11px;color:var(--dim);font-size:14.5px}
+.stat b{color:var(--text);font-size:19px;font-weight:700;letter-spacing:-.02em}
+.stat svg{color:var(--dimmer);flex:none}
 
 /* ---- sections ----------------------------------------------------------- */
-section{padding:82px 0;border-top:1px solid var(--border)}
-.sec-head{max-width:640px;margin-bottom:46px}
-.sec-head h2{margin-bottom:14px}
+section{padding:96px 0;border-top:1px solid var(--border)}
+section.plain{border-top:0}
+.sec-head{max-width:660px;margin-bottom:52px}
+.sec-head h2{margin-bottom:16px}
 
+/* ---- before / after ----------------------------------------------------- */
+.compare{position:relative;border-radius:var(--r);overflow:hidden;
+  border:1px solid var(--border-lit);cursor:ew-resize;user-select:none;
+  box-shadow:0 34px 80px rgba(0,0,0,.55);aspect-ratio:16/8;touch-action:none}
+.compare>div{position:absolute;inset:0}
+.compare .after{clip-path:inset(0 0 0 50%)}
+.compare svg{width:100%;height:100%}
+.handle{position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--text);
+  transform:translateX(-1px);z-index:4;box-shadow:0 0 22px rgba(255,255,255,.45)}
+.handle::after{content:"";position:absolute;top:50%;left:50%;width:42px;height:42px;
+  transform:translate(-50%,-50%);border-radius:50%;background:var(--text);
+  border:3px solid var(--accent);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.handle::before{content:"";position:absolute;top:50%;left:50%;width:14px;height:14px;z-index:1;
+  transform:translate(-50%,-50%) rotate(45deg);border:solid #0b0b10;
+  border-width:0 0 2.5px 2.5px;box-shadow:11px -11px 0 -2px #0b0b10;border-radius:2px}
+.handle:focus-visible{outline:none}
+.handle:focus-visible::after{box-shadow:0 0 0 4px var(--accent-glow),0 6px 20px rgba(0,0,0,.5)}
+.tagline{position:absolute;bottom:16px;z-index:5;padding:7px 14px;border-radius:8px;
+  background:rgba(10,10,12,.78);backdrop-filter:blur(6px);font-size:12.5px;
+  font-weight:700;letter-spacing:.1em;text-transform:uppercase;pointer-events:none;
+  border:1px solid var(--border)}
+.tagline.l{left:16px;color:var(--dim)}
+.tagline.r{right:16px;color:var(--accent-soft);border-color:#4a3d7d}
+.compare-note{text-align:center;color:var(--dimmer);font-size:13.5px;margin-top:18px}
+
+/* ---- feature cards ------------------------------------------------------ */
 .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-@media(max-width:900px){.cards{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.cards{grid-template-columns:1fr}}
-.card{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:26px;transition:border-color .15s,transform .15s;
-}
-.card:hover{border-color:#3c3c4a;transform:translateY(-2px)}
-.card .ico{
-  width:38px;height:38px;border-radius:10px;background:var(--surface-2);
-  border:1px solid var(--border);
-  display:grid;place-items:center;margin-bottom:16px;color:var(--dim);
-  transition:color .15s,border-color .15s;
-}
+@media(max-width:920px){.cards{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.cards{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:28px;transition:border-color .18s,transform .18s var(--ease)}
+.card:hover{border-color:var(--border-lit);transform:translateY(-3px)}
+.card .ico{width:40px;height:40px;border-radius:11px;background:var(--surface-2);
+  border:1px solid var(--border);display:grid;place-items:center;margin-bottom:18px;
+  color:var(--dim);transition:color .18s,border-color .18s,background .18s}
 /* Accent arrives on hover - the card you're looking at is the live one. */
-.card:hover .ico{color:var(--accent-soft);border-color:#403a5c}
-.card h3{margin-bottom:8px}
+.card:hover .ico{color:var(--accent-soft);border-color:#403a5c;background:rgba(140,110,240,.09)}
+.card h3{margin-bottom:9px}
 .card p{color:var(--dim);font-size:15px}
 
+/* ---- alternating deep dives --------------------------------------------- */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.split+.split{margin-top:110px}
+.split.flip .copy{order:2}
+@media(max-width:900px){
+  .split{grid-template-columns:1fr;gap:36px}
+  .split.flip .copy{order:0}
+  .split+.split{margin-top:76px}
+}
+.split h2{font-size:clamp(26px,3.2vw,34px);margin-bottom:16px}
+.split>.copy p{color:var(--dim);margin-bottom:22px}
+.ticks{list-style:none;display:grid;gap:12px}
+.ticks li{display:flex;gap:12px;font-size:15px;color:var(--dim)}
+.ticks svg{flex:none;margin-top:5px;color:var(--accent-soft)}
+.ticks b{color:var(--text);font-weight:600}
+.frame{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:16px;box-shadow:0 26px 60px rgba(0,0,0,.45);position:relative}
+.frame::before{content:"";position:absolute;left:16%;right:16%;top:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(200,185,255,.4),transparent)}
+
+.grow{display:flex;align-items:center;gap:13px;padding:13px;border-radius:10px;
+  border:1px solid transparent}
+.grow+.grow{margin-top:4px}
+.grow.on{background:var(--surface-2);border-color:var(--border)}
+.gicon{width:34px;height:34px;border-radius:8px;flex:none;display:grid;place-items:center;
+  font:700 13px system-ui;color:#0b0b10}
+.gname{font-size:14.5px;font-weight:600}
+.gsub{font-size:12.5px;color:var(--dimmer)}
+.gstate{margin-left:auto;font-size:12px;font-weight:600;color:var(--good)}
+.gstate.off{color:var(--dimmer)}
+
+.trow{display:flex;align-items:flex-start;gap:14px;padding:14px 0}
+.trow+.trow{border-top:1px solid var(--border)}
+.sw{width:38px;height:22px;border-radius:20px;background:var(--surface-3);
+  position:relative;flex:none;margin-top:2px}
+.sw i{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--dimmer)}
+.sw.on{background:var(--accent)}
+.sw.on i{left:19px;background:#fff}
+.tname{font-size:14.5px;font-weight:600;margin-bottom:3px}
+.tsub{font-size:12.5px;color:var(--dimmer);line-height:1.5}
+.badge{font:700 9px/1 system-ui;letter-spacing:.1em;text-transform:uppercase;
+  padding:4px 7px;border-radius:5px;margin-left:8px;vertical-align:middle;
+  background:rgba(224,162,60,.13);color:var(--warn);border:1px solid rgba(224,162,60,.28)}
+
+/* ---- steps -------------------------------------------------------------- */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;counter-reset:s}
+@media(max-width:820px){.steps{grid-template-columns:1fr}}
+.step{position:relative;padding-top:24px}
+.step::before{counter-increment:s;content:"0" counter(s);
+  font:700 13px/1 system-ui;letter-spacing:.1em;color:var(--accent-soft);
+  position:absolute;top:0;left:0}
+.step::after{content:"";position:absolute;top:6px;left:34px;right:-11px;height:1px;
+  background:linear-gradient(90deg,var(--border),transparent)}
+.step:last-child::after{display:none}
+@media(max-width:820px){.step::after{display:none}}
+.step h3{margin:0 0 9px}
+.step p{color:var(--dim);font-size:15px}
+
+/* ---- comparison table --------------------------------------------------- */
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{padding:16px 20px;text-align:left;font-size:14.5px;border-bottom:1px solid var(--border)}
+thead th{font:700 11px/1 system-ui;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--dimmer);background:var(--bg-2)}
+thead th.us{color:var(--accent-soft)}
+tbody td:first-child{color:var(--text);font-weight:500}
+tbody td{color:var(--dim)}
+tbody tr:last-child td{border-bottom:0}
+td.us{background:rgba(140,110,240,.05)}
+.yes{color:var(--good);font-weight:600}
+.no{color:var(--dimmer)}
+.part{color:var(--warn)}
+
+/* ---- quotes ------------------------------------------------------------- */
+.quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:920px){.quotes{grid-template-columns:1fr}}
+.quote{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px}
+.qhead{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.avatar{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font:700 14px system-ui;color:#0b0b10}
+.qname{font-size:14px;font-weight:600}
+.qsub{font-size:12px;color:var(--dimmer)}
+.quote p{color:var(--dim);font-size:15px}
+
 /* ---- pricing ------------------------------------------------------------ */
-.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:start}
-@media(max-width:880px){.plans{grid-template-columns:1fr}}
-.plan{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:30px;position:relative;
-}
-.plan.featured{
-  position:relative;border-color:#4a3d7d;
-  background:linear-gradient(180deg,#1c1730,var(--surface) 55%);
-  box-shadow:0 20px 50px rgba(0,0,0,.4);
-}
-.tag{
-  position:absolute;top:-11px;left:30px;background:var(--accent);color:#0b0b10;
-  font:700 10.5px/1 system-ui;letter-spacing:.1em;text-transform:uppercase;
-  padding:6px 11px;border-radius:20px;
-}
-.plan h3{font-size:16px;color:var(--dim);font-weight:600;letter-spacing:.03em}
-.price{display:flex;align-items:baseline;gap:6px;margin:12px 0 4px}
-.price b{font-size:46px;font-weight:700;letter-spacing:-.03em}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
+@media(max-width:900px){.plans{grid-template-columns:1fr;max-width:460px;margin:0 auto}}
+.plan{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:32px;position:relative}
+.plan.featured{border-color:#4a3d7d;background:linear-gradient(180deg,#1c1730,var(--surface) 58%);
+  box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.plan.featured::before{content:"";position:absolute;left:16%;right:16%;top:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(200,185,255,.55),transparent)}
+.tag{position:absolute;top:-11px;left:32px;background:var(--accent);color:#0b0b10;
+  font:700 10.5px/1 system-ui;letter-spacing:.11em;text-transform:uppercase;
+  padding:6px 12px;border-radius:20px}
+.plan h3{font-size:15px;color:var(--dim);font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.price{display:flex;align-items:baseline;gap:7px;margin:14px 0 6px}
+.price b{font-size:50px;font-weight:700;letter-spacing:-.04em}
 .price span{color:var(--dim);font-size:15px}
-.plan .sub{color:var(--dim);font-size:14px;min-height:42px}
-.plan .btn{width:100%;margin:20px 0 22px}
-.plan ul{list-style:none;display:grid;gap:11px;font-size:14.5px}
-.plan li{display:flex;gap:10px;color:var(--dim)}
+.plan .sub{color:var(--dim);font-size:14px;min-height:44px}
+.plan .btn{width:100%;margin:22px 0 24px}
+.plan ul{list-style:none;display:grid;gap:12px;font-size:14.5px}
+.plan li{display:flex;gap:11px;color:var(--dim)}
 .plan li svg{flex:none;margin-top:4px;color:var(--good)}
 .plan li b{color:var(--text);font-weight:600}
+.guarantee{text-align:center;color:var(--dimmer);font-size:14px;margin-top:32px}
+
+/* ---- requirements ------------------------------------------------------- */
+.reqs{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+@media(max-width:860px){.reqs{grid-template-columns:1fr 1fr}}
+.req{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.req .k{font:700 10px/1 system-ui;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:9px}
+.req .v{font-size:14.5px;font-weight:600}
+.req .n{font-size:12.5px;color:var(--dimmer);margin-top:5px}
 
 /* ---- faq ---------------------------------------------------------------- */
-.faq{display:grid;gap:10px;max-width:820px}
-details{
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:11px;padding:18px 22px;
-}
-details[open]{border-color:#3c3c4a}
-summary{
-  cursor:pointer;font-weight:600;font-size:16px;list-style:none;
-  display:flex;justify-content:space-between;gap:16px;align-items:center;
-}
+.faq{display:grid;gap:10px;max-width:840px;margin:0 auto}
+details{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:19px 24px}
+details[open]{border-color:var(--border-lit)}
+summary{cursor:pointer;font-weight:600;font-size:16px;list-style:none;
+  display:flex;justify-content:space-between;gap:16px;align-items:center}
 summary::-webkit-details-marker{display:none}
-summary::after{content:"+";color:var(--accent-soft);font-size:22px;font-weight:400;line-height:1}
+summary::after{content:"+";color:var(--accent-soft);font-size:23px;font-weight:400;line-height:1}
 details[open] summary::after{content:"−"}
-details p{color:var(--dim);font-size:15px;margin-top:12px}
+details p{color:var(--dim);font-size:15px;margin-top:13px}
+details p+p{margin-top:10px}
 
-/* ---- final cta + footer ------------------------------------------------- */
-.final{text-align:center;padding:96px 0}
-.final h2{margin-bottom:16px}
-.final .lede{margin:0 auto 30px}
-footer{border-top:1px solid var(--border);padding:34px 0;color:var(--dim);font-size:14px}
-.foot{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
-.foot .links{margin-left:auto;display:flex;gap:22px}
-.foot a:hover{color:var(--text)}
+/* ---- final + footer ----------------------------------------------------- */
+.final{position:relative;text-align:center;padding:110px 0;overflow:hidden}
+.final::before{content:"";position:absolute;left:50%;top:50%;width:820px;height:420px;
+  transform:translate(-50%,-50%);pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(140,110,240,.16),transparent 68%)}
+.final .wrap{position:relative}
+.final h2{margin-bottom:18px}
+.final .lede{margin:0 auto 32px}
+
+footer{border-top:1px solid var(--border);background:var(--bg-2);padding:56px 0 34px}
+.fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:44px}
+@media(max-width:820px){.fgrid{grid-template-columns:1fr 1fr;gap:32px}}
+.fcol h5{font:700 10.5px/1 system-ui;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dimmer);margin-bottom:16px}
+.fcol a{display:block;color:var(--dim);font-size:14.5px;margin-bottom:11px;transition:color .15s}
+.fcol a:hover{color:var(--text)}
+.fabout p{color:var(--dimmer);font-size:14px;max-width:34ch;margin-top:14px}
+.fbot{border-top:1px solid var(--border);padding-top:26px;display:flex;gap:18px;
+  flex-wrap:wrap;align-items:center;color:var(--dimmer);font-size:13.5px}
+.fbot .r{margin-left:auto;display:flex;gap:22px}
+
+/* ---- scroll reveal ------------------------------------------------------ */
+.rise{opacity:0;transform:translateY(22px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+.rise.in{opacity:1;transform:none}
 
 @media(prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
   html{scroll-behavior:auto}
+  .rise{opacity:1;transform:none}
 }
 </style>
 </head>
 <body>
 
+<div class="banner">
+  <b>PlexusX 1.0</b> — per-game profiles, real FPS tweaks and a 4-day trial.
+  <a href="#pricing">See what's in it</a>
+</div>
+
 <header>
   <div class="wrap nav">
     <a class="logo" href="#top">
-      <svg class="logo-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="4" r="2.4" fill="#8c6ef0"/>
         <circle cx="4.5" cy="17" r="2.4" fill="#8c6ef0"/>
         <circle cx="19.5" cy="17" r="2.4" fill="#8c6ef0"/>
         <circle cx="12" cy="12" r="1.7" fill="#e3b0ff"/>
-        <path d="M12 4 12 12M12 12 4.5 17M12 12 19.5 17M4.5 17 19.5 17" stroke="#8c6ef0" stroke-width="1.1" opacity=".55"/>
+        <path d="M12 4v8m0 0-7.5 5M12 12l7.5 5M4.5 17h15" stroke="#8c6ef0" stroke-width="1.1" opacity=".55"/>
       </svg>
       PlexusX
     </a>
-    <nav class="nav-links">
+    <nav class="nav-links" id="navlinks">
+      <a href="#proof">Proof</a>
       <a href="#features">Features</a>
       <a href="#games">Games</a>
+      <a href="#tweaks">FPS</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
     </nav>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 7h16M4 12h16M4 17h16"/>
+      </svg>
+    </button>
     <a class="btn btn-primary" href="#pricing">Get PlexusX</a>
   </div>
 </header>
 
-<!-- ===================== hero ===================== -->
+<!-- ======================= hero ======================= -->
 <div class="hero" id="top">
   <canvas id="plexus" aria-hidden="true"></canvas>
   <div class="wrap">
-    <div class="hero-grid">
-      <div>
-        <div class="eyebrow">For Windows · NVIDIA, AMD &amp; Intel</div>
-        <h1>Your monitor is<br>showing you <span>less<br>than it can.</span></h1>
-        <p class="lede">
-          PlexusX turns up the colour your GPU is already capable of, so enemies stop
-          blending into terrain. Set it once, per game, and forget it.
-        </p>
-        <div class="cta-row">
-          <a class="btn btn-primary" href="#pricing">Start 4-day free trial</a>
-          <a class="btn btn-ghost" href="#demo">See the difference</a>
-        </div>
-        <p class="cta-note">No card for the trial · One key, one PC · Works on any GPU</p>
+    <div class="hero-head">
+      <div class="eyebrow">Windows · NVIDIA, AMD &amp; Intel</div>
+      <h1>See them before<br><em>they see you.</em></h1>
+      <p class="lede">
+        Your GPU can push far more colour than Windows asks it for. PlexusX turns it up,
+        per game, so players stop blending into grass, rock and shadow.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" href="#pricing">Start 4-day free trial</a>
+        <a class="btn btn-ghost btn-lg" href="#proof">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          See the difference
+        </a>
       </div>
+      <div class="cta-note">
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12.5 9.5 18 20 6.5"/></svg>No card for the trial</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12.5 9.5 18 20 6.5"/></svg>Doesn't touch your games</span>
+        <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12.5 9.5 18 20 6.5"/></svg>Reverts everything on exit</span>
+      </div>
+    </div>
 
-      <div class="demo" id="demo">
-        <div class="stage" id="stage">
-          <i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i><i class="b5"></i>
-          <div class="swatches">
-            <b style="background:#1d5fd6"></b><b style="background:#17a05e"></b>
-            <b style="background:#c9342f"></b><b style="background:#d69b1e"></b>
-            <b style="background:#8c3fd0"></b><b style="background:#2bb3c0"></b>
+    <div class="shot rise">
+      <div class="titlebar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="4" r="2.4" fill="#8c6ef0"/><circle cx="4.5" cy="17" r="2.4" fill="#8c6ef0"/>
+          <circle cx="19.5" cy="17" r="2.4" fill="#8c6ef0"/>
+          <path d="M12 4v8m0 0-7.5 5M12 12l7.5 5" stroke="#8c6ef0" stroke-width="1.2" opacity=".5"/>
+        </svg>
+        <span class="t">PlexusX</span>
+        <span class="win">
+          <svg width="11" height="11" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.3"><path d="M1 6h10"/></svg>
+          <svg width="11" height="11" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.3" fill="none"><rect x="1.5" y="1.5" width="9" height="9"/></svg>
+          <svg width="11" height="11" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.3"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+        </span>
+      </div>
+      <div class="app">
+        <aside class="sidebar">
+          <div class="side-cap">Display</div>
+          <div class="navitem on">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3.5 9h17M3.5 15h17"/></svg>
+            Vibrance
+          </div>
+          <div class="navitem">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6.5" width="19" height="11" rx="3"/><path d="M7 10v4M5 12h4M16 11h.01M18.5 13.5h.01"/></svg>
+            Games
+          </div>
+          <div class="side-cap" style="margin-top:18px">System</div>
+          <div class="navitem">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h4l2-5 4 10 2-5h4"/></svg>
+            FPS Tweaks
+          </div>
+          <div class="navitem">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+            Settings
+          </div>
+        </aside>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Vibrance</h4>
+            <span class="pill">Active</span>
+          </div>
+
+          <div class="ctl">
+            <div class="ctl-top">
+              <span class="ctl-label">Digital vibrance</span>
+              <span class="ctl-val" id="mockval">78%</span>
+            </div>
+            <div class="track"><i id="mockfill" style="width:78%"></i><b id="mockthumb" style="left:78%"></b></div>
+          </div>
+
+          <div class="chips">
+            <span class="chip">Off</span>
+            <span class="chip">Subtle</span>
+            <span class="chip on">Competitive</span>
+            <span class="chip">Max</span>
+          </div>
+
+          <div class="mini-row">
+            <div class="mini">
+              <div class="k">Display 1 · 1440p 165Hz</div>
+              <div class="v"><span class="dot"></span>Applied</div>
+            </div>
+            <div class="mini">
+              <div class="k">Display 2 · 1080p 60Hz</div>
+              <div class="v"><span class="dot"></span>Applied</div>
+            </div>
+          </div>
+
+          <div class="mini">
+            <div class="k">Detected game</div>
+            <div class="v"><span class="dot"></span>Rust — profile applied automatically</div>
           </div>
         </div>
-        <div class="slider-row">
-          <label for="vib">Vibrance</label>
-          <input type="range" id="vib" min="0" max="100" value="50" aria-label="Vibrance">
-          <span class="val" id="vibval">50%</span>
-        </div>
-        <p class="demo-hint">Drag it. This is roughly what the app does to everything on screen.</p>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ===================== features ===================== -->
+<!-- ======================= trust strip ======================= -->
+<div class="strip">
+  <div class="wrap strip-in">
+    <div class="stat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.87"/></svg>
+      <span><b>300+</b> in the Discord</span>
+    </div>
+    <div class="stat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
+      <span><b>NVIDIA · AMD · Intel</b></span>
+    </div>
+    <div class="stat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/></svg>
+      <span><b>Windows 10 &amp; 11</b></span>
+    </div>
+    <div class="stat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3.5 2"/></svg>
+      <span><b>Under 60 seconds</b> to set up</span>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= before / after ======================= -->
+<section id="proof">
+  <div class="wrap">
+    <div class="sec-head center">
+      <div class="eyebrow">The whole point</div>
+      <h2>One of these has a player in it.</h2>
+      <p class="lede">Both do. Drag the handle — same frame, same monitor. The only difference
+        is how much colour your GPU is being told to send.</p>
+    </div>
+
+    <div class="compare rise" id="compare">
+      <div class="before">
+        <svg viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice" aria-label="Scene at default colour">
+          <use href="#scene" style="filter:saturate(.42) brightness(.94)"/>
+        </svg>
+      </div>
+      <div class="after" id="after">
+        <svg viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice" aria-label="Scene with vibrance applied">
+          <use href="#scene" style="filter:saturate(1.85) contrast(1.1)"/>
+        </svg>
+      </div>
+      <span class="tagline l">Default</span>
+      <span class="tagline r">PlexusX</span>
+      <div class="handle" id="handle"></div>
+    </div>
+    <p class="compare-note">Illustration of the effect. What you get depends on your monitor and how far you push it.</p>
+  </div>
+</section>
+
+<!-- the scene, defined once and used twice above -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a6b86"/><stop offset="1" stop-color="#8ea4a8"/>
+    </linearGradient>
+    <linearGradient id="hill1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4c6350"/><stop offset="1" stop-color="#3a4c3e"/>
+    </linearGradient>
+    <linearGradient id="hill2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5c7355"/><stop offset="1" stop-color="#44543f"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b7a48"/><stop offset="1" stop-color="#4e5a34"/>
+    </linearGradient>
+
+    <g id="scene">
+      <rect width="1200" height="600" fill="url(#sky)"/>
+      <circle cx="930" cy="130" r="52" fill="#d9c88a" opacity=".55"/>
+      <path d="M0 300 L150 240 L320 290 L470 225 L640 285 L820 235 L1000 290 L1200 250 L1200 600 L0 600Z" fill="url(#hill1)"/>
+      <path d="M0 370 L180 330 L360 380 L560 325 L760 375 L980 330 L1200 372 L1200 600 L0 600Z" fill="url(#hill2)"/>
+      <path d="M0 430 L1200 400 L1200 600 L0 600Z" fill="url(#ground)"/>
+      <ellipse cx="200" cy="470" rx="90" ry="34" fill="#5e5b50"/>
+      <ellipse cx="1010" cy="500" rx="115" ry="42" fill="#57544b"/>
+      <ellipse cx="640" cy="455" rx="52" ry="20" fill="#605d52"/>
+      <path d="M60 600 q14-70 30-96 q8 46 4 96Z" fill="#5f7038"/>
+      <path d="M300 600 q18-84 36-112 q10 54 4 112Z" fill="#66783c"/>
+      <path d="M900 600 q16-76 34-104 q8 50 2 104Z" fill="#5c6c36"/>
+      <path d="M1130 600 q14-64 28-88 q8 42 2 88Z" fill="#63753a"/>
+      <!-- the player: an olive jacket against olive grass. This is the whole demo. -->
+      <g transform="translate(690 400)">
+        <ellipse cx="24" cy="126" rx="34" ry="8" fill="#000" opacity=".22"/>
+        <rect x="12" y="76" width="10" height="48" rx="4" fill="#4a4536"/>
+        <rect x="27" y="76" width="10" height="48" rx="4" fill="#443f31"/>
+        <path d="M8 34h33a7 7 0 0 1 7 7v34a5 5 0 0 1-5 5H6a5 5 0 0 1-5-5V41a7 7 0 0 1 7-7Z" fill="#6e6438"/>
+        <rect x="-4" y="40" width="9" height="34" rx="4" fill="#655c33" transform="rotate(-9 0 40)"/>
+        <rect x="44" y="40" width="9" height="34" rx="4" fill="#655c33" transform="rotate(9 48 40)"/>
+        <circle cx="24" cy="20" r="14" fill="#a8845e"/>
+        <path d="M9 18a15 15 0 0 1 30 0v3H9Z" fill="#5c5330"/>
+        <rect x="40" y="52" width="46" height="6" rx="3" fill="#3b3a33" transform="rotate(-6 40 52)"/>
+      </g>
+      <!-- foreground grass, so the player really is partly hidden -->
+      <path d="M600 600 q22-96 44-128 q12 62 4 128Z" fill="#556231" opacity=".95"/>
+      <path d="M745 600 q20-88 40-118 q12 58 4 118Z" fill="#59672f" opacity=".95"/>
+      <path d="M660 600 q16-70 32-96 q10 46 2 96Z" fill="#4f5c2c" opacity=".9"/>
+    </g>
+  </defs>
+</svg>
+
+<!-- ======================= features ======================= -->
 <section id="features">
   <div class="wrap">
     <div class="sec-head">
       <div class="eyebrow">What you get</div>
-      <h2>Built for the games you actually play</h2>
-      <p class="lede">Not a filter sitting on top of your screen. PlexusX drives the colour
-        controls in your graphics driver, the same ones your GPU already has.</p>
+      <h2>Everything you'd otherwise do by hand, every session</h2>
+      <p class="lede">PlexusX drives the colour controls already sitting in your graphics
+        driver. No overlay, no injection, nothing layered on top of the game.</p>
     </div>
     <div class="cards">
 
-      <div class="card">
+      <div class="card rise">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3.5 9h17M3.5 15h17"/></svg></div>
         <h3>Digital vibrance</h3>
-        <p>The single setting that makes enemies pop out of grass and rocks. Slide it, see it
-          change instantly, stop when it looks right.</p>
+        <p>The one setting that makes players separate from terrain. Drag it, watch the screen
+          change under your cursor, stop where it looks right.</p>
       </div>
 
-      <div class="card">
-        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div>
-        <h3>Every GPU</h3>
-        <p>NVIDIA, AMD and Intel. Multi-monitor too — every display gets the setting, not just
-          whichever one Windows calls the first one.</p>
+      <div class="card rise">
+        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></div>
+        <h3>Every GPU, every monitor</h3>
+        <p>NVIDIA, AMD and Intel. Multiple displays all get the setting — not just whichever one
+          Windows happens to call the first one.</p>
       </div>
 
-      <div class="card">
+      <div class="card rise">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h4l2-5 4 10 2-5h4"/></svg></div>
-        <h3>Real FPS tweaks</h3>
-        <p>A short list of Windows settings that genuinely move frame times, each one explained
-          and each one reversible. No fake scores, no placebo toggles.</p>
+        <h3>FPS tweaks that are real</h3>
+        <p>A short, honest list of Windows settings that actually move frame times. Each one
+          explains itself, and each one reverts to the value that was there before.</p>
       </div>
 
-      <div class="card">
+      <div class="card rise">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2.5" y="6.5" width="19" height="11" rx="3"/><path d="M7 10v4M5 12h4M16 11h.01M18.5 13.5h.01"/></svg></div>
         <h3>Per-game profiles</h3>
-        <p>Rust wants different colour to Valorant. Set each one once — PlexusX spots the game
-          launching and switches for you.</p>
+        <p>Rust wants different colour to a dark horror game. Set each once — PlexusX notices the
+          game start and switches without you asking.</p>
       </div>
 
-      <div class="card">
+      <div class="card rise">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="10" rx="2"/><path d="M7 11h.01M11 11h.01M15 11h.01M8 14h8"/></svg></div>
         <h3>Hotkeys</h3>
-        <p>Flip the whole thing on or off mid-game without alt-tabbing. Bind it to whatever key
-          you have spare.</p>
+        <p>Toggle the whole thing mid-fight without alt-tabbing. Bind it to any key you've got
+          spare and forget the app is running.</p>
       </div>
 
-      <div class="card">
-        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3.5 2"/></svg></div>
-        <h3>Stays out of the way</h3>
-        <p>Lives in the tray, starts with Windows if you want, and puts your colours back exactly
-          as they were when you close it.</p>
+      <div class="card rise">
+        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6 9 17l-5-5"/></svg></div>
+        <h3>Puts everything back</h3>
+        <p>Close PlexusX and your colours return exactly as they were. Tweaks store the old value
+          before touching anything, so revert means revert.</p>
       </div>
 
     </div>
   </div>
 </section>
 
-<!-- ===================== games ===================== -->
+<!-- ======================= deep dives ======================= -->
 <section id="games">
   <div class="wrap">
-    <div class="sec-head">
-      <div class="eyebrow">Games hub</div>
-      <h2>It knows what you're playing</h2>
-      <p class="lede">PlexusX finds your installed games and gives each one its own colour
-        profile. Launch the game, the profile applies. Close it, everything goes back.</p>
+    <div class="split">
+      <div class="copy">
+        <div class="eyebrow">Games hub</div>
+        <h2>It knows what you're playing</h2>
+        <p>PlexusX finds your installed games and gives each one its own colour profile. Launch
+          the game and the profile applies. Close it and everything goes back to normal.</p>
+        <ul class="ticks">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Finds them automatically.</b> Steam libraries and local installs, including drives you moved games to.</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Rust is tuned first.</b> Colour plus the in-game settings actually worth changing, ready to apply.</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Anything else you add</b> gets its own profile and behaves the same way.</span></li>
+        </ul>
+      </div>
+      <div class="frame rise">
+        <div class="grow on">
+          <div class="gicon" style="background:#cd6a2e">R</div>
+          <div><div class="gname">Rust</div><div class="gsub">Running · profile applied</div></div>
+          <div class="gstate">ON</div>
+        </div>
+        <div class="grow">
+          <div class="gicon" style="background:#5b8dd6">CS</div>
+          <div><div class="gname">Counter-Strike 2</div><div class="gsub">Vibrance 82% · saved</div></div>
+          <div class="gstate off">Ready</div>
+        </div>
+        <div class="grow">
+          <div class="gicon" style="background:#c4484f">VA</div>
+          <div><div class="gname">Valorant</div><div class="gsub">Vibrance 74% · saved</div></div>
+          <div class="gstate off">Ready</div>
+        </div>
+        <div class="grow">
+          <div class="gicon" style="background:#4f9e78">AP</div>
+          <div><div class="gname">Apex Legends</div><div class="gsub">No profile yet</div></div>
+          <div class="gstate off">Set up</div>
+        </div>
+        <div class="grow">
+          <div class="gicon" style="background:#7a6ad6">FN</div>
+          <div><div class="gname">Fortnite</div><div class="gsub">Vibrance 88% · saved</div></div>
+          <div class="gstate off">Ready</div>
+        </div>
+      </div>
     </div>
-    <div class="cards">
-      <div class="card">
-        <h3>Rust</h3>
-        <p>Tuned so players stand out against the grass and rock that make up most of what
-          you're looking at. Colour profile plus the in-game settings worth changing.</p>
+
+    <div class="split flip" id="tweaks">
+      <div class="copy">
+        <div class="eyebrow">FPS tweaks</div>
+        <h2>No scores. No made-up numbers.</h2>
+        <p>Most "optimizers" hand you a pile of toggles and a points total that means nothing.
+          PlexusX ships a short list instead — settings that genuinely affect frame times, each
+          with a plain sentence about what it changes and what it costs.</p>
+        <ul class="ticks">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Old value saved first.</b> Revert restores what was there, not a guessed default.</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Situational ones are labelled.</b> If a tweak helps some systems and hurts others, it says so and stays off.</span></li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Nothing hidden.</b> Every toggle names the setting it touches.</span></li>
+        </ul>
       </div>
-      <div class="card">
-        <h3>Your shooters</h3>
-        <p>Anything on Steam or installed locally gets picked up. Give it a profile and it's
-          handled from then on.</p>
-      </div>
-      <div class="card">
-        <h3>More on the way</h3>
-        <p>Game-specific tuning is added over time, and it arrives through the built-in updater —
-          nothing to reinstall.</p>
+      <div class="frame rise">
+        <div class="trow">
+          <div class="sw on"><i></i></div>
+          <div><div class="tname">Ultimate Performance power plan</div>
+            <div class="tsub">Stops Windows dropping clock speed between frames. Your previous plan is remembered.</div></div>
+        </div>
+        <div class="trow">
+          <div class="sw on"><i></i></div>
+          <div><div class="tname">Disable core parking</div>
+            <div class="tsub">Keeps every core awake instead of waking them on demand mid-fight.</div></div>
+        </div>
+        <div class="trow">
+          <div class="sw on"><i></i></div>
+          <div><div class="tname">Game DVR background capture</div>
+            <div class="tsub">Turns off the recorder Windows leaves running behind every game.</div></div>
+        </div>
+        <div class="trow">
+          <div class="sw on"><i></i></div>
+          <div><div class="tname">Network throttling off</div>
+            <div class="tsub">Removes the packet limit Windows applies to non-multimedia traffic.</div></div>
+        </div>
+        <div class="trow">
+          <div class="sw"><i></i></div>
+          <div><div class="tname">Disable Windows Game Mode <span class="badge">Situational</span></div>
+            <div class="tsub">Helps on some systems, hurts on others. Off unless you want to test it.</div></div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===================== pricing ===================== -->
-<section id="pricing">
+<!-- ======================= how it works ======================= -->
+<section id="how">
   <div class="wrap">
     <div class="sec-head">
+      <div class="eyebrow">Setup</div>
+      <h2>Running in under a minute</h2>
+    </div>
+    <div class="steps">
+      <div class="step rise">
+        <h3>Install it</h3>
+        <p>One installer, no dependencies to hunt down. It lands in your tray and can start with
+          Windows if you want it to.</p>
+      </div>
+      <div class="step rise">
+        <h3>Drag the slider</h3>
+        <p>Your screen changes as you drag. There's no correct number — stop where the game looks
+          clear to you.</p>
+      </div>
+      <div class="step rise">
+        <h3>Forget about it</h3>
+        <p>Save it against the game and PlexusX handles it from then on. Launch, play, close.
+          Colours go back on their own.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= comparison ======================= -->
+<section id="compare-table">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Honestly</div>
+      <h2>You could do some of this yourself</h2>
+      <p class="lede">The colour setting exists in your driver already. Here's what you're
+        actually paying for.</p>
+    </div>
+    <div class="tablewrap rise">
+      <table>
+        <thead>
+          <tr><th>&nbsp;</th><th>Driver control panel</th><th>Typical "optimizer"</th><th class="us">PlexusX</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Change vibrance</td><td class="part">Yes, buried in menus</td><td class="no">Rarely</td><td class="us yes">One slider</td></tr>
+          <tr><td>Different setting per game</td><td class="no">No</td><td class="no">No</td><td class="us yes">Automatic</td></tr>
+          <tr><td>Works on AMD and Intel</td><td class="part">A different app each</td><td class="part">Varies</td><td class="us yes">Same app</td></tr>
+          <tr><td>Applies to every monitor</td><td class="part">One at a time</td><td class="no">No</td><td class="us yes">All of them</td></tr>
+          <tr><td>Hotkey mid-game</td><td class="no">No</td><td class="no">No</td><td class="us yes">Yes</td></tr>
+          <tr><td>Tells you what a tweak does</td><td class="no">No</td><td class="no">Shows a score</td><td class="us yes">Plain English</td></tr>
+          <tr><td>Restores your old settings</td><td class="part">Manually</td><td class="no">Often not</td><td class="us yes">Automatically</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= community ======================= -->
+<section id="community">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Community</div>
+      <h2>Built with the people using it</h2>
+      <p class="lede">Bugs get reported in Discord and fixed in days, not quarters. The update
+        arrives inside the app.</p>
+    </div>
+    <div class="quotes">
+      <!-- PLACEHOLDER. Replace with real messages from the Discord, with permission.
+           Do not ship invented testimonials. -->
+      <div class="quote rise">
+        <div class="qhead">
+          <div class="avatar" style="background:#8c6ef0">?</div>
+          <div><div class="qname">Your player's name</div><div class="qsub">Rust</div></div>
+        </div>
+        <p>Paste a real message from the Discord here, with their permission.</p>
+      </div>
+      <div class="quote rise">
+        <div class="qhead">
+          <div class="avatar" style="background:#5b8dd6">?</div>
+          <div><div class="qname">Your player's name</div><div class="qsub">CS2</div></div>
+        </div>
+        <p>Paste a real message from the Discord here, with their permission.</p>
+      </div>
+      <div class="quote rise">
+        <div class="qhead">
+          <div class="avatar" style="background:#4f9e78">?</div>
+          <div><div class="qname">Your player's name</div><div class="qsub">Apex</div></div>
+        </div>
+        <p>Paste a real message from the Discord here, with their permission.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= pricing ======================= -->
+<section id="pricing">
+  <div class="wrap">
+    <div class="sec-head center">
       <div class="eyebrow">Pricing</div>
-      <h2>Try it for four days. Then decide.</h2>
-      <p class="lede">The trial is the whole app, not a cut-down version. If it doesn't make a
-        difference on your setup you'll know well before it ends.</p>
+      <h2>Four days free. Then it's a couple of coffees.</h2>
+      <p class="lede">The trial is the whole app, not a crippled version. If it doesn't help on
+        your setup you'll know long before it runs out.</p>
     </div>
 
     <div class="plans">
-
-      <div class="plan">
+      <div class="plan rise">
         <h3>Free trial</h3>
         <div class="price"><b>$0</b></div>
-        <p class="sub">Four days. No card, no account.</p>
+        <p class="sub">Four days. No card, no account, nothing to cancel.</p>
         <a class="btn btn-ghost" href="#download" data-checkout="trial">Download</a>
         <ul>
           <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Every feature unlocked</span></li>
-          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Nothing to cancel</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Per-game profiles included</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Discord access</span></li>
         </ul>
       </div>
 
-      <div class="plan">
+      <div class="plan rise">
         <h3>Monthly</h3>
         <div class="price"><b>$4</b><span>/ month</span></div>
-        <p class="sub">Cancel whenever. Stops billing straight away.</p>
+        <p class="sub">Cancel any time. Billing stops the moment you do.</p>
         <a class="btn btn-ghost" href="#" data-checkout="monthly">Choose monthly</a>
         <ul>
-          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>All updates included</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Everything in the trial</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>All updates while subscribed</span></li>
           <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>New game profiles as they land</span></li>
-          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Discord support</span></li>
         </ul>
       </div>
 
-      <div class="plan featured">
+      <div class="plan featured rise">
         <span class="tag">Best value</span>
         <h3>600 days</h3>
         <div class="price"><b>$12</b><span>once</span></div>
-        <p class="sub">One payment, nearly two years. Nothing recurring.</p>
+        <p class="sub">One payment, nearly two years. Nothing recurring, nothing to forget.</p>
         <a class="btn btn-primary" href="#" data-checkout="lifetime600">Get 600 days</a>
         <ul>
           <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span><b>Everything in monthly</b></span></li>
-          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>No subscription to forget about</span></li>
+          <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>No subscription to manage</span></li>
           <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12.5 9.5 18 20 6.5"/></svg><span>Moves with you if you rebuild your PC</span></li>
         </ul>
       </div>
+    </div>
 
+    <p class="guarantee">One key works on one PC. Changed your hardware? Ask in Discord and we'll
+      move it across — free, no limit.</p>
+  </div>
+</section>
+
+<!-- ======================= requirements ======================= -->
+<section id="requirements">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Requirements</div>
+      <h2>It runs on what you already have</h2>
+    </div>
+    <div class="reqs">
+      <div class="req rise"><div class="k">Operating system</div><div class="v">Windows 10 or 11</div><div class="n">64-bit</div></div>
+      <div class="req rise"><div class="k">Graphics</div><div class="v">NVIDIA, AMD or Intel</div><div class="n">Current drivers recommended</div></div>
+      <div class="req rise"><div class="k">Disk</div><div class="v">Around 150 MB</div><div class="n">Nothing else to install</div></div>
+      <div class="req rise"><div class="k">While running</div><div class="v">Sits in the tray</div><div class="n">Idles at effectively no CPU</div></div>
     </div>
   </div>
 </section>
 
-<!-- ===================== faq ===================== -->
+<!-- ======================= faq ======================= -->
 <section id="faq">
   <div class="wrap">
-    <div class="sec-head">
+    <div class="sec-head center">
       <div class="eyebrow">Questions</div>
       <h2>The things people ask first</h2>
     </div>
@@ -431,118 +968,272 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--dim);font-s
     <div class="faq">
       <details open>
         <summary>Is this a cheat? Will anti-cheat care?</summary>
-        <p>PlexusX changes display settings through the same driver controls NVIDIA, AMD and
-          Intel ship in their own control panels. It doesn't read game memory, inject into a
-          game process, or touch the game at all — it adjusts what your monitor is being sent.
-          It is the same setting you could change by hand in your driver software; PlexusX just
-          makes it quick and per-game.</p>
+        <p>PlexusX changes display settings through the same driver controls NVIDIA, AMD and Intel
+          ship in their own control panels. It doesn't read game memory, inject into a game
+          process, or touch the game at all — it changes what your monitor is being sent.</p>
+        <p>It is the same setting you could change by hand in your driver software. We can tell you
+          what PlexusX does; we can't speak for how any particular anti-cheat behaves, so if you're
+          worried about a specific game, check that game's rules.</p>
       </details>
 
       <details>
-        <summary>What does one key, one PC mean?</summary>
-        <p>A key locks to the machine it's activated on. That stops keys being resold or shared
-          around. If you change your CPU or drive, or reinstall Windows, message us on Discord
-          and we'll release the key so you can activate on the new machine. That's free and
-          there's no limit on it.</p>
+        <summary>What does "one key, one PC" mean?</summary>
+        <p>A key locks to the machine it's activated on, which is what stops keys being resold or
+          passed around. If you change your CPU or drive, or reinstall Windows, ask in Discord and
+          we'll release the key so you can activate on the new machine. Free, and there's no limit
+          on how often.</p>
       </details>
 
       <details>
         <summary>Do I need an NVIDIA card?</summary>
-        <p>No. NVIDIA, AMD and Intel graphics all work. If you have several monitors, the
-          setting applies to all of them.</p>
+        <p>No. NVIDIA, AMD and Intel graphics all work, and multi-monitor setups get the setting on
+          every display rather than just one.</p>
       </details>
 
       <details>
-        <summary>Does it change anything permanently?</summary>
-        <p>No. Colour settings go back to where they were when you close PlexusX. The FPS tweaks
-          are the only thing that stays applied on purpose, and every one of them has a revert
-          that puts back the exact value that was there before.</p>
+        <summary>Will my colours be stuck like that afterwards?</summary>
+        <p>No. Close PlexusX and your display returns to how it was. The FPS tweaks are the only
+          thing that deliberately stays applied, and every one of them saves the previous value
+          first, so reverting puts back exactly what was there.</p>
+      </details>
+
+      <details>
+        <summary>Will it show up in my recordings and streams?</summary>
+        <p>Not currently. Digital vibrance is applied at the driver level, past the point where OBS
+          and other capture software read the image — so your viewers see the game as it was before
+          PlexusX touched it, while you see the boosted version.</p>
+        <p>Making the effect visible in capture is something we're working on, and it isn't
+          finished. If that's the only reason you'd buy, use the trial first.</p>
       </details>
 
       <details>
         <summary>What happens when my licence runs out?</summary>
-        <p>The app stops applying settings and your display returns to normal. Nothing is
-          damaged and nothing is left behind — renew and it picks up where it left off.</p>
+        <p>The app stops applying settings and your display goes back to normal. Nothing is damaged
+          and nothing is left behind. Renew and it picks up where it left off, profiles and all.</p>
       </details>
 
       <details>
         <summary>Can I get a refund?</summary>
-        <p>That's what the four-day trial is for — it's the full app, so you can find out before
-          paying anything. If something goes wrong after you've bought, talk to us on Discord.</p>
+        <p>The four-day trial is the full app, so you can find out before paying anything. If
+          something goes wrong after you've bought, talk to us in Discord.</p>
+      </details>
+
+      <details>
+        <summary>Does it slow my PC down?</summary>
+        <p>It sits in the tray doing nothing until a game starts or you press a hotkey. The colour
+          change itself happens in the driver and costs no frames.</p>
       </details>
     </div>
   </div>
 </section>
 
-<!-- ===================== final cta ===================== -->
-<section class="final" id="download">
+<!-- ======================= final ======================= -->
+<section class="final plain" id="download">
   <div class="wrap">
     <h2>Four days. Nothing to cancel.</h2>
     <p class="lede">Install it, drag the slider, load your game. You'll know within a round.</p>
     <div class="cta-row" style="justify-content:center">
-      <a class="btn btn-primary" href="#" data-download>Download for Windows</a>
-      <a class="btn btn-ghost" href="#" data-discord>Join the Discord</a>
+      <a class="btn btn-primary btn-lg" href="#" data-download>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 20h16"/></svg>
+        Download for Windows
+      </a>
+      <a class="btn btn-ghost btn-lg" href="#" data-discord>Join the Discord</a>
     </div>
   </div>
 </section>
 
 <footer>
-  <div class="wrap foot">
-    <span>© <span id="yr">2026</span> PlexusX</span>
-    <span class="links">
-      <a href="#" data-discord>Discord</a>
-      <a href="#pricing">Pricing</a>
-      <a href="terms.html">Terms</a>
-      <a href="privacy.html">Privacy</a>
-    </span>
+  <div class="wrap">
+    <div class="fgrid">
+      <div class="fcol fabout">
+        <a class="logo" href="#top">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="4" r="2.4" fill="#8c6ef0"/><circle cx="4.5" cy="17" r="2.4" fill="#8c6ef0"/>
+            <circle cx="19.5" cy="17" r="2.4" fill="#8c6ef0"/><circle cx="12" cy="12" r="1.7" fill="#e3b0ff"/>
+            <path d="M12 4v8m0 0-7.5 5M12 12l7.5 5M4.5 17h15" stroke="#8c6ef0" stroke-width="1.1" opacity=".55"/>
+          </svg>
+          PlexusX
+        </a>
+        <p>Colour and performance tools for people who'd rather see the player than the terrain.</p>
+      </div>
+      <div class="fcol">
+        <h5>Product</h5>
+        <a href="#features">Features</a>
+        <a href="#games">Games</a>
+        <a href="#tweaks">FPS tweaks</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <div class="fcol">
+        <h5>Support</h5>
+        <a href="#" data-discord>Discord</a>
+        <a href="#faq">FAQ</a>
+        <a href="#requirements">Requirements</a>
+      </div>
+      <div class="fcol">
+        <h5>Legal</h5>
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+      </div>
+    </div>
+    <div class="fbot">
+      <span>© <span id="yr">2026</span> PlexusX. Not affiliated with NVIDIA, AMD, Intel, or any game named here.</span>
+      <span class="r">
+        <a href="terms.html">Terms</a>
+        <a href="privacy.html">Privacy</a>
+      </span>
+    </div>
   </div>
 </footer>
 
 <script>
-/* ---------------------------------------------------------------------------
-   The vibrance demo. Saturation is the honest part of what the app does, so
-   the slider drives a real CSS filter rather than swapping two pictures.
---------------------------------------------------------------------------- */
-(function(){
-  var slider = document.getElementById('vib'),
-      stage  = document.getElementById('stage'),
-      out    = document.getElementById('vibval');
+/* ===========================================================================
+   Everything below is progressive: with JS off the page still reads, the
+   comparison sits at its default split, and nothing is hidden.
+=========================================================================== */
 
-  function apply(){
-    var v = +slider.value;
-    // 0 -> greyscale, 50 -> untouched, 100 -> roughly what the app's ceiling looks like
-    stage.style.filter = 'saturate(' + (v / 50) + ') contrast(' + (1 + v / 500) + ')';
-    out.textContent = v + '%';
+/* ---- before/after handle ------------------------------------------------ */
+(function(){
+  var box = document.getElementById('compare');
+  if(!box) return;
+  var after = document.getElementById('after'),
+      handle = document.getElementById('handle'),
+      dragging = false, pos = 50;
+
+  function set(pct){
+    pos = Math.max(2, Math.min(98, pct));
+    after.style.clipPath = 'inset(0 0 0 ' + pos + '%)';
+    handle.style.left = pos + '%';
+    handle.setAttribute('aria-valuenow', Math.round(pos));
   }
-  slider.addEventListener('input', apply);
-  apply();
+  function fromEvent(e){
+    var r = box.getBoundingClientRect();
+    set((e.clientX - r.left) / r.width * 100);
+  }
+
+  box.addEventListener('pointerdown', function(e){
+    dragging = true; box.setPointerCapture(e.pointerId); fromEvent(e);
+  });
+  box.addEventListener('pointermove', function(e){ if(dragging) fromEvent(e); });
+  box.addEventListener('pointerup', function(){ dragging = false; });
+  box.addEventListener('pointercancel', function(){ dragging = false; });
+
+  // The handle is a real control, so it should work without a mouse.
+  handle.tabIndex = 0;
+  handle.setAttribute('role', 'slider');
+  handle.setAttribute('aria-label', 'Compare default and PlexusX');
+  handle.setAttribute('aria-valuemin', '0');
+  handle.setAttribute('aria-valuemax', '100');
+  handle.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowLeft'){ set(pos - 4); e.preventDefault(); }
+    if(e.key === 'ArrowRight'){ set(pos + 4); e.preventDefault(); }
+  });
+
+  // A small nudge on first view, so it's obvious the thing moves.
+  if(window.IntersectionObserver && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    var once = new IntersectionObserver(function(en){
+      if(!en[0].isIntersecting) return;
+      once.disconnect();
+      var t = 0, id = setInterval(function(){
+        t++;
+        set(50 + Math.sin(t / 4) * 14 * Math.max(0, 1 - t / 26));
+        if(t > 26){ clearInterval(id); set(50); }
+      }, 32);
+    }, {threshold:.4});
+    once.observe(box);
+  }
 })();
 
-/* ---------------------------------------------------------------------------
-   Background node field. It's the name of the product, so it may as well be
-   on the page. Cheap: a few dozen points, paused when off-screen or when the
-   visitor has asked for less motion.
---------------------------------------------------------------------------- */
+/* ---- the mock slider counts up, so the hero isn't a dead image ---------- */
+(function(){
+  var val = document.getElementById('mockval'),
+      fill = document.getElementById('mockfill'),
+      thumb = document.getElementById('mockthumb');
+  if(!val || !window.IntersectionObserver) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  var n = 22, target = 78, id = null;
+  function step(){
+    n += Math.max(1, Math.round((target - n) / 8));
+    if(n >= target){ n = target; clearInterval(id); }
+    val.textContent = n + '%';
+    fill.style.width = n + '%';
+    thumb.style.left = n + '%';
+  }
+  var o = new IntersectionObserver(function(en){
+    if(!en[0].isIntersecting) return;
+    o.disconnect(); n = 22; step(); id = setInterval(step, 40);
+  }, {threshold:.5});
+  o.observe(val);
+})();
+
+/* ---- scroll reveal ------------------------------------------------------ */
+(function(){
+  var items = document.querySelectorAll('.rise');
+  if(!window.IntersectionObserver || matchMedia('(prefers-reduced-motion: reduce)').matches){
+    items.forEach(function(el){ el.classList.add('in'); });
+    return;
+  }
+  var o = new IntersectionObserver(function(entries){
+    entries.forEach(function(en, i){
+      if(!en.isIntersecting) return;
+      setTimeout(function(){ en.target.classList.add('in'); }, i * 60);
+      o.unobserve(en.target);
+    });
+  }, {threshold:.12, rootMargin:'0px 0px -40px 0px'});
+  items.forEach(function(el){ o.observe(el); });
+})();
+
+/* ---- which section am I in --------------------------------------------- */
+(function(){
+  if(!window.IntersectionObserver) return;
+  var links = [].slice.call(document.querySelectorAll('.nav-links a')),
+      targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+
+  var o = new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(!en.isIntersecting) return;
+      var i = targets.indexOf(en.target);
+      links.forEach(function(a, j){ a.classList.toggle('on', i === j); });
+    });
+  }, {rootMargin:'-45% 0px -50% 0px'});
+  targets.forEach(function(t){ if(t) o.observe(t); });
+})();
+
+/* ---- mobile menu -------------------------------------------------------- */
+(function(){
+  var b = document.getElementById('burger'), n = document.getElementById('navlinks');
+  if(!b) return;
+  b.addEventListener('click', function(){
+    var open = n.classList.toggle('open');
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  n.addEventListener('click', function(e){
+    if(e.target.tagName === 'A'){
+      n.classList.remove('open');
+      b.setAttribute('aria-expanded', 'false');
+    }
+  });
+})();
+
+/* ---- plexus field ------------------------------------------------------- */
 (function(){
   var c = document.getElementById('plexus');
-  if(!c || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if(!c || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   var ctx = c.getContext('2d'), pts = [], raf = null, w = 0, h = 0;
 
   function size(){
     var r = c.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
-    if(r.width < 1 || r.height < 1) return;   // nothing to draw into yet
+    if(r.width < 1 || r.height < 1) return;          // nothing to draw into yet
     w = r.width; h = r.height;
     c.width = w * d; c.height = h * d;
     ctx.setTransform(d, 0, 0, d, 0, 0);
 
-    var count = Math.min(46, Math.round(w * h / 26000));
+    var count = Math.min(52, Math.round(w * h / 24000));
     pts = [];
     for(var i = 0; i < count; i++){
-      pts.push({
-        x: Math.random() * w, y: Math.random() * h,
-        vx: (Math.random() - .5) * .22, vy: (Math.random() - .5) * .22
-      });
+      pts.push({x:Math.random()*w, y:Math.random()*h,
+                vx:(Math.random()-.5)*.22, vy:(Math.random()-.5)*.22});
     }
   }
 
@@ -556,8 +1247,8 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--dim);font-s
 
       for(var j = i + 1; j < pts.length; j++){
         var q = pts[j], dx = p.x - q.x, dy = p.y - q.y, d = Math.hypot(dx, dy);
-        if(d < 130){
-          ctx.strokeStyle = 'rgba(140,110,240,' + (1 - d / 130) * .3 + ')';
+        if(d < 132){
+          ctx.strokeStyle = 'rgba(140,110,240,' + (1 - d / 132) * .3 + ')';
           ctx.lineWidth = 1;
           ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
         }
@@ -571,33 +1262,16 @@ footer{border-top:1px solid var(--border);padding:34px 0;color:var(--dim);font-s
   function start(){ if(!raf) raf = requestAnimationFrame(frame); }
   function stop(){ if(raf){ cancelAnimationFrame(raf); raf = null; } }
 
-  // Measure after layout has actually settled. Reading the box while the page is
-  // still being parsed returned a zero width, which drew nothing at all.
+  // Measure once layout has settled; reading the box mid-parse returned zero width.
   function measure(){ size(); start(); }
   requestAnimationFrame(measure);
   window.addEventListener('load', measure);
   window.addEventListener('resize', size);
-
-  // Belt and braces: if the box ever reports a real size after having reported
-  // none, rebuild rather than sit there blank.
-  if(window.ResizeObserver){
-    new ResizeObserver(function(){
-      var r = c.getBoundingClientRect();
-      if(r.width > 0 && Math.abs(r.width - w) > 1) size();
-    }).observe(c);
-  }
-  document.addEventListener('visibilitychange', function(){
-    document.hidden ? stop() : start();
-  });
-  // Alt-tabbed away is still "not looking at it" - don't spend the CPU.
   window.addEventListener('blur', stop);
   window.addEventListener('focus', start);
-
-  // Once the hero has scrolled away there's nothing to animate.
+  document.addEventListener('visibilitychange', function(){ document.hidden ? stop() : start(); });
   if(window.IntersectionObserver){
-    new IntersectionObserver(function(e){
-      e[0].isIntersecting ? start() : stop();
-    }).observe(c);
+    new IntersectionObserver(function(e){ e[0].isIntersecting ? start() : stop(); }).observe(c);
   }
 })();
 
