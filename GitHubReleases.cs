@@ -40,9 +40,19 @@ namespace VibranceHud
                 if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
                     return null;
 
-                // The installer is the .exe asset (prefer one that looks like a Setup).
+                // The installer is the .exe asset - and when a release carries more than one,
+                // the NEWEST wins.
+                //
+                // This used to take the first asset whose name contained "setup" and stop. A
+                // release on the live repo had both PlexusX-Setup-0.9.6.exe and
+                // PlexusX-Setup-0.9.8.exe attached, with 0.9.6 listed first - so every user
+                // would have been handed 0.9.6 while the 0.9.8 they were meant to get sat
+                // there unused, and nothing would have reported a problem. GitHub makes no
+                // promise about asset order, so "first" was never a safe choice.
                 string? url = null;
                 string installerName = "";
+                Version? bestVersion = null;
+
                 foreach (var asset in assets.EnumerateArray())
                 {
                     var name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
@@ -50,9 +60,19 @@ namespace VibranceHud
                     var link = asset.TryGetProperty("browser_download_url", out var d) ? d.GetString() : null;
                     if (link == null) continue;
 
+                    var assetVersion = ParseVersionFromFilename(name);
+
+                    // First candidate wins by default; after that only a higher version
+                    // displaces it. An asset with no readable version never displaces one that
+                    // has a version, since there's no way to know it's newer.
+                    bool better = url == null
+                        || (assetVersion != null && (bestVersion == null || assetVersion > bestVersion));
+
+                    if (!better) continue;
+
                     url = link;
                     installerName = name;
-                    if (name.Contains("setup", StringComparison.OrdinalIgnoreCase)) break;
+                    bestVersion = assetVersion;
                 }
                 if (url == null) return null;
 
