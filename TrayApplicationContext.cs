@@ -48,6 +48,7 @@ namespace VibranceHud
         private ToolStripMenuItem? _mainHotkeyMenuItem;
         private CompositionKeeper? _compositionKeeper;
         private System.Windows.Forms.Timer? _betaGateTimer;
+        private System.Windows.Forms.Timer? _licenceTimer;
 
         public TrayApplicationContext(LicenseService? license = null)
         {
@@ -219,6 +220,59 @@ namespace VibranceHud
         }
 
         /// <summary>
+        /// Re-verify the licence while the app is running.
+        ///
+        /// The licence used to be read exactly once, at launch. PlexusX starts with Windows and
+        /// lives in the tray for days, so that check might not run again for a week - which made
+        /// every short-lived key meaningless. A 6-hour key kept working until the machine
+        /// happened to reboot; a tester was handed one and never noticed it end.
+        ///
+        /// Five minutes is frequent enough that a short key ends when it should, and far too
+        /// cheap to matter: it re-reads one small local file. No network involved - expiry is
+        /// arithmetic on the issue timestamp already stored in the licence.
+        /// </summary>
+        private void StartLicenceWatch()
+        {
+            var timer = new System.Windows.Forms.Timer { Interval = 5 * 60 * 1000 };
+            timer.Tick += (s, e) => CheckLicenceStillValid();
+            timer.Start();
+            _licenceTimer = timer;
+        }
+
+        private void CheckLicenceStillValid()
+        {
+            try
+            {
+                // Fresh instance: re-reads the file from disk and re-evaluates expiry, hardware
+                // and revocation exactly as a new launch would.
+                var current = new LicenseService();
+                if (current.HasValidLicense) return;
+
+                string reason = current.State switch
+                {
+                    LicenseState.Expired => "Your PlexusX key has expired.",
+                    LicenseState.Revoked => "Your PlexusX key is no longer valid.",
+                    LicenseState.WrongMachine => "This key is registered to a different PC.",
+                    _ => "Your PlexusX licence is no longer valid.",
+                };
+
+                MessageBox.Show(
+                    reason + "\n\nPlexusX will close. Enter a new key next time you open it.",
+                    "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                // Close rather than trying to run on in some disabled half-state. The next
+                // launch hits the activation dialog in Program.cs, which is the one place
+                // that decision lives.
+                ExitThread();
+            }
+            catch
+            {
+                // A licence check must never take the app down by accident - a locked file or
+                // a transient read error is not the same as an invalid licence.
+            }
+        }
+
+        /// <summary>
         /// Re-ask whether this build may still run, now and every few hours.
         ///
         /// The startup check in Program.cs reads only the cached answer so launching never
@@ -371,6 +425,12 @@ namespace VibranceHud
             // cached answer at startup; this refreshes it, so someone running for days gets
             // locked within hours of the switch being thrown rather than at their next reboot.
             StartBetaGateWatch();
+
+            // Re-check the licence while running. Without this a licence is only ever verified
+            // at launch, and PlexusX starts with Windows and sits in the tray for days - so a
+            // 6-hour key kept working until the machine was next rebooted, which made every
+            // short-lived key effectively unlimited.
+            StartLicenceWatch();
 
             if (await UpdateService.RunPendingUpdateIfAnyAsync(_settings))
             {
@@ -586,6 +646,7 @@ namespace VibranceHud
             _settings.ManualOverrideActive = false;
             _store.Save(_settings);
             if (_betaGateTimer != null) { _betaGateTimer.Stop(); _betaGateTimer.Dispose(); _betaGateTimer = null; }
+            if (_licenceTimer != null) { _licenceTimer.Stop(); _licenceTimer.Dispose(); _licenceTimer = null; }
             _compositionKeeper?.Dispose();  // drops the 1x1 topmost pixel
             (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear
