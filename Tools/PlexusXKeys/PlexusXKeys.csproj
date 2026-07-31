@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PlexusXKeys</AssemblyName>
+    <RootNamespace>PlexusXKeys</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="**\*.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="MainForm.cs" />
+    <Compile Include="KeyVault.cs" />
+
+    <!-- Linked from the app rather than copied, so the key format, licence shape and
+         signing can never drift between the tool that issues keys and the app that
+         accepts them. Copies of these files drifted twice in the beta, each time
+         producing keys no install could activate. -->
+    <Compile Include="..\..\Licensing\PlanCatalog.cs" Link="Licensing\PlanCatalog.cs" />
+    <Compile Include="..\..\Licensing\KeyCode.cs" Link="Licensing\KeyCode.cs" />
+    <Compile Include="..\..\Licensing\KeyRecord.cs" Link="Licensing\KeyRecord.cs" />
+    <Compile Include="..\..\Licensing\KeyLedger.cs" Link="Licensing\KeyLedger.cs" />
+    <Compile Include="..\..\Licensing\LicenceDocument.cs" Link="Licensing\LicenceDocument.cs" />
+    <Compile Include="..\..\Licensing\LicenceSigner.cs" Link="Licensing\LicenceSigner.cs" />
+  </ItemGroup>
+
+</Project>

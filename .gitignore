@@ -38,3 +38,12 @@ debug.log
 
 # Tools/KeyGenerator embedded copies - rebuilt from License/*.cs on demand
 Tools/KeyGenerator/LicenseEmbed/
+
+# Licence signing keys and the key ledger. These live in %LocalAppData%\PlexusXKeys and
+# should never come near the repo, but this repo is PUBLIC and one stray copy of the
+# private key lets anyone mint licences the app accepts - with no way to undo it short of
+# re-keying every install. Belt and braces.
+*.private
+signing-key.*
+keys.json
+keys.json.bak
