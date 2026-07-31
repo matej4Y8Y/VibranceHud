@@ -145,23 +145,27 @@ namespace PlexusXKeys
             copy.Click += (s, e) => CopySelectedCode();
             bar.Controls.Add(copy);
 
-            var revoke = Button("Revoke", 136, 14, 110, Color.FromArgb(120, 50, 50));
+            var activate = Button("Activate...", 136, 14, 120, Accent);
+            activate.Click += (s, e) => ActivateSelected();
+            bar.Controls.Add(activate);
+
+            var revoke = Button("Revoke", 266, 14, 100, Color.FromArgb(120, 50, 50));
             revoke.Click += (s, e) => ActOnSelection("revoke", KeyLedger.Revoke,
                 "Revoke this key? It stops working for whoever has it.");
             bar.Controls.Add(revoke);
 
-            var restore = Button("Un-revoke", 256, 14, 110, Color.FromArgb(60, 60, 70));
+            var restore = Button("Un-revoke", 376, 14, 100, Color.FromArgb(60, 60, 70));
             restore.Click += (s, e) => ActOnSelection("restore", KeyLedger.Restore, null);
             bar.Controls.Add(restore);
 
-            var release = Button("Release from PC", 376, 14, 150, Color.FromArgb(60, 60, 70));
+            var release = Button("Release from PC", 486, 14, 140, Color.FromArgb(60, 60, 70));
             release.Click += (s, e) => ActOnSelection("release", KeyLedger.Release,
                 "Release this key from the PC it's on?\n\n" +
                 "Use this when a customer changes their GPU or reinstalls Windows - it lets " +
                 "them activate again on the new machine.");
             bar.Controls.Add(release);
 
-            _hint.SetBounds(544, 20, 430, 20);
+            _hint.SetBounds(640, 20, 330, 20);
             _hint.ForeColor = Dim;
             _hint.Text = "Double-click a row to copy its key.";
             bar.Controls.Add(_hint);
@@ -229,6 +233,55 @@ namespace PlexusXKeys
                 Reload();
                 SelectCode(code);
                 _hint.Text = $"{code}  -  {what} done";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "PlexusX Keys", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Issue the actual licence for a customer's PC, and record that the key is now spent.
+        ///
+        /// The ledger is only updated once a licence has really been produced - closing the
+        /// dialog without creating one leaves the key untouched and still sellable.
+        /// </summary>
+        private void ActivateSelected()
+        {
+            var code = SelectedCode();
+            if (code == null) { _hint.Text = "Select a key first."; return; }
+
+            var record = KeyLedger.Find(_ledger, code);
+            if (record == null) return;
+
+            if (record.Revoked &&
+                MessageBox.Show(
+                    "This key is revoked. Activating it will produce a working licence anyway.\n\n" +
+                    "Continue?", "PlexusX Keys",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            if (record.IsActivated &&
+                MessageBox.Show(
+                    "This key is already on a PC. Activating again gives a second working " +
+                    "licence, which is one key on two machines.\n\n" +
+                    "Use \"Release from PC\" first if the customer changed hardware.\n\n" +
+                    "Activate anyway?", "PlexusX Keys",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            using var dialog = new ActivateDialog(record);
+            dialog.ShowDialog(this);
+
+            if (dialog.ActivatedFor == null) return;
+
+            try
+            {
+                _ledger = KeyLedger.MarkActivated(_ledger, code, dialog.ActivatedFor, DateTime.UtcNow);
+                KeyVault.SaveLedger(_ledger);
+                Reload();
+                SelectCode(code);
+                _hint.Text = $"{code}  -  activated on {dialog.ActivatedFor}";
             }
             catch (Exception ex)
             {
