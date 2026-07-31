@@ -1,7 +1,15 @@
-PlexusX 0.9.8
+PlexusX 0.9.8  -  THE FINAL BETA
 
-The last beta build. Everything known to be broken is fixed, and the things that aren't
-finished are named honestly below rather than left for you to discover.
+This is the last beta release. Everything known to be broken is fixed, and anything still
+unfinished is named plainly below rather than left for you to trip over.
+
+Thank you for testing. Nearly everything in this list was found by someone in the
+community reporting it - the vibrance not working on AMD, the invisible setup text, the
+app putting itself back on an older version. That feedback is the reason this build is
+worth shipping.
+
+From here the work moves to the paid release: licence handling, and getting the colour
+effect to show up in recordings.
 
 IF YOU EVER GOT PUT ON AN OLDER VERSION
 
@@ -71,6 +79,13 @@ thing being worked on after the beta - it isn't being ignored.
 
 If it doesn't show for you, that's expected, not a fault with your PC. Reporting your
 graphics card on Discord genuinely helps.
+
+ONE THING ABOUT KEYS
+
+Short keys (the 6-hour and 1-week ones) don't reliably run out yet. PlexusX only checks
+your licence when it starts, and it normally runs in the background for days at a time -
+so a key can keep working well past the point it should have ended. That's being rebuilt
+for the paid release. Long keys are unaffected.
 
 Your settings, profiles, crosshairs and licence all carry over untouched.
 
