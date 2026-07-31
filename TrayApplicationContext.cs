@@ -47,6 +47,7 @@ namespace VibranceHud
         private ToolStripItem? _hotkeyMenuItem;
         private ToolStripMenuItem? _mainHotkeyMenuItem;
         private CompositionKeeper? _compositionKeeper;
+        private System.Windows.Forms.Timer? _betaGateTimer;
 
         public TrayApplicationContext(LicenseService? license = null)
         {
@@ -217,6 +218,48 @@ namespace VibranceHud
             }
         }
 
+        /// <summary>
+        /// Re-ask whether this build may still run, now and every few hours.
+        ///
+        /// The startup check in Program.cs reads only the cached answer so launching never
+        /// waits on the network. This is what actually brings the news in. PlexusX normally
+        /// runs for days at a time, so without it a user would only find out the beta had
+        /// ended at their next reboot.
+        ///
+        /// When the answer changes, the app closes rather than trying to tear itself down into
+        /// some disabled half-state - the next launch shows the ended screen from Program.cs,
+        /// which is the one place that decision lives.
+        /// </summary>
+        private void StartBetaGateWatch()
+        {
+            _ = CheckBetaGateAsync();
+
+            var timer = new System.Windows.Forms.Timer { Interval = 2 * 60 * 60 * 1000 }; // 2h
+            timer.Tick += (s, e) => _ = CheckBetaGateAsync();
+            timer.Start();
+            _betaGateTimer = timer;
+        }
+
+        private async System.Threading.Tasks.Task CheckBetaGateAsync()
+        {
+            try
+            {
+                var minimum = await AppStatusService.RefreshAsync();
+                if (!VersionGate.IsBlocked(UpdateService.CurrentVersion, minimum)) return;
+
+                // Tell them why the app is closing - otherwise it just vanishes mid-session.
+                using (var ended = new BetaEndedWindow(AppStatusService.CachedMessage()))
+                    ended.ShowDialog();
+
+                ExitThread();
+            }
+            catch
+            {
+                // Never let a status check take the app down. Offline, DNS failure and captive
+                // portals are all ordinary and none of them mean the beta has ended.
+            }
+        }
+
         /// <summary>One DX11 attempt. Returns null when it isn't available right now, and
         /// reports WHY through the out params - the failed DxOverlay is disposed here, so
         /// this is the only chance to capture its reason before it's gone.</summary>
@@ -323,6 +366,11 @@ namespace VibranceHud
             // ever looked for NEWER versions and so never removed the old ones. Before the
             // pending check, so a superseded file isn't even considered.
             UpdateService.CleanupObsoleteInstallers();
+
+            // Ask whether this build is still allowed to run. Program.cs already checked the
+            // cached answer at startup; this refreshes it, so someone running for days gets
+            // locked within hours of the switch being thrown rather than at their next reboot.
+            StartBetaGateWatch();
 
             if (await UpdateService.RunPendingUpdateIfAnyAsync(_settings))
             {
@@ -537,6 +585,7 @@ namespace VibranceHud
             // launch always starts from the saved profile, not from a stale tweak.
             _settings.ManualOverrideActive = false;
             _store.Save(_settings);
+            if (_betaGateTimer != null) { _betaGateTimer.Stop(); _betaGateTimer.Dispose(); _betaGateTimer = null; }
             _compositionKeeper?.Dispose();  // drops the 1x1 topmost pixel
             (_overlay as IDisposable)?.Dispose();    // clears any oversaturation and releases the overlay runtime
             _gammaRamp.Dispose();  // gamma ramps persist after exit, so always restore linear

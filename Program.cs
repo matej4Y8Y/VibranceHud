@@ -56,6 +56,20 @@ namespace VibranceHud
 
             try
             {
+                // Beta gate, before anything else. If the published minimum version is above
+                // this build, the beta is over and this copy doesn't run - no tray icon, no
+                // overlay, no licence check. Uses only the cached requirement so startup never
+                // waits on the network; the refresh that can raise it happens later, in the
+                // background. A machine that has never reached the status file is never
+                // blocked, so a user with no internet keeps working.
+                var minimum = AppStatusService.CachedMinimum();
+                if (VersionGate.IsBlocked(UpdateService.CurrentVersion, minimum))
+                {
+                    using var ended = new BetaEndedWindow(AppStatusService.CachedMessage());
+                    ended.ShowDialog();
+                    return 0;
+                }
+
                 // License gate: if no valid key on disk, show the activation dialog
                 // BEFORE the tray is created. The dialog is modal so the user can't
                 // reach the main window until they enter a key or close the app.
