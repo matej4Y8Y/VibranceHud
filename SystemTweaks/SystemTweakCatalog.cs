@@ -28,7 +28,6 @@ namespace VibranceHud.SystemTweaks
         private const string SystemProfile =
             @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
         private const string GamesTask = SystemProfile + @"\Tasks\Games";
-        private const string PriorityControl = @"SYSTEM\CurrentControlSet\Control\PriorityControl";
         private const string PowerThrottling = @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling";
         private const string GraphicsDrivers = @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers";
         private const string MouseKey = @"Control Panel\Mouse";
@@ -73,14 +72,21 @@ namespace VibranceHud.SystemTweaks
                         new RegistrySetting(RegistryRoot.LocalMachine, GamesTask, "Scheduling Category",
                             "High", "Medium", RegistryKind.String)),
 
-                    // Win32PrioritySeparation controls how much longer the foreground process
-                    // gets per time slice. 0x26 = short quantums, variable, 3:1 foreground bias -
-                    // the standard "favour the game you're actually playing" value.
-                    new RegistryTweak(_reg, "foreground-boost", "Favour the Active Window",
-                        "Gives the game you're playing longer CPU turns than everything behind it.",
-                        "System", TweakTier.Safe, "Active window gets priority",
-                        new RegistrySetting(RegistryRoot.LocalMachine, PriorityControl,
-                            "Win32PrioritySeparation", "38", "2")),
+                    // REMOVED: "Favour the Active Window" (Win32PrioritySeparation = 38).
+                    //
+                    // It was doing the opposite of what it claimed. The value is three 2-bit
+                    // fields - foreground bias, variable/fixed quantum, short/long quantum:
+                    //
+                    //    38 = 0b10_01_10 -> 3:1 bias, variable, LONG quantums
+                    //     2 = 0b00_00_10 -> 3:1 bias, variable, SHORT quantums (desktop default)
+                    //
+                    // So Windows already gives a desktop the 3:1 foreground bias out of the box.
+                    // The only thing writing 38 changed was short -> long quantums, which is the
+                    // *server* configuration: threads run longer before being preempted, which
+                    // costs a game latency rather than gaining it anything.
+                    //
+                    // There is no value here that beats the default, so the honest move is to
+                    // ship no toggle at all. See PriorityControlIsLeftAlone in the tests.
 
                     // Windows throttles background processes to save power. On a desktop that
                     // only costs performance, and it can clip a game's own helper threads.

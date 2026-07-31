@@ -1,3 +1,4 @@
+using System;
 // Covers the tweaks added on top of the original five.
 //
 // These write real system state, some of it HKLM, so the properties that matter are: every
@@ -129,13 +130,13 @@ namespace VibranceHud.Tests
         public void IsApplied_ReadsRealState_NotSessionMemory()
         {
             var catalog = NewCatalog(out var reg);
-            var tweak = catalog.All.First(t => t.Id == "foreground-boost");
+            var tweak = catalog.All.First(t => t.Id == "system-responsiveness");
 
             Assert.False(tweak.IsApplied());
             tweak.Apply();
 
             // A brand-new catalog over the same registry - like a relaunch.
-            var afterRestart = new SystemTweakCatalog(reg).All.First(t => t.Id == "foreground-boost");
+            var afterRestart = new SystemTweakCatalog(reg).All.First(t => t.Id == "system-responsiveness");
             Assert.True(afterRestart.IsApplied());
         }
 
@@ -176,10 +177,28 @@ namespace VibranceHud.Tests
         {
             var catalog = NewCatalog(out _);
 
-            Assert.True(catalog.All.First(t => t.Id == "foreground-boost").RequiresAdmin,
+            Assert.True(catalog.All.First(t => t.Id == "system-responsiveness").RequiresAdmin,
                 "writes HKLM, so it must request elevation");
             Assert.False(catalog.All.First(t => t.Id == "mouse-accel").RequiresAdmin,
                 "only writes HKCU - must not prompt for admin");
+        }
+
+        /// <summary>
+        /// Nothing may write Win32PrioritySeparation.
+        ///
+        /// A tweak used to set it to 38, described as "short quantums". It is not: 38 decodes to
+        /// LONG quantums, which is the server configuration and costs a game latency. Windows
+        /// already gives a desktop the 3:1 foreground bias by default, so there is no value worth
+        /// writing here - only values worth not writing.
+        /// </summary>
+        [Fact]
+        public void PriorityControlIsLeftAlone()
+        {
+            var catalog = NewCatalog(out var reg);
+            foreach (var tweak in catalog.All) tweak.Apply();
+
+            Assert.DoesNotContain(Written(reg), key =>
+                key.Contains("Win32PrioritySeparation", StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>Situational tweaks stay opt-in; the ones that are simply correct don't get
