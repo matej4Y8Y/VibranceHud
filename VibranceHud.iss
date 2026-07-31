@@ -56,8 +56,19 @@ Name: "{autoprograms}\PlexusX"; Filename: "{app}\PlexusX.exe"
 Name: "{autodesktop}\PlexusX"; Filename: "{app}\PlexusX.exe"; Tasks: desktopicon
 
 [Run]
-; No "skipifsilent": a silent auto-update must relaunch PlexusX afterwards.
-Filename: "{app}\PlexusX.exe"; Description: "Launch PlexusX now"; Flags: nowait postinstall
+; Two entries on purpose - one for each kind of install.
+;
+; This was a single entry carrying "postinstall", with a comment saying a silent
+; auto-update must relaunch PlexusX afterwards. It never did: postinstall renders a
+; checkbox on the finish page, and a /VERYSILENT install has no finish page, so Inno skips
+; the entry entirely. Dropping "skipifsilent" didn't help because postinstall alone is
+; enough to suppress it. Users saw the app close to install an update and simply never come
+; back, which reads as a crash.
+;
+; Interactive install: offer it as a checkbox, the normal convention.
+Filename: "{app}\PlexusX.exe"; Description: "Launch PlexusX now"; Flags: nowait postinstall skipifsilent
+; Silent auto-update: no UI to tick, so always relaunch.
+Filename: "{app}\PlexusX.exe"; Flags: nowait skipifnotsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
