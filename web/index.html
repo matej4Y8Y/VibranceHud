@@ -387,6 +387,11 @@ details p+p{margin-top:10px}
 .final .wrap{position:relative}
 .final h2{margin-bottom:18px}
 .final .lede{margin:0 auto 32px}
+/* Said before the download, not after. Being surprised by a Windows warning reads as
+   something hidden; being told about it first reads as nothing to hide. */
+.heads-up{margin:26px auto 0;max-width:52ch;color:var(--dimmer);font-size:13.5px;line-height:1.6}
+.heads-up b{color:var(--dim);font-weight:600}
+.heads-up a{color:var(--accent-soft);text-decoration:underline;text-underline-offset:3px}
 
 footer{border-top:1px solid var(--border);background:var(--bg-2);padding:56px 0 34px}
 .fgrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:44px}
@@ -977,6 +982,26 @@ footer{border-top:1px solid var(--border);background:var(--bg-2);padding:56px 0 
       </details>
 
       <details>
+        <summary>Windows warned me, and my antivirus flagged it. What's going on?</summary>
+        <p>You'll see "Windows protected your PC" the first time you run the installer. Click
+          <b>More info</b>, then <b>Run anyway</b>. A couple of antivirus engines may also flag
+          it. Here's the honest reason, rather than "just turn your antivirus off".</p>
+        <p>PlexusX isn't signed with a code-signing certificate yet — those cost a few hundred
+          a year and we're getting one. Until then Windows has no publisher name to check, so it
+          warns about the file itself. On top of that, PlexusX does three things scanners treat
+          as suspicious in combination: it changes Windows settings, it asks for admin to do it,
+          and it watches which programs are running so it can spot your game starting. Those are
+          the features. An installer that does all three and isn't signed gets flagged on
+          pattern, not on anything it found.</p>
+        <p>Two things worth knowing: the detection rate is a couple of engines out of about
+          seventy, all reporting a generic heuristic rather than a named threat — and once
+          you've installed it, updates arrive inside the app and never show this warning again.
+          It's a one-time thing.</p>
+        <p>If you'd rather not take our word for it, scan the installer yourself before running
+          it and ask us about anything it reports.</p>
+      </details>
+
+      <details>
         <summary>What does "one key, one PC" mean?</summary>
         <p>A key locks to the machine it's activated on, which is what stops keys being resold or
           passed around. If you change your CPU or drive, or reinstall Windows, ask in Discord and
@@ -1039,6 +1064,10 @@ footer{border-top:1px solid var(--border);background:var(--bg-2);padding:56px 0 
       </a>
       <a class="btn btn-ghost btn-lg" href="#" data-discord>Join the Discord</a>
     </div>
+    <p class="heads-up">
+      Windows will warn you the first time — PlexusX isn't code-signed yet.
+      Click <b>More info</b> → <b>Run anyway</b>. <a href="#faq">Here's the full reason.</a>
+    </p>
   </div>
 </section>
 

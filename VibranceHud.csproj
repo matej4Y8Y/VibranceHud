@@ -17,6 +17,16 @@
     <InformationalVersion>0.9.9</InformationalVersion>
     <ApplicationIcon>brand\PlexusX.ico</ApplicationIcon>
 
+    <!-- Version resources. An executable with an empty publisher/product/copyright block is
+         itself a heuristic signal - scanners weight "no identity at all" toward malware,
+         because real software fills these in and droppers usually don't. Costs nothing and
+         it's what shows in the file's Properties > Details tab. -->
+    <Company>PlexusX</Company>
+    <Product>PlexusX</Product>
+    <Authors>PlexusX</Authors>
+    <Copyright>Copyright © PlexusX</Copyright>
+    <Description>Digital vibrance, per-game colour profiles and system tweaks for Windows.</Description>
+
     <!-- Self-contained so a friend's PC needs nothing pre-installed (no .NET Desktop
          Runtime download/prompt) - the app carries its own runtime. Without this, a plain
          `dotnet publish` produces a framework-dependent build that fails to launch with
@@ -25,17 +35,23 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
 
-    <!-- Compress the bundled runtime inside the single file. The exe carries all of .NET
-         so a friend's PC needs nothing pre-installed, which is why it's ~156MB raw - this
-         is the supported way to cut that without giving up self-contained. Costs a little
-         startup time on first run while it decompresses, which is invisible next to the
-         splash screen we already show.
+    <!-- Compression inside the single file is OFF deliberately.
 
-         Deliberately NOT using PublishTrimmed: WinForms is not trim-safe (the designer
-         and data binding resolve types by reflection), and Microsoft warn against it for
-         WinForms apps. It would shrink further and then fail at runtime in whichever
+         A compressed self-extracting bundle is the classic "packed executable" shape, and
+         packing is one of the strongest generic-malware heuristics there is - it's how
+         droppers hide their payload from static analysis. We were paying that reputational
+         cost for nothing: the thing users actually download is the Inno Setup installer,
+         and Inno already LZMA-compresses its payload. Compressing twice barely shrinks the
+         installer while making the inner exe look packed.
+
+         Turning this off makes the raw exe larger (~156MB) and the installer roughly the
+         same size as before. It also removes the decompress-on-first-run step.
+
+         Deliberately NOT using PublishTrimmed either: WinForms is not trim-safe (the
+         designer and data binding resolve types by reflection), and Microsoft warn against
+         it for WinForms apps. It would shrink further and then fail at runtime in whichever
          dialog happened to use the trimmed-away path. -->
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
 
     <!-- InvariantGlobalization would shave more off by dropping the ICU data, but it changes
          runtime behaviour rather than just packaging: any path that needs culture data throws
