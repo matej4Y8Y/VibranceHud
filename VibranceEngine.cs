@@ -19,14 +19,19 @@ namespace VibranceHud
     /// </summary>
     public sealed class VibranceEngine : IVibranceEngine
     {
-        public const int MaxVibrance = 200;
-        public const int MaxSaturation = 200;
+        // Ceilings are where the control stops being useful, not round numbers. Past roughly
+        // 3x, colour hits the edge of what a monitor can show and flattens into blocks.
+        public const int MaxVibrance = 350;
+        public const int MaxSaturation = 300;
 
         /// <summary>The driver's own hard ceiling. Past this there is no hardware left to
         /// ask, so vibrance continues in software.</summary>
         public const int DriverVibranceCeiling = 100;
         public const int MinBrightness = 50;
-        public const int MaxBrightness = 150;
+        // Deliberately not doubled. Brightness multiplies pixel values, so anything already
+        // bright clips to white and stays there - at 2x half the screen is blown out. That is
+        // not headroom, it is damage.
+        public const int MaxBrightness = 170;
         public const int MinGamma = 50;
         public const int MaxGamma = 150;
 
@@ -290,13 +295,20 @@ namespace VibranceHud
             if (vibrance <= SoftwareNeutral)
                 return vibrance / (float)SoftwareNeutral;
 
-            return 1f + (vibrance - SoftwareNeutral)
-                        / (float)(MaxVibrance - SoftwareNeutral);
+            // Fixed slope, NOT derived from MaxVibrance. Tying it to the maximum meant that
+            // raising the ceiling silently re-scaled everything below it: 200 would have
+            // stopped meaning 2.0 and every existing user's screen would have changed because
+            // we added headroom they never asked for. The cap now just extends the same line.
+            return 1f + (vibrance - SoftwareNeutral) / (float)SoftwareSlope;
         }
 
         /// <summary>Where the software curve is untouched - the same place the driver's own
         /// neutral sits, which is the whole point of it.</summary>
         public const int SoftwareNeutral = 50;
+
+        /// <summary>How far past neutral doubles the chroma. Fixed forever: this is what makes
+        /// a saved 200 keep meaning exactly what it meant the day it was saved.</summary>
+        private const int SoftwareSlope = 150;
 
         /// <summary>
         /// Convert a value saved under the old meaning so it still looks the same.
@@ -311,7 +323,7 @@ namespace VibranceHud
 
             int migrated = wanted <= 1f
                 ? (int)Math.Round(wanted * SoftwareNeutral)
-                : SoftwareNeutral + (int)Math.Round((wanted - 1f) * (MaxVibrance - SoftwareNeutral));
+                : SoftwareNeutral + (int)Math.Round((wanted - 1f) * SoftwareSlope);
 
             return Math.Clamp(migrated, 0, MaxVibrance);
         }

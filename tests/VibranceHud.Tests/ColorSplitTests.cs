@@ -73,7 +73,9 @@ namespace VibranceHud.Tests
         {
             var (engine, ctrl, _) = NewEngine();
 
-            engine.Vibrance = 250;
+            // Past the ceiling, whatever the ceiling currently is - a literal here goes stale
+            // the moment the slider gets more headroom.
+            engine.Vibrance = VibranceEngine.MaxVibrance + 50;
             Assert.Equal(VibranceEngine.MaxVibrance, engine.Vibrance);
 
             engine.Vibrance = -10;

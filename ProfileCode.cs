@@ -37,21 +37,22 @@ namespace VibranceHud
         {
             // Brightness and gamma are stored as an offset from their own minimum so each one
             // fits the same byte as everything else.
-            byte[] payload =
+            // Ints, not bytes. Two characters of a 32-symbol alphabet hold 0-1023, which
+            // covers every slider; a byte topped out at 255 and would have silently truncated
+            // a maxed-out vibrance into somebody else's screen.
+            int[] payload =
             {
-                (byte)ClampVibrance(profile.Vibrance),
-                (byte)ClampSaturation(profile.Saturation),
-                (byte)(ClampBrightness(profile.Brightness) - VibranceEngine.MinBrightness),
-                (byte)(ClampGamma(profile.Gamma) - VibranceEngine.MinGamma),
+                ClampVibrance(profile.Vibrance),
+                ClampSaturation(profile.Saturation),
+                ClampBrightness(profile.Brightness) - VibranceEngine.MinBrightness,
+                ClampGamma(profile.Gamma) - VibranceEngine.MinGamma,
             };
 
             var body = new StringBuilder();
-            foreach (byte b in payload)
+            foreach (int value in payload)
             {
-                // Two characters per byte: 32 x 32 covers 0-255 with room to spare, and keeps
-                // the whole code readable rather than squeezing bits across boundaries.
-                body.Append(Alphabet[b / 32]);
-                body.Append(Alphabet[b % 32]);
+                body.Append(Alphabet[value / 32]);
+                body.Append(Alphabet[value % 32]);
             }
 
             body.Append(Alphabet[Checksum(body.ToString())]);
@@ -76,9 +77,9 @@ namespace VibranceHud
                 if (digits[i] < 0) return false;                   // not one of our characters
             }
 
-            byte[] payload = new byte[4];
+            int[] payload = new int[4];
             for (int i = 0; i < payload.Length; i++)
-                payload[i] = (byte)(digits[i * 2] * 32 + digits[i * 2 + 1]);
+                payload[i] = digits[i * 2] * 32 + digits[i * 2 + 1];
 
             if (digits[8] != Checksum(body.Substring(0, 8)))
                 return false;                                      // a typo, or somebody guessing
