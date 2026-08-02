@@ -37,6 +37,14 @@ namespace VibranceHud
         private readonly SettingsStore _store;
         private readonly Theming.CustomThemeService _customTheme;
         private readonly Crosshair.CrosshairService _crosshair = new();
+
+        /// <summary>
+        /// Monitor settings live here rather than in the window, because a theme change
+        /// rebuilds the window - and a service that died with it would restore every monitor
+        /// while the user was still sitting there using them.
+        /// </summary>
+        private readonly Monitors.MonitorService _monitors =
+            new(new Monitors.DdcMonitorControl());
         private readonly AppSettings _settings;
         private readonly SplashForm _splash;
         private readonly Audio.AudioEdgeService? _audioEdge;
@@ -125,7 +133,7 @@ namespace VibranceHud
             if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey, _monitors);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) =>
@@ -578,7 +586,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey, _monitors);
             _window.ShowAndFocus();
             old.Dispose();
         }
@@ -636,6 +644,9 @@ namespace VibranceHud
 
         protected override void ExitThreadCore()
         {
+            // Puts every monitor back to what it was set to when we found it. Same reason the
+            // crosshair goes first: leave nothing of ours on the user's screen.
+            _monitors.Dispose();
             _crosshair.Dispose(); // never leave an overlay floating on screen
             _vibrancePopup?.Dispose();
             UnregisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID);
