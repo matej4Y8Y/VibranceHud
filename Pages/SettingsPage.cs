@@ -71,8 +71,13 @@ namespace VibranceHud.Pages
                         bool usingFallback = _settings.OverlayMode == VibranceHud.OverlayMode.Mag;
                         general.Controls.Add(new Label
                         {
+                            // No longer true as of Streaming Mode - and a stale "not supported
+                            // yet" sitting above the switch that supports it is worse than
+                            // saying nothing, because people believe the warning and never
+                            // scroll down.
                             Text = usingFallback
-                                ? "Colour effect shows on your monitor. Capturing it in OBS / Discord isn't supported yet."
+                                ? "Colour effect runs on the Magnification path. For recordings, "
+                                  + "turn on Show my colours in recordings below."
                                 : "Display engine: DX11",
                             ForeColor = Theme.TextDim,
                             BackColor = Color.Transparent,

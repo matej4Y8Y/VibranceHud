@@ -27,6 +27,41 @@ namespace VibranceHud.Pages
                    | ControlStyles.ResizeRedraw, true);
         }
 
+        // ---- scrolling ---------------------------------------------------------------------
+        //
+        // The backdrop is painted at a fixed window offset - it is one continuous picture
+        // behind the whole app and is not supposed to move. Windows, though, scrolls by
+        // copying the pixels that are already on screen and repainting only the thin strip
+        // that just came into view. So it drags the backdrop along with the cards, and the
+        // rest of it is never redrawn: smeared plexus lines, cards printed over other cards,
+        // captions appearing twice.
+        //
+        // Repainting the whole page on every scroll costs a frame and removes the artefact
+        // entirely. Children are included because the copy has already moved them.
+
+        protected override void OnScroll(ScrollEventArgs se)
+        {
+            base.OnScroll(se);
+            Invalidate(true);
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            Invalidate(true);
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+
+            // Keyboard scrolling, and anything that moves the view without going through the
+            // two overrides above, arrives here as a scroll message.
+            const int WM_HSCROLL = 0x0114;
+            const int WM_VSCROLL = 0x0115;
+            if (m.Msg is WM_HSCROLL or WM_VSCROLL) Invalidate(true);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             using (var back = new SolidBrush(Theme.Background))
