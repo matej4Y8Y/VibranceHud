@@ -164,6 +164,10 @@ namespace VibranceHud
         /// <summary>False when the 0-100 driver range has no NVIDIA driver to apply to.</summary>
         public bool DriverAvailable => _controller.IsAvailable;
 
+        /// <summary>Why the driver path is missing, when it is. The UI needs the reason, not
+        /// just the fact - "no NVIDIA GPU" is a lie on a laptop that has one.</summary>
+        public VibranceDriverState DriverState => _controller.DriverState;
+
         /// <summary>Screen brightness calibration, 50-150 (100 = untouched).</summary>
         public int Brightness
         {

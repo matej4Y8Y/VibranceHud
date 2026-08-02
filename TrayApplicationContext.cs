@@ -219,11 +219,19 @@ namespace VibranceHud
         {
             try
             {
-            return new VibranceController();
+                return new VibranceController();
+            }
+            catch (NoNvidiaDisplaysException)
+            {
+                // The card is there, it just isn't wired to this screen - the laptop case.
+                // Falls back to software like the line below, but remembers why, so the user
+                // isn't told they lack a GPU they paid for.
+                return new NullVibranceController(VibranceDriverState.DisplayNotOnNvidia);
             }
             catch
             {
-            return new NullVibranceController();
+                // No NVIDIA driver at all: an AMD or Intel machine.
+                return new NullVibranceController(VibranceDriverState.NoNvidiaCard);
             }
         }
 

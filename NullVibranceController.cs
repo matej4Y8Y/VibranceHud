@@ -9,9 +9,19 @@ namespace VibranceHud
     /// </summary>
     public sealed class NullVibranceController : IVibranceController
     {
+        /// <summary>
+        /// Why there's no driver. This stand-in covers two very different situations - a PC
+        /// with no NVIDIA card, and a laptop whose built-in screen runs off the integrated
+        /// chip - and the user has to be told which. Defaults to "no card" so anything that
+        /// forgets to say can't accidentally claim the driver is fine.
+        /// </summary>
+        public NullVibranceController(
+            VibranceDriverState state = VibranceDriverState.NoNvidiaCard) => DriverState = state;
+
         public int CurrentLevel => 100;
         public int DefaultLevel => 100;
         public bool IsAvailable => false;
+        public VibranceDriverState DriverState { get; }
         public void SetLevel(int level) { /* no driver to talk to */ }
     }
 }

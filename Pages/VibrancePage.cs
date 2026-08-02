@@ -339,9 +339,11 @@ namespace VibranceHud.Pages
             // ---- Vibrance (driver) ----
             TextRenderer.DrawText(g, UiHelpers.Spaced("VIBRANCE"), CaptionFont,
                 new Rectangle(_cx, _vibCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
+            // Wider than the other readouts on purpose: when the driver is missing this says
+            // why, and "no NVIDIA GPU" was the wrong answer on every gaming laptop.
             TextRenderer.DrawText(g,
-                _engine.DriverAvailable ? $"{_vibrance.Value}%" : "no NVIDIA GPU",
-                SmallFont, new Rectangle(_cx + _colW - 110, _vibCapY, 110, 16),
+                VibranceStatus.Readout(_engine.DriverState, _vibrance.Value),
+                SmallFont, new Rectangle(_cx + _colW - 240, _vibCapY, 240, 16),
                 Theme.TextDim, TextFormatFlags.Right);
 
             // ---- Brightness calibration ----

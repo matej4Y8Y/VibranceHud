@@ -33,8 +33,12 @@ namespace VibranceHud
             _displays = DisplayApi.EnumNvidiaDisplayHandle();
             if (_displays.Length == 0)
             {
-                throw new InvalidOperationException(
-                    "No NVIDIA-driven display was found.");
+                // Getting here means the driver answered but drives no display we can reach.
+                // On a gaming laptop that's normal: the built-in panel is wired to the Intel
+                // or AMD chip and NVIDIA only drives the external ports. NoNvidiaDisplays
+                // exists so the caller can tell that apart from having no NVIDIA card at all -
+                // saying "no NVIDIA GPU" to someone who owns one reads as a broken app.
+                throw new NoNvidiaDisplaysException();
             }
         }
 
