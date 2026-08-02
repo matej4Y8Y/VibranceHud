@@ -119,12 +119,12 @@ namespace VibranceHud
 
             _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
             _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
-            _navMonitor = MakeNav("Monitor", position: 1, iconKind: 0);
-            _navGames = MakeNav("Games", position: 2, iconKind: 1);
-            _navFps = MakeNav("FPS Tweaks", position: 3, iconKind: 4);
-            _navCrosshair = MakeNav("Crosshair", position: 4, iconKind: 0);
-            _navSettings = MakeNav("Settings", position: 5, iconKind: 2);
-            _navEditor = MakeNav("Profile Editor", position: 6, iconKind: 2);
+            _navCrosshair = MakeNav("Crosshair", position: 1, iconKind: 0);
+            _navMonitor = MakeNav("Monitor", position: 2, iconKind: 0);
+            _navGames = MakeNav("Games", position: 3, iconKind: 1);
+            _navFps = MakeNav("FPS Tweaks", position: 4, iconKind: 4);
+            _navEditor = MakeNav("Profile Editor", position: 5, iconKind: 2);
+            _navSettings = MakeNav("Settings", position: 6, iconKind: 2);
             _navAccount = MakeNav("Account", position: 7, iconKind: 3);
 
             // Until the license is valid, only the Account tab is reachable. The

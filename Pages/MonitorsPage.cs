@@ -20,7 +20,7 @@ namespace VibranceHud.Pages
         private readonly MonitorService _service;
         private readonly FlowLayoutPanel _body = new();
         private readonly Label _status = new();
-        private readonly Button _rescan = new();
+        private readonly GlassButton _rescan = new();
 
         public MonitorsPage(MonitorService service)
         {
@@ -50,11 +50,6 @@ namespace VibranceHud.Pages
 
             _rescan.Text = "Rescan";
             _rescan.SetBounds(30, 96, 110, 30);
-            _rescan.FlatStyle = FlatStyle.Flat;
-            _rescan.BackColor = Theme.Surface;
-            _rescan.ForeColor = Theme.Text;
-            _rescan.FlatAppearance.BorderColor = Theme.Border;
-            _rescan.Cursor = Cursors.Hand;
             _rescan.Visible = false;
             _rescan.Click += (s, e) => StartScan();
             Controls.Add(_rescan);

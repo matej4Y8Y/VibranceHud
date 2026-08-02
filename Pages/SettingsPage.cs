@@ -427,30 +427,22 @@ namespace VibranceHud.Pages
                 };
                 share.Controls.Add(codeBox);
 
-                var copy = new Button
+                var copy = new GlassButton
                 {
                     Text = "Copy mine",
                     Location = new Point(width - 184, 71),
                     Size = new Size(86, 28),
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = Theme.Surface,
-                    ForeColor = Theme.Text,
-                    Cursor = Cursors.Hand,
                 };
-                copy.FlatAppearance.BorderColor = Theme.Border;
                 share.Controls.Add(copy);
 
-                var apply = new Button
+                // Primary: the one action on this card that does something to your screen.
+                var apply = new GlassButton
                 {
                     Text = "Apply",
+                    Kind = GlassButtonKind.Primary,
                     Location = new Point(width - 92, 71),
                     Size = new Size(74, 28),
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = Theme.Accent,
-                    ForeColor = Theme.Background,
-                    Cursor = Cursors.Hand,
                 };
-                apply.FlatAppearance.BorderColor = Theme.Accent;
                 share.Controls.Add(apply);
 
                 var shareStatus = new Label
