@@ -400,6 +400,107 @@ namespace VibranceHud.Pages
                 Controls.Add(recording);
             }
 
+            if (engine != null)
+            {
+                // Sits below Recording. Both are additive cards under the existing layout, so
+                // nothing above them had to move.
+                var share = new CardPanel { Location = new Point(40, 1104), Size = new Size(width, 150) };
+                share.Controls.Add(UiHelpers.Caption("SHARE", 18, 16, 200));
+                share.Controls.Add(new Label
+                {
+                    Text = "Send someone your exact colours, or paste theirs.",
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Location = new Point(18, 44),
+                    Size = new Size(width - 40, 20),
+                });
+
+                var codeBox = new TextBox
+                {
+                    Location = new Point(18, 72),
+                    Size = new Size(width - 210, 26),
+                    BorderStyle = BorderStyle.FixedSingle,
+                    BackColor = Theme.Background,
+                    ForeColor = Theme.Text,
+                    Font = new Font("Consolas", 10f),
+                    CharacterCasing = CharacterCasing.Upper,
+                };
+                share.Controls.Add(codeBox);
+
+                var copy = new Button
+                {
+                    Text = "Copy mine",
+                    Location = new Point(width - 184, 71),
+                    Size = new Size(86, 28),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Theme.Surface,
+                    ForeColor = Theme.Text,
+                    Cursor = Cursors.Hand,
+                };
+                copy.FlatAppearance.BorderColor = Theme.Border;
+                share.Controls.Add(copy);
+
+                var apply = new Button
+                {
+                    Text = "Apply",
+                    Location = new Point(width - 92, 71),
+                    Size = new Size(74, 28),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Theme.Accent,
+                    ForeColor = Theme.Background,
+                    Cursor = Cursors.Hand,
+                };
+                apply.FlatAppearance.BorderColor = Theme.Accent;
+                share.Controls.Add(apply);
+
+                var shareStatus = new Label
+                {
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Location = new Point(18, 108),
+                    Size = new Size(width - 40, 20),
+                };
+                share.Controls.Add(shareStatus);
+
+                copy.Click += (s2, e2) =>
+                {
+                    var code = ProfileCode.Encode(new ProfileCode(
+                        engine.Vibrance, engine.Saturation, engine.Brightness, engine.Gamma));
+                    codeBox.Text = code;
+                    Clipboard.SetText(code);
+                    shareStatus.ForeColor = Theme.TextDim;
+                    shareStatus.Text = code + "  -  copied, paste it anywhere";
+                };
+
+                apply.Click += (s2, e2) =>
+                {
+                    if (!ProfileCode.TryDecode(codeBox.Text, out var incoming))
+                    {
+                        // Never half-apply. A wrong character means we don't know what they
+                        // meant, and guessing lands someone on a stranger's screen.
+                        shareStatus.ForeColor = Theme.Accent;
+                        shareStatus.Text = "That code isn't right - check it and try again.";
+                        return;
+                    }
+
+                    engine.Vibrance = incoming.Vibrance;
+                    engine.Saturation = incoming.Saturation;
+                    engine.Brightness = incoming.Brightness;
+                    engine.Gamma = incoming.Gamma;
+
+                    _settings.VibrancePercent = incoming.Vibrance;
+                    _settings.SaturationPercent = incoming.Saturation;
+                    _settings.BrightnessPercent = incoming.Brightness;
+                    _settings.GammaPercent = incoming.Gamma;
+                    _store.Save(_settings);
+
+                    shareStatus.ForeColor = Theme.TextDim;
+                    shareStatus.Text = "Applied.";
+                };
+
+                Controls.Add(share);
+            }
+
             var about = new CardPanel { Location = new Point(40, 764), Size = new Size(width, 150) };
             about.Controls.Add(new LogoBox
             {
