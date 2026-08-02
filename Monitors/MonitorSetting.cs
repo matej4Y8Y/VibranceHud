@@ -29,6 +29,10 @@ namespace VibranceHud.Monitors
         /// as "preset 1..n" rather than pretending to know the names.</summary>
         Preset,
 
+        /// <summary>Put the monitor back to how it left the factory. One button, no value -
+        /// the way out when someone has made a mess of their own picture.</summary>
+        FactoryReset,
+
         /// <summary>Which cable the monitor is showing. Lets someone switch between their PC
         /// and a console without reaching behind the screen.</summary>
         InputSource,

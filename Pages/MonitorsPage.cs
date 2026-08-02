@@ -186,6 +186,52 @@ namespace VibranceHud.Pages
                 y += 54;
             }
 
+            // Presets and factory reset are buttons, not sliders. They are menu entries, and
+            // a slider through a menu is how someone lands somewhere their screen can't come
+            // back from.
+            if (monitor.HasPresets)
+            {
+                card.Controls.Add(new Label
+                {
+                    Text = "PICTURE MODE",
+                    Font = new Font("Segoe UI", 8f, FontStyle.Bold),
+                    ForeColor = Theme.TextDim,
+                    AutoSize = true,
+                    Location = new Point(20, y + 6),
+                });
+
+                int x = 150;
+                foreach (int preset in monitor.Presets)
+                {
+                    var button = new GlassButton { Text = preset.ToString() };
+                    button.SetBounds(x, y, 38, 26);
+                    int chosen = preset;
+                    button.Click += (s2, e2) =>
+                        _service.SetRaw(monitor.DeviceName, MonitorSetting.Preset, chosen);
+                    card.Controls.Add(button);
+                    x += 42;
+                    if (x > 560) break;   // one row; the rest are noise
+                }
+                y += 46;
+            }
+
+            var reset = new GlassButton { Text = "Reset monitor" };
+            reset.SetBounds(20, y + 4, 130, 28);
+            reset.Click += (s2, e2) =>
+            {
+                if (MessageBox.Show(
+                        "Put this monitor back to its factory settings?\n\n" +
+                        "This undoes everything, including changes you made with the buttons " +
+                        "on the screen itself - not just the ones made here.",
+                        "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                    return;
+
+                _service.SetRaw(monitor.DeviceName, MonitorSetting.FactoryReset, 1);
+                StartScan();   // everything just moved; read it all back
+            };
+            card.Controls.Add(reset);
+            y += 40;
+
             card.Height = y + 12;
             return card;
         }

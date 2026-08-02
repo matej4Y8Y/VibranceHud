@@ -59,12 +59,32 @@ namespace VibranceHud.Monitors
         public MonitorSnapshot(
             string deviceName,
             string model,
-            IReadOnlyDictionary<MonitorSetting, MonitorRange> settings)
+            IReadOnlyDictionary<MonitorSetting, MonitorRange> settings,
+            int presetCount = 0)
         {
             DeviceName = deviceName;
             Model = model;
             _settings = settings;
+            PresetCount = presetCount;
         }
+
+        /// <summary>How many picture modes the monitor says it has.</summary>
+        public int PresetCount { get; }
+
+        /// <summary>One choice is not a choice. Buttons that cannot change anything are
+        /// exactly the padding this app exists to not have.</summary>
+        public bool HasPresets => PresetCount > 1;
+
+        /// <summary>
+        /// The presets worth showing, numbered from one.
+        ///
+        /// Capped, because monitors have reported counts in the hundreds and a wall of
+        /// numbered buttons is not a feature. Their names aren't readable over DDC, so they
+        /// are offered as numbers rather than invented labels that would be wrong on most
+        /// panels.
+        /// </summary>
+        public IReadOnlyList<int> Presets =>
+            HasPresets ? Enumerable.Range(1, Math.Min(PresetCount, 12)).ToList() : Array.Empty<int>();
 
         public string DeviceName { get; }
         public string Model { get; }

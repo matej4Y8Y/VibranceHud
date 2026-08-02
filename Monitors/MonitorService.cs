@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -113,6 +113,18 @@ namespace VibranceHud.Monitors
                 _flushTimer.Change(FlushDelay, Timeout.InfiniteTimeSpan);
             }
             return true;
+        }
+
+        /// <summary>
+        /// Write a value straight through, no percentage conversion and no queueing.
+        ///
+        /// For the controls that are choices rather than scales - a picture mode, a factory
+        /// reset. There is nothing to coalesce: a button is pressed once.
+        /// </summary>
+        public bool SetRaw(string deviceName, MonitorSetting setting, int rawValue)
+        {
+            try { return _control.Set(deviceName, setting, rawValue); }
+            catch { return false; }
         }
 
         /// <summary>Send whatever is queued. Called by the timer; called directly by tests.</summary>

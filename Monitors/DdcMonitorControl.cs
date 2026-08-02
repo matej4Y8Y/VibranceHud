@@ -29,6 +29,8 @@ namespace VibranceHud.Monitors
         // panels set above zero. Everything else goes through raw VCP, where the floor is 0.
         private const byte VcpSharpness = 0x87;
         private const byte VcpVolume = 0x62;
+        private const byte VcpPreset = 0xDC;
+        private const byte VcpFactoryReset = 0x04;
 
         // Picture mode (0xDC) and input source (0x60) are deliberately not read.
         //
@@ -51,7 +53,11 @@ namespace VibranceHud.Monitors
                 {
                     try
                     {
-                        result.Add(new MonitorSnapshot(deviceName, description, Read(handle)));
+                        // Preset count is read, but never as a slider - see the note below.
+                        int presets = TryGetVcp(handle, VcpPreset, out _, out int maxPreset)
+                            ? maxPreset + 1
+                            : 0;
+                        result.Add(new MonitorSnapshot(deviceName, description, Read(handle), presets));
                     }
                     finally
                     {
@@ -127,6 +133,8 @@ namespace VibranceHud.Monitors
             MonitorSetting.Blue => Safe(() => SetMonitorRedGreenOrBlueGain(handle, 2, value)),
             MonitorSetting.Sharpness => Safe(() => SetVCPFeature(handle, VcpSharpness, value)),
             MonitorSetting.Volume => Safe(() => SetVCPFeature(handle, VcpVolume, value)),
+            MonitorSetting.Preset => Safe(() => SetVCPFeature(handle, VcpPreset, value)),
+            MonitorSetting.FactoryReset => Safe(() => SetVCPFeature(handle, VcpFactoryReset, 1)),
             _ => false,
         };
 
