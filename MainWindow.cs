@@ -34,14 +34,13 @@ namespace VibranceHud
         private Control? _currentPage;
 
         private readonly VibrancePage _vibrancePage;
-        private readonly MonitorsPage _monitorsPage;
         private readonly SettingsPage _settingsPage;
         private readonly AccountPage _accountPage;
         private readonly FpsTweaksPage _fpsPage;
         private readonly CrosshairPage _crosshairPage;
         private readonly ProfileEditorPage _profileEditorPage;
         private readonly Crosshair.CrosshairService _crosshair;
-        private readonly NavButton _navVibrance, _navMonitor, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount;
+        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount;
         private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
         private readonly ProfileEngineCoordinator? _profileCoordinator;
@@ -54,8 +53,7 @@ namespace VibranceHud
             ProfileEngineCoordinator? profileCoordinator = null,
             LicenseService? license = null,
             Func<uint, uint, bool>? onHotkeyChanged = null,
-            Action<uint, uint, bool>? onMainHotkeyChanged = null,
-            Monitors.MonitorService? monitors = null)
+            Action<uint, uint, bool>? onMainHotkeyChanged = null)
         {
             _crosshair = crosshair ?? new Crosshair.CrosshairService();
             _profileCoordinator = profileCoordinator;
@@ -107,25 +105,22 @@ namespace VibranceHud
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
             _fpsPage = new FpsTweaksPage(_tweaks);
-            _monitorsPage = new MonitorsPage(
-                monitors ?? new Monitors.MonitorService(new Monitors.DdcMonitorControl()));
             _profileEditorPage = new ProfileEditorPage();
             _profileEditorPage.PopulateGames(GetEditorGames());
             _profileEditorPage.SetStatus(_profileCoordinator?.IsRunning ?? false);
             _profileEditorPage.OnSaved += (_, _) => Select(_navVibrance, _vibrancePage);
             _profileEditorPage.OnCancelled += (_, _) => Select(_navVibrance, _vibrancePage);
-            foreach (var page in new GlowPage[] { _vibrancePage, _monitorsPage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _profileEditorPage })
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _profileEditorPage })
                 AttachField(page);
 
             _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
             _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
             _navCrosshair = MakeNav("Crosshair", position: 1, iconKind: 0);
-            _navMonitor = MakeNav("Monitor", position: 2, iconKind: 0);
-            _navGames = MakeNav("Games", position: 3, iconKind: 1);
-            _navFps = MakeNav("FPS Tweaks", position: 4, iconKind: 4);
-            _navEditor = MakeNav("Profile Editor", position: 5, iconKind: 2);
-            _navSettings = MakeNav("Settings", position: 6, iconKind: 2);
-            _navAccount = MakeNav("Account", position: 7, iconKind: 3);
+            _navGames = MakeNav("Games", position: 2, iconKind: 1);
+            _navFps = MakeNav("FPS Tweaks", position: 3, iconKind: 4);
+            _navEditor = MakeNav("Profile Editor", position: 4, iconKind: 2);
+            _navSettings = MakeNav("Settings", position: 5, iconKind: 2);
+            _navAccount = MakeNav("Account", position: 6, iconKind: 3);
 
             // Until the license is valid, only the Account tab is reachable. The
             // other tabs are still constructed (so the user sees the full nav once
@@ -133,14 +128,13 @@ namespace VibranceHud
             // buttons exist - visibility=null would NRE.
             ApplyLicenseVisibility();
             _navVibrance.Click += (s, e) => ShowVibrance();
-            _navMonitor.Click += (s, e) => Select(_navMonitor, _monitorsPage);
             _navGames.Click += (s, e) => ShowGames();
             _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
             _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navEditor.Click += (s, e) => ShowProfileEditor();
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount });
 
             var version = new Label
             {
@@ -380,7 +374,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navMonitor, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
