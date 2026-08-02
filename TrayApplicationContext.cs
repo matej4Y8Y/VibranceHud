@@ -108,6 +108,24 @@ namespace VibranceHud
             _engine.Brightness = _settings.BrightnessPercent;
             _engine.Gamma = _settings.GammaPercent;
             _engine.EyeCare = _settings.EyeCare;
+
+            // The software path's neutral moved from 100 to 50 so the number means the same
+            // thing on every GPU. Anyone who saved a value under the old meaning gets it
+            // converted once, so their screen looks identical the morning after an update -
+            // we are preserving what they chose, not deciding it was wrong for them.
+            //
+            // Only on machines actually using that path: on NVIDIA nothing changed, and
+            // converting there would break the picture we are trying to protect.
+            if (_settings.VibranceScaleVersion < 2)
+            {
+                if (!_engine.DriverAvailable)
+                {
+                    _settings.VibrancePercent =
+                        VibranceEngine.MigrateSoftwareVibrance(_settings.ResolvedVibrance);
+                }
+                _settings.VibranceScaleVersion = 2;
+                _store.Save(_settings);
+            }
             // Set before the vibrance values below: it decides whether the driver gets the
             // value or is parked at neutral, so applying it afterwards would leave the driver
             // holding a level Streaming Mode is supposed to have taken off it.

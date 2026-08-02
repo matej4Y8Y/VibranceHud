@@ -60,26 +60,38 @@ namespace VibranceHud.Tests
             Assert.Equal(expected, VibranceEngine.SoftwareVibranceFactor(vibrance, driverAvailable: true), 3);
         }
 
-        /// <summary>The fix: with no driver the whole range goes through software, so 50 is a
-        /// real desaturation instead of silently nothing.</summary>
+        /// <summary>
+        /// With no driver the whole range goes through software, and the number means what it
+        /// means on NVIDIA: 50 is untouched, below that drains colour, above it adds.
+        ///
+        /// This used to be value/100 throughout, which left the default at half saturation -
+        /// so an AMD or Intel user's first impression was a screen that looked worse than
+        /// before they installed anything.
+        /// </summary>
         [Theory]
         [InlineData(0, 0f)]
-        [InlineData(50, 0.5f)]
-        [InlineData(100, 1.0f)]
-        [InlineData(150, 1.5f)]
+        [InlineData(25, 0.5f)]
+        [InlineData(50, 1.0f)]
+        [InlineData(125, 1.5f)]
         [InlineData(200, 2.0f)]
         public void WithoutDriver_WholeRangeGoesThroughSoftware(int vibrance, float expected)
         {
             Assert.Equal(expected, VibranceEngine.SoftwareVibranceFactor(vibrance, driverAvailable: false), 3);
         }
 
-        /// <summary>100 must be exactly neutral in both modes - it's the "untouched" point,
-        /// and an off-by-a-hair there leaves the overlay running forever at idle.</summary>
+        /// <summary>
+        /// Each path has to hit exactly 1.0 at its own neutral, or the overlay never switches
+        /// itself off and runs forever at idle for no visible reason.
+        ///
+        /// They are different numbers on purpose: on NVIDIA the driver owns 0-100, so software
+        /// stays out of the way for that whole stretch. Without a driver, software is doing
+        /// all of it and its neutral is the slider's own default of 50.
+        /// </summary>
         [Fact]
-        public void AtOneHundred_IsNeutral_InBothModes()
+        public void EachPathIsExactlyNeutralAtItsOwnNeutralPoint()
         {
             Assert.Equal(1f, VibranceEngine.SoftwareVibranceFactor(100, true), 5);
-            Assert.Equal(1f, VibranceEngine.SoftwareVibranceFactor(100, false), 5);
+            Assert.Equal(1f, VibranceEngine.SoftwareVibranceFactor(VibranceEngine.SoftwareNeutral, false), 5);
         }
 
         // ---- engine behaviour -------------------------------------------------------------

@@ -268,8 +268,52 @@ namespace VibranceHud
             // Streaming Mode is exactly "pretend there is no driver": the driver's contribution
             // is applied after the desktop is composited, so no capture can ever see it, and
             // the matrix has to carry the whole range instead.
-            if (driverAvailable && !streaming && vibrance <= DriverVibranceCeiling) return 1f;
-            return vibrance / (float)DriverVibranceCeiling;
+            if (driverAvailable && !streaming)
+            {
+                // NVIDIA is left exactly as it was. The driver owns 0-100 and its own neutral
+                // already sits at 50, so nothing here was ever broken - and changing the curve
+                // above the ceiling would alter the picture for users who have no complaint.
+                return vibrance <= DriverVibranceCeiling
+                    ? 1f
+                    : vibrance / (float)DriverVibranceCeiling;
+            }
+
+            // Two straight lines meeting at the default, so the number means the same thing
+            // here as it does on NVIDIA:
+            //
+            //     0 -> greyscale      50 -> untouched      200 -> the same ceiling as before
+            //
+            // It used to be value/100 throughout, which put the default at half saturation.
+            // An AMD or Intel user opened the app and their screen looked worse than before
+            // they installed it - and it only reached normal at 100, by which point they'd
+            // already decided the product was broken.
+            if (vibrance <= SoftwareNeutral)
+                return vibrance / (float)SoftwareNeutral;
+
+            return 1f + (vibrance - SoftwareNeutral)
+                        / (float)(MaxVibrance - SoftwareNeutral);
+        }
+
+        /// <summary>Where the software curve is untouched - the same place the driver's own
+        /// neutral sits, which is the whole point of it.</summary>
+        public const int SoftwareNeutral = 50;
+
+        /// <summary>
+        /// Convert a value saved under the old meaning so it still looks the same.
+        ///
+        /// Without this, everyone on AMD or Intel wakes up after an update to a different
+        /// picture and no explanation. We're preserving what they chose, not deciding it was
+        /// wrong for them.
+        /// </summary>
+        public static int MigrateSoftwareVibrance(int savedValue)
+        {
+            float wanted = savedValue / (float)DriverVibranceCeiling;   // the old formula
+
+            int migrated = wanted <= 1f
+                ? (int)Math.Round(wanted * SoftwareNeutral)
+                : SoftwareNeutral + (int)Math.Round((wanted - 1f) * (MaxVibrance - SoftwareNeutral));
+
+            return Math.Clamp(migrated, 0, MaxVibrance);
         }
 
         /// <summary>Push the current vibrance to the driver. Called directly outside a drag

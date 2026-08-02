@@ -183,6 +183,12 @@ namespace VibranceHud
         /// main window. Off by default so existing users don't get a surprise binding on
         /// first launch after upgrade. The Vibrance page's "Main window" hotkey picker
         /// sets this to true the moment the user picks a combo.</summary>
+        /// <summary>
+        /// Bumped when a saved value changes meaning. 1 = vibrance on the software path was
+        /// value/100, so its neutral sat at 100 instead of 50.
+        /// </summary>
+        public int VibranceScaleVersion { get; set; }
+
         /// <summary>Streaming Mode: put the whole effect through the colour matrix so
         /// capture can see it. Off by default - it costs a little image quality, and only
         /// someone who records has a reason to pay that.</summary>

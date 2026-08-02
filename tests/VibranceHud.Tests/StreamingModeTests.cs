@@ -56,8 +56,15 @@ namespace VibranceHud.Tests
         public void In_streaming_mode_software_carries_the_whole_range()
         {
             // The driver's contribution is invisible to capture, so software has to do all of
-            // it - even on a machine where the driver works perfectly.
-            Assert.Equal(0.7f, VibranceEngine.SoftwareVibranceFactor(
+            // it - even on a machine where the driver works perfectly. Which is exactly the
+            // same job it does on a machine that never had a driver, so the two must agree
+            // rather than each carry their own copy of the curve.
+            Assert.Equal(
+                VibranceEngine.SoftwareVibranceFactor(70, driverAvailable: false),
+                VibranceEngine.SoftwareVibranceFactor(70, driverAvailable: true, streaming: true), 3);
+
+            // And it must not be the do-nothing value the driver path returns.
+            Assert.NotEqual(1f, VibranceEngine.SoftwareVibranceFactor(
                 70, driverAvailable: true, streaming: true), 3);
         }
 
