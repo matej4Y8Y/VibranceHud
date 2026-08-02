@@ -20,7 +20,8 @@ namespace VibranceHud.Pages
 
         public SettingsPage(AppSettings settings, SettingsStore store,
             Action<int> onOpacityChanged, Action<string> onThemeChanged,
-            Theming.CustomThemeService? custom = null, Action? onBackgroundChanged = null)
+            Theming.CustomThemeService? custom = null, Action? onBackgroundChanged = null,
+            IVibranceEngine? engine = null)
         {
             _settings = settings;
             _store = store;
@@ -359,6 +360,46 @@ namespace VibranceHud.Pages
             Controls.Add(updates);
 
             // ---- About ----
+            if (engine != null)
+            {
+                var recording = new CardPanel { Location = new Point(40, 934), Size = new Size(width, 150) };
+                recording.Controls.Add(UiHelpers.Caption("RECORDING", 18, 16, 200));
+                recording.Controls.Add(new Label
+                {
+                    Text = "Show my colours in recordings",
+                    ForeColor = Theme.Text,
+                    BackColor = Color.Transparent,
+                    Location = new Point(18, 46),
+                    AutoSize = true
+                });
+
+                var streaming = new ToggleSwitch
+                {
+                    Location = new Point(width - 62, 44),
+                    Checked = _settings.StreamingMode
+                };
+                streaming.CheckedChanged += (s2, e2) =>
+                {
+                    engine.StreamingMode = streaming.Checked;
+                    _settings.StreamingMode = streaming.Checked;
+                    _store.Save(_settings);
+                };
+                recording.Controls.Add(streaming);
+
+                recording.Controls.Add(new Label
+                {
+                    Text = "Normally your viewers see the game without your colours - the effect is " +
+                           "added after the point recording software reads the screen. This moves it " +
+                           "earlier so it shows up.\r\n\r\n" +
+                           "In OBS use Display Capture, not Game Capture. Costs a little image quality.",
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Location = new Point(18, 74),
+                    Size = new Size(width - 40, 62),
+                });
+                Controls.Add(recording);
+            }
+
             var about = new CardPanel { Location = new Point(40, 764), Size = new Size(width, 150) };
             about.Controls.Add(new LogoBox
             {

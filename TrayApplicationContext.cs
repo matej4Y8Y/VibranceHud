@@ -108,6 +108,10 @@ namespace VibranceHud
             _engine.Brightness = _settings.BrightnessPercent;
             _engine.Gamma = _settings.GammaPercent;
             _engine.EyeCare = _settings.EyeCare;
+            // Set before the vibrance values below: it decides whether the driver gets the
+            // value or is parked at neutral, so applying it afterwards would leave the driver
+            // holding a level Streaming Mode is supposed to have taken off it.
+            _engine.StreamingMode = _settings.StreamingMode;
             // Resolved properties migrate an old combined "Level" on first run after
             // vibrance and saturation became separate controls.
             _engine.Vibrance = _settings.ResolvedVibrance;

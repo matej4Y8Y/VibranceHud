@@ -8,6 +8,10 @@ namespace VibranceHud
     public interface IVibranceEngine
     {
         int Vibrance { get; set; }
+
+        /// <summary>Move the whole effect into the colour matrix so recordings and screen
+        /// shares can see it. Default false everywhere.</summary>
+        bool StreamingMode { get => false; set { } }
         int Saturation { get; set; }
         int Brightness { get; set; }
         int Gamma { get; set; }

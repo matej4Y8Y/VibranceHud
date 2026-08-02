@@ -162,11 +162,38 @@ namespace VibranceHud
         public int DefaultLevel => _controller.DefaultLevel;
 
         /// <summary>False when the 0-100 driver range has no NVIDIA driver to apply to.</summary>
+        private bool _streamingMode;
+
         public bool DriverAvailable => _controller.IsAvailable;
 
         /// <summary>Why the driver path is missing, when it is. The UI needs the reason, not
         /// just the fact - "no NVIDIA GPU" is a lie on a laptop that has one.</summary>
         public VibranceDriverState DriverState => _controller.DriverState;
+
+        /// <summary>
+        /// Move the whole effect into the colour matrix so recordings and screen shares can
+        /// see it.
+        ///
+        /// The matrix is applied while the desktop is composited, which is where Desktop
+        /// Duplication - and therefore OBS Display Capture - reads. Driver vibrance and the
+        /// gamma ramp are applied after that, on the way to the cable, so no capture can ever
+        /// pick them up. That is the whole reason the effect shows for some people and not
+        /// others: it depends which slider they happened to use.
+        ///
+        /// Off by default. It trades a little image quality for being visible, and nobody who
+        /// isn't recording should pay that without asking.
+        /// </summary>
+        public bool StreamingMode
+        {
+            get => _streamingMode;
+            set
+            {
+                if (_streamingMode == value) return;
+                _streamingMode = value;
+                ApplyDriverVibrance();   // park the driver, or hand its value back
+                ScheduleOverlayApply();
+            }
+        }
 
         /// <summary>Screen brightness calibration, 50-150 (100 = untouched).</summary>
         public int Brightness
@@ -235,16 +262,25 @@ namespace VibranceHud
         /// Public + static so it can be unit-tested without a GPU, and so ApplyOverlay and
         /// the identity check can't drift apart about what counts as neutral.
         /// </summary>
-        public static float SoftwareVibranceFactor(int vibrance, bool driverAvailable)
+        public static float SoftwareVibranceFactor(
+            int vibrance, bool driverAvailable, bool streaming = false)
         {
-            if (driverAvailable && vibrance <= DriverVibranceCeiling) return 1f;
+            // Streaming Mode is exactly "pretend there is no driver": the driver's contribution
+            // is applied after the desktop is composited, so no capture can ever see it, and
+            // the matrix has to carry the whole range instead.
+            if (driverAvailable && !streaming && vibrance <= DriverVibranceCeiling) return 1f;
             return vibrance / (float)DriverVibranceCeiling;
         }
 
         /// <summary>Push the current vibrance to the driver. Called directly outside a drag
         /// and once from EndDrag; never per mouse-move.</summary>
         private void ApplyDriverVibrance() =>
-            _controller.SetLevel(Math.Min(_vibrance, DriverVibranceCeiling));
+            // In Streaming Mode the driver is parked at its own neutral, NOT at zero. Driver
+            // vibrance 0 is fully grey, so handing it a 0 while software does the work would
+            // drain the colour out of the screen and look like the app had broken.
+            _controller.SetLevel(_streamingMode
+                ? _controller.DefaultLevel
+                : Math.Min(_vibrance, DriverVibranceCeiling));
 
         /// <summary>Install (or clear) the gamma ramp for the current gamma value.</summary>
         private void ApplyGammaRamp()
@@ -284,7 +320,7 @@ namespace VibranceHud
         {
             // On a machine with no NVIDIA driver this now covers the whole 0-200 range,
             // rather than leaving 0-100 to a driver that isn't there.
-            float vibrance = SoftwareVibranceFactor(_vibrance, _controller.IsAvailable);
+            float vibrance = SoftwareVibranceFactor(_vibrance, _controller.IsAvailable, _streamingMode);
             float saturation = _saturation / 100f;
             float brightness = _brightness / 100f;
             float warmth = _eyeCare ? EyeCareWarmth : 0f;

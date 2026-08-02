@@ -183,6 +183,11 @@ namespace VibranceHud
         /// main window. Off by default so existing users don't get a surprise binding on
         /// first launch after upgrade. The Vibrance page's "Main window" hotkey picker
         /// sets this to true the moment the user picks a combo.</summary>
+        /// <summary>Streaming Mode: put the whole effect through the colour matrix so
+        /// capture can see it. Off by default - it costs a little image quality, and only
+        /// someone who records has a reason to pay that.</summary>
+        public bool StreamingMode { get; set; }
+
         public bool MainHotkeyEnabled { get; set; }
 
         /// <summary>Modifier mask for the main-window hotkey. Default: Ctrl+Shift (distinct
