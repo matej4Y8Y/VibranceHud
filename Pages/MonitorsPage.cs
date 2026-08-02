@@ -62,11 +62,36 @@ namespace VibranceHud.Pages
             Controls.Add(_body);
 
             _service.Updated += OnScanFinished;
-            StartScan();
+        }
+
+        /// <summary>
+        /// The scan starts here rather than in the constructor.
+        ///
+        /// It runs on a background thread, and a fast machine can finish it before this page
+        /// has a window handle - at which point the result has nowhere to be marshalled to and
+        /// gets dropped. The page then sits there empty forever, because the only thing that
+        /// ever asked for a scan has already been and gone.
+        /// </summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            if (_service.HasScanned) Rebuild();   // a scan already ran for another page
+            else StartScan();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);   // GlowPage draws the shared backdrop
+
+            // Scrim, so text stays readable over whatever background image is behind, and so
+            // an empty page still reads as a surface rather than a black hole.
+            using var scrim = new SolidBrush(Color.FromArgb(150, Theme.Background));
+            e.Graphics.FillRectangle(scrim, ClientRectangle);
         }
 
         private void StartScan()
         {
+            if (!IsHandleCreated) return;
             _rescan.Enabled = false;
             _status.Text = "Looking for monitors...";
             _body.Controls.Clear();

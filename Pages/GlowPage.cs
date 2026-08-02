@@ -27,6 +27,31 @@ namespace VibranceHud.Pages
                    | ControlStyles.ResizeRedraw, true);
         }
 
+        /// <summary>
+        /// Draw the page and everything on it into one off-screen buffer before it reaches the
+        /// screen.
+        ///
+        /// Repainting on scroll fixed the smearing but introduced a flicker, because the two
+        /// steps were visible separately: Windows drags the old pixels to their new position,
+        /// then our repaint snaps the backdrop back to where it belongs. One frame of each,
+        /// which reads as the background trying to follow the scroll.
+        ///
+        /// WS_EX_COMPOSITED makes both happen off-screen and arrive as a single frame, so
+        /// there's no intermediate state to see. This is also why it goes on the page rather
+        /// than the window - it covers the page and its children without forcing the whole
+        /// app through one buffer.
+        /// </summary>
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                const int WS_EX_COMPOSITED = 0x02000000;
+                var cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_COMPOSITED;
+                return cp;
+            }
+        }
+
         // ---- scrolling ---------------------------------------------------------------------
         //
         // The backdrop is painted at a fixed window offset - it is one continuous picture
