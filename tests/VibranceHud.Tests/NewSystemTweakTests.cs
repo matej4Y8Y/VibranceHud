@@ -209,8 +209,37 @@ namespace VibranceHud.Tests
             var catalog = NewCatalog(out _);
 
             Assert.Equal(TweakTier.Advanced, catalog.All.First(t => t.Id == "hags").Tier);
-            Assert.Equal(TweakTier.Advanced, catalog.All.First(t => t.Id == "fullscreen-optimizations").Tier);
             Assert.Equal(TweakTier.Safe, catalog.All.First(t => t.Id == "mouse-accel").Tier);
+        }
+
+        /// <summary>
+        /// Tweaks that were shipped and turned out not to earn their place. A toggle that costs
+        /// frames, or that we can only describe as "might help, might not", is worse than no
+        /// toggle - it spends the trust the whole tab runs on.
+        /// </summary>
+        [Theory]
+        [InlineData("fullscreen-optimizations")]  // costs frames in borderless, which is how our users play
+        [InlineData("game-mode")]                 // "helps some, hurts others" = we didn't know
+        [InlineData("foreground-boost")]          // wrote the server-style long quantum
+        public void RetiredTweaksStayGone(string id)
+        {
+            Assert.DoesNotContain(NewCatalog(out _).All, t => t.Id == id);
+        }
+
+        /// <summary>
+        /// Game DVR needs both values. GameDVR_Enabled alone leaves the capture pipeline
+        /// running, which is the whole thing the tweak claims to stop - it reported success
+        /// and changed nothing measurable.
+        /// </summary>
+        [Fact]
+        public void DisablingGameDvrAlsoStopsBackgroundCapture()
+        {
+            var catalog = NewCatalog(out var reg);
+            catalog.All.First(t => t.Id == "game-dvr").Apply();
+
+            var written = Written(reg).ToList();
+            Assert.Contains(written, k => k.Contains("GameDVR_Enabled"));
+            Assert.Contains(written, k => k.Contains("AppCaptureEnabled"));
         }
     }
 }
