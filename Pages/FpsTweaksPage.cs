@@ -29,6 +29,8 @@ namespace VibranceHud.Pages
             Dock = DockStyle.Fill;
             BackColor = Theme.Background;
             AutoScroll = true;
+            // Centre the column rather than let it hug the left edge of a wide window.
+            ContentWidth = 640 + 80;
             Font = new Font(Theme.FontFamily, 9.5f);
             Padding = new Padding(40, 32, 40, 32);
 

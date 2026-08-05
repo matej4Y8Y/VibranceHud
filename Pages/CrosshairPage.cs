@@ -53,6 +53,8 @@ namespace VibranceHud.Pages
 
             Font = new Font(Theme.FontFamily, 9.5f);
             AutoScroll = true;
+            // Centre the column rather than let it hug the left edge of a wide window.
+            ContentWidth = CardW + 80;
 
             // Tall enough for every row including SAVED at the bottom (y=300 sliders start,
             // combo/buttons land around y=572-600): a shorter card clips its own last row

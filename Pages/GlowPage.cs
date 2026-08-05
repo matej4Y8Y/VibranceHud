@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace VibranceHud.Pages
@@ -86,6 +89,69 @@ namespace VibranceHud.Pages
             const int WM_VSCROLL = 0x0115;
             if (m.Msg is WM_HSCROLL or WM_VSCROLL) Invalidate(true);
         }
+
+        // ---- centred content column ------------------------------------------------------
+        //
+        // Every page lays itself out with absolute coordinates against a fixed card width.
+        // That was fine while the window was welded at 1040px. Now that it resizes, a wide
+        // window left the content hugging the left edge with a large dead zone beside it.
+        //
+        // The fix is to centre the column rather than stretch it. Stretching would be worse:
+        // a 1600px-wide settings row with its toggle far off on the right is harder to use
+        // than a readable column, which is why almost every desktop app caps its content
+        // width. Pages opt in by setting ContentWidth.
+        //
+        // Design-time positions are captured once, so repeated resizes always offset from the
+        // original layout rather than compounding.
+
+        private int _contentWidth;
+        private Dictionary<Control, int>? _designLeft;
+
+        /// <summary>The page's natural content width. Set it and the page centres itself in
+        /// anything wider. Zero (the default) leaves layout untouched.</summary>
+        protected int ContentWidth
+        {
+            get => _contentWidth;
+            set
+            {
+                _contentWidth = value;
+                CentreContent();
+            }
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            CentreContent();
+        }
+
+        private void CentreContent()
+        {
+            if (_contentWidth <= 0 || Width <= 0) return;
+
+            // Captured on first use, after the page has finished building itself.
+            _designLeft ??= Controls.Cast<Control>().ToDictionary(c => c, c => c.Left);
+
+            int available = Width - SystemInformation.VerticalScrollBarWidth;
+            int offset = Math.Max(0, (available - _contentWidth) / 2);
+
+            foreach (Control child in Controls)
+            {
+                if (!_designLeft.TryGetValue(child, out int design))
+                {
+                    // Added after the first layout - adopt where it is now as its design
+                    // position, or it would be shifted twice.
+                    design = child.Left - CurrentOffset();
+                    _designLeft[child] = design;
+                }
+                child.Left = design + offset;
+            }
+
+            _lastOffset = offset;
+        }
+
+        private int _lastOffset;
+        private int CurrentOffset() => _lastOffset;
 
         // Pages used to fade up from the background when swapped in - a ~200ms scrim over the
         // whole page. Taken out on request: switching tabs should feel instant, and a fade

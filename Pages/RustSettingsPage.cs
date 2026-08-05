@@ -65,6 +65,8 @@ namespace VibranceHud.Pages
             _audio = audio;
             _service = new RustSettingsService(Path.Combine(game.InstallDir, "cfg", "client.cfg"));
             AutoScroll = true;
+            // Centre the column instead of letting it hug the left edge of a wide window.
+            ContentWidth = CardW + 2 * Pad;
             Font = new Font(Theme.FontFamily, 9.5f);
             Padding = new Padding(0, 0, 0, 28);
 

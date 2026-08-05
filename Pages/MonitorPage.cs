@@ -49,6 +49,10 @@ namespace VibranceHud.Pages
             _selection = selection;
 
             AutoScroll = true;
+
+            // Centre the column instead of letting it hug the left edge of a wide window.
+
+            ContentWidth = CardW + 2 * Pad;
             Font = new Font(Theme.FontFamily, 9.5f);
 
             int y = Pad;

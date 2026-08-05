@@ -333,17 +333,25 @@ namespace VibranceHud.Pages
         {
             if (Width <= 0) return;
 
-            int cardW = Math.Max(Design.Tokens.Scale(520),
-                Width - 2 * PageMargin - SystemInformation.VerticalScrollBarWidth);
+            // Capped, not just floored. This page stretches its card to the window, which was
+            // right while the window was welded at 1040px. Once it could be dragged wide, the
+            // two-column grid stretched with it and a slider's readout ended up hundreds of
+            // pixels from its own caption - a long way to look to read one number.
+            int available = Width - 2 * PageMargin - SystemInformation.VerticalScrollBarWidth;
+            int cardW = Math.Clamp(available, Design.Tokens.Scale(520), Design.Tokens.Scale(980));
             int innerW = cardW - 2 * CardPad;
+
+            // Centre whatever is left over, so a wide window frames the card instead of
+            // leaving it against the left edge.
+            int leftMargin = PageMargin + Math.Max(0, (available - cardW) / 2);
             int colW = (innerW - ColGap) / 2;
             int leftX = CardPad;
             int rightX = CardPad + colW + ColGap;
 
             // Title box is sized from the font, not from a number that happened to fit the
             // old one. At 30px the 'p' and 'y' descenders in "Display" were being sliced off.
-            _title.SetBounds(PageMargin, Design.Tokens.Scale(16), cardW, Design.Tokens.Scale(38));
-            _subtitle.SetBounds(PageMargin, Design.Tokens.Scale(56), cardW, Design.Tokens.Scale(22));
+            _title.SetBounds(leftMargin, Design.Tokens.Scale(16), cardW, Design.Tokens.Scale(38));
+            _subtitle.SetBounds(leftMargin, Design.Tokens.Scale(56), cardW, Design.Tokens.Scale(22));
 
             int cardTop = Design.Tokens.Scale(86);
             int y = CardPad;
@@ -421,7 +429,7 @@ namespace VibranceHud.Pages
             y += Design.Tokens.Scale(20);
 
             // The card ends where its contents do, plus the same padding it started with.
-            _card.SetBounds(PageMargin, cardTop, cardW, y + CardPad);
+            _card.SetBounds(leftMargin, cardTop, cardW, y + CardPad);
 
             // Scroll extent covers the header band, the card and a margin underneath.
             AutoScrollMinSize = new Size(0, cardTop + _card.Height + PageMargin);
