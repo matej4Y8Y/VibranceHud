@@ -35,6 +35,10 @@ namespace VibranceHud.Pages
         private readonly List<ChipButton> _ruleChips = new();
 
         private Label _currentLabel = null!;
+
+        /// <summary>Holds the refresh-rate chips. Rebuilt on every resolution change, since
+        /// which rates exist depends entirely on the mode that is live.</summary>
+        private Panel? _rateRow;
         private Label _status = null!;
         private Label _ruleCaption = null!;
 
@@ -70,6 +74,7 @@ namespace VibranceHud.Pages
             y += 68;
 
             y = BuildNowCard(y);
+            y = BuildHdrCard(y);
             y = BuildPerGameCard(y);
 
             _status = new Label
@@ -133,6 +138,24 @@ namespace VibranceHud.Pages
                 card.Controls.Add(chip);
             }
 
+            // ---- refresh rate ----
+            //
+            // The setting this app's audience cares about most, and the one the page could
+            // not change: resolution chips always applied the monitor's maximum. Usually
+            // right, occasionally exactly wrong - a panel that drops frames at its top rate,
+            // or a second monitor being matched to the first.
+            int rateTop = 68 + rows * 42 + 8;
+            card.Controls.Add(UiHelpers.Caption("REFRESH RATE", Gutter, rateTop, 260));
+
+            _rateRow = new Panel
+            {
+                Location = new Point(Gutter, rateTop + 22),
+                Size = new Size(CardW - 2 * Gutter, 34),
+                BackColor = Color.Transparent,
+            };
+            card.Controls.Add(_rateRow);
+            card.Height = rateTop + 22 + 34 + 16;
+
             Controls.Add(card);
             SyncCurrent();
             return y + card.Height + 20;
@@ -152,6 +175,20 @@ namespace VibranceHud.Pages
             SyncCurrent();
         }
 
+        private void ApplyRate(int hz)
+        {
+            var current = DisplayController.Current();
+            if (current is not { } now) return;
+
+            if (DisplayController.Apply(now.Width, now.Height, hz))
+                SetStatus($"Switched to {hz} Hz.", Theme.TextDim);
+            else
+                SetStatus($"Your monitor refused {hz} Hz at this resolution - nothing changed.",
+                    Theme.Accent);
+
+            SyncCurrent();
+        }
+
         private void SyncCurrent()
         {
             var current = DisplayController.Current();
@@ -162,6 +199,132 @@ namespace VibranceHud.Pages
             for (int i = 0; i < _modeChips.Count; i++)
                 _modeChips[i].Active = current is { } c
                     && _modes[i].Width == c.Width && _modes[i].Height == c.Height;
+
+            RebuildRateChips(current);
+        }
+
+        /// <summary>
+        /// Rebuild the refresh-rate chips for whatever resolution is live now.
+        ///
+        /// Rebuilt rather than filtered: which rates exist depends entirely on the current
+        /// resolution, so a fixed set of chips would offer rates the monitor cannot do at the
+        /// mode it is actually in.
+        /// </summary>
+        private void RebuildRateChips(DisplayMode? current)
+        {
+            if (_rateRow == null) return;
+
+            _rateRow.Controls.Clear();
+            if (current is not { } now) return;
+
+            var rates = DisplayModes.RefreshRatesFor(DisplayController.SupportedModes(),
+                now.Width, now.Height);
+
+            // One rate is not a choice; showing a single dead chip implies there is something
+            // to pick.
+            if (rates.Count < 2)
+            {
+                _rateRow.Controls.Add(new Label
+                {
+                    Text = $"{now.RefreshHz} Hz — the only rate this monitor offers at {now.Width} x {now.Height}.",
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Location = new Point(0, 8),
+                    AutoSize = true,
+                });
+                return;
+            }
+
+            int x = 0;
+            foreach (int hz in rates)
+            {
+                var chip = new ChipButton
+                {
+                    Text = $"{hz} Hz",
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Size = new Size(84, 32),
+                    Location = new Point(x, 0),
+                    Active = hz == now.RefreshHz,
+                };
+                int captured = hz;
+                chip.Click += (_, _) => ApplyRate(captured);
+                _rateRow.Controls.Add(chip);
+                x += 92;
+            }
+        }
+
+        // ---- HDR ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Turn HDR on or off.
+        ///
+        /// Here because the capability probe already tells the user HDR is why their advanced
+        /// colour does nothing - Windows runs its own colour pipeline in HDR and ignores the
+        /// gamma ramp everything tonal is built on. Detecting a dead end and offering no way
+        /// out of it is half an answer; this is the other half.
+        ///
+        /// The card only appears on a machine that can actually do HDR. On everything else it
+        /// would be a permanently disabled switch explaining a feature the monitor does not
+        /// have.
+        /// </summary>
+        private int BuildHdrCard(int y)
+        {
+            var caps = Capabilities.Machine.Current;
+
+            // Nothing measured, or nothing to measure: no card. Machine.Current is Unknown in
+            // tests and in any path that skipped the probe.
+            if (!caps.HdrActive && caps.GammaRamp != Capabilities.GammaSupport.Refused
+                                && caps.GammaRamp != Capabilities.GammaSupport.Clamped)
+                return y;
+
+            var card = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 132) };
+            card.Controls.Add(UiHelpers.Caption("HDR", Gutter, 16, 260));
+
+            var toggle = new ToggleSwitch
+            {
+                Location = new Point(CardW - 62, 44),
+                Checked = caps.HdrActive,
+            };
+
+            var explain = new Label
+            {
+                ForeColor = caps.HdrActive ? Theme.Accent : Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(Gutter, 44),
+                Size = new Size(CardW - 2 * Gutter - 70, 70),
+                Text = caps.HdrActive
+                    ? "HDR is on, and Windows ignores screen-colour changes while it is. "
+                      + "Gamma and everything under Advanced on the Display page will do "
+                      + "nothing until you turn it off."
+                    : "HDR is off. Your colour controls all work.",
+            };
+
+            toggle.CheckedChanged += (_, _) =>
+            {
+                bool wanted = toggle.Checked;
+
+                if (!Capabilities.HdrDetection.TrySetHdr(wanted))
+                {
+                    // Never leave the switch showing a state the display did not take.
+                    toggle.Checked = !wanted;
+                    SetStatus("Windows wouldn't change HDR from here — try Display settings.",
+                        Theme.Accent);
+                    return;
+                }
+
+                SetStatus(wanted
+                    ? "HDR on. Restart PlexusX so it re-checks what your colour controls can do."
+                    : "HDR off. Restart PlexusX so it re-checks what your colour controls can do.",
+                    Theme.TextDim);
+            };
+
+            card.Controls.Add(explain);
+            card.Controls.Add(toggle);
+            Controls.Add(card);
+
+            return y + card.Height + 20;
         }
 
         // ---- per-game rule -----------------------------------------------------------

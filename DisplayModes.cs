@@ -48,6 +48,35 @@ namespace VibranceHud
             return max;
         }
 
+        /// <summary>
+        /// Every refresh rate the monitor offers at that resolution, highest first.
+        ///
+        /// Refresh rate is the setting this app's audience cares about most and the one it
+        /// could not change: Apply always forced the maximum, which is usually right and is
+        /// occasionally exactly wrong - a 240Hz panel that drops frames at 240 in a
+        /// particular game, or a second monitor being matched to the first.
+        /// </summary>
+        public static IReadOnlyList<int> RefreshRatesFor(
+            IEnumerable<DisplayMode> modes, int width, int height)
+        {
+            var rates = new SortedSet<int>();
+            foreach (var m in modes)
+                if (m.Width == width && m.Height == height && m.RefreshHz > 0)
+                    rates.Add(m.RefreshHz);
+
+            var list = new List<int>(rates);
+            list.Reverse();   // highest first: it is what most people want
+            return list;
+        }
+
+        /// <summary>Whether this exact mode - resolution AND refresh - was reported.</summary>
+        public static bool IsSupported(IEnumerable<DisplayMode> modes, int width, int height, int hz)
+        {
+            foreach (var m in modes)
+                if (m.Width == width && m.Height == height && m.RefreshHz == hz) return true;
+            return false;
+        }
+
         /// <summary>Never apply a mode the monitor didn't report - that's how you black-screen someone.</summary>
         public static bool IsSupported(IEnumerable<DisplayMode> modes, int width, int height) =>
             MaxRefreshFor(modes, width, height) > 0;

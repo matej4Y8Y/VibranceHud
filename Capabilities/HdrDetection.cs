@@ -52,8 +52,85 @@ namespace VibranceHud.Capabilities
             return false;
         }
 
+        /// <summary>
+        /// Turn HDR on or off for every active display. Returns true when at least one
+        /// display accepted it.
+        ///
+        /// Worth having because the capability probe already tells the user that HDR is why
+        /// their tone controls do nothing. Detecting a dead end and offering no way out of it
+        /// is only half an answer - this is the other half.
+        ///
+        /// Only touches displays that actually support HDR. Asking a non-HDR monitor to
+        /// change state fails harmlessly but would also make a partial success look like a
+        /// total one.
+        /// </summary>
+        public static bool TrySetHdr(bool enabled)
+        {
+            if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, out uint pathCount, out uint modeCount) != 0)
+                return false;
+
+            var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+            var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+
+            if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths,
+                    ref modeCount, modes, IntPtr.Zero) != 0)
+                return false;
+
+            bool anyChanged = false;
+
+            for (int i = 0; i < pathCount; i++)
+            {
+                var info = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO
+                {
+                    header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                    {
+                        type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO,
+                        size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>(),
+                        adapterId = paths[i].targetInfo.adapterId,
+                        id = paths[i].targetInfo.id,
+                    }
+                };
+
+                if (DisplayConfigGetDeviceInfo(ref info) != 0) continue;
+
+                // Bit 0 is advancedColorSupported. A display that cannot do HDR is skipped
+                // rather than asked and refused.
+                if ((info.value & 0x1) == 0) continue;
+
+                bool alreadyOn = (info.value & 0x2) != 0;
+                if (alreadyOn == enabled) { anyChanged = true; continue; }
+
+                var set = new DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE
+                {
+                    header = new DISPLAYCONFIG_DEVICE_INFO_HEADER
+                    {
+                        type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE,
+                        size = Marshal.SizeOf<DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE>(),
+                        adapterId = paths[i].targetInfo.adapterId,
+                        id = paths[i].targetInfo.id,
+                    },
+                    value = enabled ? 1u : 0u,
+                };
+
+                if (DisplayConfigSetDeviceInfo(ref set) == 0) anyChanged = true;
+            }
+
+            return anyChanged;
+        }
+
         private const uint QDC_ONLY_ACTIVE_PATHS = 0x00000002;
         private const int DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO = 9;
+        private const int DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE = 10;
+
+        [DllImport("user32.dll")]
+        private static extern int DisplayConfigSetDeviceInfo(ref DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE info);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE
+        {
+            public DISPLAYCONFIG_DEVICE_INFO_HEADER header;
+            public uint value;   // bit 0: enableAdvancedColor
+        }
 
         [DllImport("user32.dll")]
         private static extern int GetDisplayConfigBufferSizes(uint flags, out uint pathCount, out uint modeCount);

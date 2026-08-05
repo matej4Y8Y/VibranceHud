@@ -101,33 +101,84 @@ namespace VibranceHud
             return ChangeDisplaySettings(ref dm, 0) == DISP_CHANGE_SUCCESSFUL;
         }
 
-        /// <summary>Return the desktop to the mode captured earlier.</summary>
-        public static bool Restore(DisplayMode mode) => Apply(mode.Width, mode.Height);
+        /// <summary>
+        /// Switch to this resolution at a specific refresh rate.
+        ///
+        /// Same driver test-then-commit as <see cref="Apply(int,int)"/>, and it refuses a
+        /// combination the monitor never reported - applying an unreported mode is how you
+        /// black-screen somebody with no way back.
+        /// </summary>
+        public static bool Apply(int width, int height, int hz)
+        {
+            if (hz <= 0) return Apply(width, height);
+            if (!DisplayModes.IsSupported(SupportedModes(), width, height, hz)) return false;
+
+            var dm = NewDevMode();
+            if (!EnumDisplaySettings(null, ENUM_CURRENT_SETTINGS, ref dm)) return false;
+
+            dm.dmPelsWidth = width;
+            dm.dmPelsHeight = height;
+            dm.dmDisplayFrequency = hz;
+            dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+
+            if (ChangeDisplaySettings(ref dm, CDS_TEST) != DISP_CHANGE_SUCCESSFUL) return false;
+            return ChangeDisplaySettings(ref dm, 0) == DISP_CHANGE_SUCCESSFUL;
+        }
 
         /// <summary>
-        /// Wait for Rust to start and then exit, and put the desktop back. Fire-and-forget:
-        /// if the game never starts we restore anyway so nobody is left stretched.
+        /// Return the desktop to the mode captured earlier.
+        ///
+        /// Restores the refresh rate too. It previously went through the resolution-only
+        /// overload, which reapplies at the monitor's maximum - so a user who ran at 120Hz on
+        /// a 240Hz panel got put back at 240 after every game, silently, and had to fix it in
+        /// Windows each time.
         /// </summary>
-        public static void RestoreWhenRustExits(DisplayMode original, TimeSpan waitForStart)
+        public static bool Restore(DisplayMode mode) =>
+            Apply(mode.Width, mode.Height, mode.RefreshHz);
+
+        /// <summary>
+        /// Wait for a game to start and then exit, and put the desktop back.
+        ///
+        /// Fire-and-forget, and it restores on every exit path - including the game never
+        /// starting at all. Leaving somebody on a stretched desktop because a launch failed
+        /// is the worst outcome here, so the timeout restores rather than giving up.
+        /// </summary>
+        /// <param name="processName">Executable without ".exe", from the game catalogue.</param>
+        public static void RestoreWhenGameExits(string processName, DisplayMode original,
+            TimeSpan waitForStart)
         {
+            if (string.IsNullOrWhiteSpace(processName)) return;
+
             _ = Task.Run(async () =>
             {
-                var deadline = DateTime.UtcNow + waitForStart;
-                Process[] running;
-
-                // Wait for it to appear (or give up and restore).
-                while ((running = Process.GetProcessesByName("RustClient")).Length == 0)
+                try
                 {
-                    if (DateTime.UtcNow > deadline) { Restore(original); return; }
-                    await Task.Delay(2000);
+                    var deadline = DateTime.UtcNow + waitForStart;
+
+                    // Wait for it to appear (or give up and restore).
+                    while (Process.GetProcessesByName(processName).Length == 0)
+                    {
+                        if (DateTime.UtcNow > deadline) { Restore(original); return; }
+                        await Task.Delay(2000);
+                    }
+
+                    // Then wait for it to close.
+                    while (Process.GetProcessesByName(processName).Length > 0)
+                        await Task.Delay(3000);
+
+                    Restore(original);
                 }
-
-                // Then wait for it to close.
-                while (Process.GetProcessesByName("RustClient").Length > 0)
-                    await Task.Delay(3000);
-
-                Restore(original);
+                catch
+                {
+                    // Never let a background poll take the process down, and never leave the
+                    // desktop switched because of one.
+                    try { Restore(original); } catch { /* nothing left to try */ }
+                }
             });
         }
+
+        /// <summary>Kept for the Rust page's existing call.</summary>
+        public static void RestoreWhenRustExits(DisplayMode original, TimeSpan waitForStart) =>
+            RestoreWhenGameExits("RustClient", original, waitForStart);
     }
 }
