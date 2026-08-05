@@ -26,59 +26,11 @@ namespace VibranceHud
         private const double RegionRange = 0.35;     // highlights / shadows
         private const double TintRange = 0.12;       // split toning
 
-        // ---- night-vision guard ----------------------------------------------------------
-        //
-        // Shadows, blacks and fade all lift dark areas. Taken to their limits together they
-        // stop being a look and become night vision: a player crouched in an unlit corner,
-        // rendered by the game at near-black, gets pulled up to plainly visible grey.
-        //
-        // That is not what this app is for. It is an unfair advantage, it is the kind of
-        // thing that gets people banned, and "we sell a legal edge" stops being true the
-        // moment the sliders can do it. The product line in docs/ROADMAP.md - nothing that
-        // risks anti-cheat accounts - covers this as much as it covers injection.
-        //
-        // So the very bottom of the curve is capped. The cap is hard at true black and
-        // releases quickly, so a filmic lifted-black look still works while genuinely dark
-        // content stays dark.
-
-        /// <summary>Most a pure-black pixel may be lifted to. Roughly 20/255 - visibly not
-        /// pure black, nowhere near enough to pick a body out of an unlit corner.</summary>
-        internal const double NightGuardFloor = 0.08;
-
-        /// <summary>How much the cap rises with the input while it is still binding.</summary>
-        private const double NightGuardSlope = 1.0;
-
-        /// <summary>
-        /// Where the guard has fully released. About 64/255 - by then the picture is visible
-        /// terrain rather than somewhere to hide, so restricting it would only be deleting
-        /// grading the user paid for.
-        /// </summary>
-        private const double NightGuardRange = 0.25;
-
-        /// <summary>The highest output the cap alone would permit at this input.</summary>
-        internal static double NightGuardCap(double input) =>
-            NightGuardFloor + input * NightGuardSlope;
-
-        /// <summary>
-        /// Apply the guard, fading its influence out as the input brightens.
-        ///
-        /// Blended rather than switched off at a threshold. A hard cut-off puts a visible
-        /// edge in the curve, which shows up as a band across anything with a smooth dark
-        /// gradient - a night sky, smoke, a dim wall. Smoothstep keeps the first derivative
-        /// continuous so there is nothing to see.
-        /// </summary>
-        private static double ApplyNightGuard(double value, double input)
-        {
-            if (input >= NightGuardRange) return value;
-
-            double capped = Math.Min(value, NightGuardCap(input));
-
-            // smoothstep: 0 at the black end, 1 where the guard lets go.
-            double t = input / NightGuardRange;
-            t = t * t * (3 - 2 * t);
-
-            return capped * (1 - t) + value * t;
-        }
+        // A shadow-lift cap was added here and then removed. It capped how far the darkest
+        // part of the curve could be raised, so the tone controls could not add up to seeing
+        // players hidden in unlit corners. It came out with the Advanced section: with those
+        // sliders gone the only thing still reaching this curve is the gamma control, which
+        // has shipped unrestricted since the first release.
 
         public static ushort[] Build(ToneSettings t)
         {
@@ -129,11 +81,7 @@ namespace VibranceHud
                 // 4. Fade last, so the raised black point survives everything above it.
                 v = fade + v * (1 - fade);
 
-                // 5. The night-vision guard, before the tint so it caps the luminance the
-                //    tint then rides on rather than being applied per channel.
-                v = ApplyNightGuard(v, x);
-
-                // 6. Split tone. Warm pushes red up and blue down, cool the reverse, each
+                // 5. Split tone. Warm pushes red up and blue down, cool the reverse, each
                 //    weighted to the tonal region it belongs to.
                 double tint = tintS * wS + tintM * wM + tintH * wH;
 
