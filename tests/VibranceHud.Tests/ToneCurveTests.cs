@@ -218,22 +218,50 @@ namespace VibranceHud.Tests
         }
 
         /// <summary>
-        /// The old single-gamma path has to survive exactly, or everyone's saved gamma
-        /// silently changes meaning the moment this ships.
+        /// The old single-gamma path has to survive, or everyone's saved gamma silently
+        /// changes meaning.
+        ///
+        /// Above the guarded region it must match exactly. Inside it - the darkest quarter -
+        /// the night-vision guard is deliberately allowed to hold gamma down, because
+        /// cranking gamma is the oldest way there is to brighten a dark game and exempting it
+        /// would leave the guard trivially bypassable. The difference is a fraction of a
+        /// percent and invisible on anything but a test.
         /// </summary>
         [Theory]
         [InlineData(70)]
         [InlineData(100)]
         [InlineData(130)]
         [InlineData(150)]
-        public void MatchesLegacyGammaCurveWhenOnlyGammaIsSet(int gamma)
+        public void MatchesLegacyGammaCurveOutsideTheGuardedShadows(int gamma)
         {
             var mine = ToneCurve.Build(ToneSettings.Neutral with { Gamma = gamma });
             var legacy = GammaCurve.Build(gamma / 100f);
 
-            for (int i = 0; i < legacy.Length; i++)
-                Assert.True(Math.Abs(mine[i] - legacy[i]) <= 2,
-                    $"entry {i} drifted from the legacy gamma curve: {mine[i]} vs {legacy[i]}");
+            // The guard has fully released by 25% of the range.
+            int guarded = (int)(N * 0.25);
+
+            for (int c = 0; c < 3; c++)
+                for (int i = guarded; i < N; i++)
+                {
+                    int idx = c * N + i;
+                    Assert.True(Math.Abs(mine[idx] - legacy[idx]) <= 2,
+                        $"entry {i} drifted from the legacy gamma curve: {mine[idx]} vs {legacy[idx]}");
+                }
+        }
+
+        /// <summary>Inside the guarded region a raised gamma may be held down, but never
+        /// pushed up - the guard only ever darkens.</summary>
+        [Theory]
+        [InlineData(130)]
+        [InlineData(150)]
+        public void TheGuardOnlyEverHoldsGammaDownNeverUp(int gamma)
+        {
+            var mine = ToneCurve.Build(ToneSettings.Neutral with { Gamma = gamma });
+            var legacy = GammaCurve.Build(gamma / 100f);
+
+            for (int i = 0; i < N; i++)
+                Assert.True(mine[N + i] <= legacy[N + i] + 2,
+                    $"entry {i}: the guard brightened rather than darkened");
         }
 
         [Fact]

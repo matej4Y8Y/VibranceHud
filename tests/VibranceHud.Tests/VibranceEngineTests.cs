@@ -156,7 +156,12 @@ namespace VibranceHud.Tests
             engine.Gamma = 130;
 
             Assert.Equal(130, engine.Gamma);
-            Assert.Equal(GammaCurve.Build(1.3f), gamma.Last);
+
+            // ToneCurve, not GammaCurve. Gamma is one field of the same grade now, and the
+            // curve it produces is night-vision guarded - cranking gamma is the oldest way
+            // there is to brighten a dark game, so exempting it would leave the guard
+            // trivially bypassable. The two agree everywhere except the deepest shadows.
+            Assert.Equal(ToneCurve.Build(ToneSettings.Neutral with { Gamma = 130 }), gamma.Last);
 
             int resetsBefore = gamma.ResetCalls;
             engine.Gamma = 100;

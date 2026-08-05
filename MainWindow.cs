@@ -141,17 +141,16 @@ namespace VibranceHud
             logo.MouseDown += DragWindow;
             var close = TitleGlyph("✕", ClientSize.Width - Design.Tokens.Scale(42));
             close.Click += (s, e) => { SaveWindowBounds(); Hide(); };
-            var max = TitleGlyph("▢", ClientSize.Width - Design.Tokens.Scale(78));
-            max.Click += (s, e) => ToggleMaximize();
-            var min = TitleGlyph("─", ClientSize.Width - Design.Tokens.Scale(114));
+            var min = TitleGlyph("─", ClientSize.Width - Design.Tokens.Scale(78));
             min.Click += (s, e) => WindowState = FormWindowState.Minimized;
-            _titleBar.Controls.AddRange(new Control[] { logo, close, max, min });
+            _titleBar.Controls.AddRange(new Control[] { logo, close, min });
 
-            // Double-clicking the title bar maximizes, which is the gesture every Windows
-            // user already has. Dragging to a screen edge snaps for free: the drag goes
-            // through WM_NCLBUTTONDOWN/HTCAPTION, so Windows treats it as a real title bar.
-            _titleBar.DoubleClick += (s, e) => ToggleMaximize();
-            logo.DoubleClick += (s, e) => ToggleMaximize();
+            // No maximize, by choice. It was added with the resize work and taken back out:
+            // this is a utility window that sits beside a game, not something anybody wants
+            // filling their screen, and a full-screen PlexusX is just a lot of empty card.
+            // Dragging still resizes, and drag-to-edge snapping still works for free - that
+            // goes through WM_NCLBUTTONDOWN/HTCAPTION, which Windows treats as a real title
+            // bar regardless of whether we offer a maximize button.
             Controls.Add(_titleBar);
 
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
@@ -257,7 +256,7 @@ namespace VibranceHud
             HookInteractionPauses();
 
             // Last, so the restore does not fight the layout above it.
-            if (settings.WindowMaximized) WindowState = FormWindowState.Maximized;
+            ClearStaleMaximizedState();
 
             // The window normally hides rather than closes, so both paths have to record
             // the placement or closing via the tray would silently discard it.
@@ -800,10 +799,21 @@ namespace VibranceHud
             visible[NextNavIndex(current, visible.Count, forward)].PerformClick();
         }
 
-        private void ToggleMaximize() =>
-            WindowState = WindowState == FormWindowState.Maximized
-                ? FormWindowState.Normal
-                : FormWindowState.Maximized;
+        /// <summary>
+        /// Never leave a maximized window behind.
+        ///
+        /// Maximize was removed, but a settings file written while it existed can still say
+        /// the window was closed maximized - and with no button to undo it, that user would
+        /// open a full-screen PlexusX with no obvious way back. Read once and cleared.
+        /// </summary>
+        private void ClearStaleMaximizedState()
+        {
+            if (!_settings.WindowMaximized) return;
+
+            _settings.WindowMaximized = false;
+            WindowState = FormWindowState.Normal;
+            try { _store.Save(_settings); } catch { /* not worth failing startup over */ }
+        }
 
         public void OnEngineChanged()
         {
