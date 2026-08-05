@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace VibranceHud
 {
     /// <summary>
@@ -55,7 +57,22 @@ namespace VibranceHud
         public string ThemeName { get; set; } = "";
         public int BrightnessPercent { get; set; } = 100;
         public int GammaPercent { get; set; } = 100;
+        public int ContrastPercent { get; set; } = 100;
+
+        /// <summary>-100 (cool) to +100 (warm). Nullable so a settings file saved before
+        /// this control existed migrates from the old <see cref="EyeCare"/> switch instead
+        /// of silently resetting everyone's screen to neutral on upgrade.</summary>
+        public int? Temperature { get; set; }
+
+        /// <summary>Legacy on/off eye-care switch. New code reads
+        /// <see cref="ResolvedTemperature"/>; kept so an old settings file still migrates.</summary>
         public bool EyeCare { get; set; }
+
+        /// <summary>Temperature to actually use: the saved value if this settings file has
+        /// ever been through the new control, otherwise the old switch mapped onto the same
+        /// scale it always produced.</summary>
+        public int ResolvedTemperature =>
+            Temperature ?? (EyeCare ? VibranceEngine.EyeCareTemperature : 0);
 
         /// <summary>Which overlay mechanism was actually active last launch (DX11, or the
         /// Magnification-API fallback if DX11 init failed). Surfaced on the Settings page so
@@ -73,6 +90,12 @@ namespace VibranceHud
         /// ("Display driver doesn't support DX11" etc.). Kept short because
         /// it lives in a single-line Settings card alongside the kind.</summary>
         public string DxFailureMessage { get; set; } = "";
+
+        /// <summary>Raw HRESULT behind <see cref="DxFailure"/>, 0 when there wasn't one.
+        /// Only the category used to be kept, so every failure the mapper didn't recognise
+        /// became "Unknown" with nothing left to investigate - while the hint told the user
+        /// to report the code.</summary>
+        public int DxFailureCode { get; set; }
 
         // ---- Custom image theme ----
 
@@ -150,6 +173,32 @@ namespace VibranceHud
         /// <summary>What the user said they play during onboarding (for light personalization).</summary>
         public string FavoriteGame { get; set; } = "";
 
+        /// <summary>
+        /// The game the app is currently pointed at; empty means Desktop (no game).
+        ///
+        /// A UI selection only - it decides what the Game tab and Profile Editor show, never
+        /// what auto-apply does. See <see cref="Games.GameSelection"/>.
+        /// </summary>
+        public string CurrentGameId { get; set; } = "";
+
+        /// <summary>
+        /// Per-game desktop resolution rules, applied on launch and undone on exit.
+        ///
+        /// Lives here rather than in the game profile because it is a display setting, not a
+        /// colour one - it belongs with the Monitor tab that owns it, and it has to work for
+        /// people who never touch profiles.
+        /// </summary>
+        public List<MonitorRule> MonitorRules { get; set; } = new();
+
+        /// <summary>
+        /// Key → command bindings, per game.
+        ///
+        /// Held here rather than only in the game's config so the app can show you what you
+        /// set up without parsing a file it does not own, and so the bindings survive a game
+        /// reinstall wiping its cfg folder.
+        /// </summary>
+        public List<Keybinds.Keybind> Keybinds { get; set; } = new();
+
         // Rust launch boosts
         public bool RustHighPriority { get; set; } = true;
         public bool RustTrimLauncher { get; set; }
@@ -211,5 +260,37 @@ namespace VibranceHud
         /// flag has to expire). Cleared on PlexusX shutdown so it never persists across
         /// reboots.</summary>
         public bool ManualOverrideActive { get; set; }
+
+        /// <summary>
+        /// Where the user last dragged the quick-vibrance popup, in screen coordinates.
+        ///
+        /// <see cref="int.MinValue"/> means "never moved" - the popup opens centred, which is
+        /// the behaviour it always had. Once someone moves it, it's because the middle of the
+        /// screen was covering something they wanted to see, so reopening it back in the
+        /// middle every time undoes the move they just made.
+        ///
+        /// Validated against the live monitor layout on load, so a saved spot on a monitor
+        /// that has since been unplugged can't strand the popup off-screen.
+        /// </summary>
+        public int PopupX { get; set; } = int.MinValue;
+        public int PopupY { get; set; } = int.MinValue;
+
+        // ---- Main window placement ----
+
+        /// <summary>
+        /// Where the main window was last left, in screen coordinates.
+        ///
+        /// Zero width means "never saved", and the window then opens centred exactly as it
+        /// always did. Validated against the live monitor layout on load - see
+        /// <see cref="WindowBounds"/> - so a position on a monitor that has since been
+        /// unplugged cannot strand the window somewhere unreachable.
+        /// </summary>
+        public int WindowX { get; set; }
+        public int WindowY { get; set; }
+        public int WindowWidth { get; set; }
+        public int WindowHeight { get; set; }
+
+        /// <summary>True when the window was last closed maximized, so it returns that way.</summary>
+        public bool WindowMaximized { get; set; }
     }
 }

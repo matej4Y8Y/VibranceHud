@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using VibranceHud.Games;
@@ -8,6 +10,13 @@ using VibranceHud.Pages;
 
 namespace VibranceHud
 {
+    /// <summary>Which resize border a point falls in. See <see cref="MainWindow.HitTestBorder"/>.</summary>
+    public enum BorderHit
+    {
+        None, Left, Right, Top, Bottom,
+        TopLeft, TopRight, BottomLeft, BottomRight
+    }
+
     public sealed class MainWindow : Form
     {
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
@@ -15,6 +24,13 @@ namespace VibranceHud
         [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
         private const int WM_NCLBUTTONDOWN = 0xA1;
         private const int HTCAPTION = 0x2;
+
+        private const int WM_NCHITTEST = 0x0084;
+        private const int HTLEFT = 10, HTRIGHT = 11, HTTOP = 12, HTTOPLEFT = 13,
+                          HTTOPRIGHT = 14, HTBOTTOM = 15, HTBOTTOMLEFT = 16, HTBOTTOMRIGHT = 17;
+
+        /// <summary>How wide the invisible resize border is, in logical pixels.</summary>
+        private const int ResizeGrip = 6;
 
         private const int TitleH = 52;
         private const int NavW = 210;
@@ -74,7 +90,6 @@ namespace VibranceHud
             _onThemeChanged = onThemeChanged;
 
             FormBorderStyle = FormBorderStyle.None;
-            StartPosition = FormStartPosition.CenterScreen;
             Text = "PlexusX";
             Icon = AppIcon.Value;
             BackColor = Theme.Background;
@@ -88,6 +103,24 @@ namespace VibranceHud
             Opacity = Math.Clamp(settings.OpacityPercent, 50, 100) / 100.0;
             Font = Design.Fonts.Label;
             DoubleBuffered = true;
+
+            // Come back where we were left. Validated against the monitors that exist right
+            // now, so unplugging the screen the window was on brings it home rather than
+            // leaving it somewhere the user cannot reach.
+            var restored = WindowBounds.ClampToVisible(
+                new Rectangle(settings.WindowX, settings.WindowY,
+                              settings.WindowWidth, settings.WindowHeight),
+                Screen.AllScreens.Select(s => s.WorkingArea));
+
+            if (restored.IsEmpty)
+            {
+                StartPosition = FormStartPosition.CenterScreen;
+            }
+            else
+            {
+                StartPosition = FormStartPosition.Manual;
+                Bounds = restored;
+            }
 
             _field.Resize(ClientSize.Width, ClientSize.Height);
             Theming.AppBackground.Resize(ClientSize.Width, ClientSize.Height);
@@ -107,10 +140,18 @@ namespace VibranceHud
             };
             logo.MouseDown += DragWindow;
             var close = TitleGlyph("✕", ClientSize.Width - Design.Tokens.Scale(42));
-            close.Click += (s, e) => Hide();
-            var min = TitleGlyph("─", ClientSize.Width - Design.Tokens.Scale(78));
+            close.Click += (s, e) => { SaveWindowBounds(); Hide(); };
+            var max = TitleGlyph("▢", ClientSize.Width - Design.Tokens.Scale(78));
+            max.Click += (s, e) => ToggleMaximize();
+            var min = TitleGlyph("─", ClientSize.Width - Design.Tokens.Scale(114));
             min.Click += (s, e) => WindowState = FormWindowState.Minimized;
-            _titleBar.Controls.AddRange(new Control[] { logo, close, min });
+            _titleBar.Controls.AddRange(new Control[] { logo, close, max, min });
+
+            // Double-clicking the title bar maximizes, which is the gesture every Windows
+            // user already has. Dragging to a screen edge snaps for free: the drag goes
+            // through WM_NCLBUTTONDOWN/HTCAPTION, so Windows treats it as a real title bar.
+            _titleBar.DoubleClick += (s, e) => ToggleMaximize();
+            logo.DoubleClick += (s, e) => ToggleMaximize();
             Controls.Add(_titleBar);
 
             _vibrancePage = new VibrancePage(_engine, _settings, _store);
@@ -222,7 +263,39 @@ namespace VibranceHud
 
             HookInteractionPauses();
 
+            // Last, so the restore does not fight the layout above it.
+            if (settings.WindowMaximized) WindowState = FormWindowState.Maximized;
+
+            // The window normally hides rather than closes, so both paths have to record
+            // the placement or closing via the tray would silently discard it.
+            FormClosing += (s, e) => SaveWindowBounds();
+
             ShowVibrance();
+        }
+
+        /// <summary>
+        /// Remember where the window is.
+        ///
+        /// Reads RestoreBounds rather than Bounds when maximized, so what gets stored is the
+        /// size the window had BEFORE being maximized. Saving the maximized rectangle as the
+        /// normal size gives you a screen-filling "restored" window that can never be made
+        /// small again.
+        /// </summary>
+        private void SaveWindowBounds()
+        {
+            if (IsDisposed) return;
+
+            var b = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            if (b.Width <= 0 || b.Height <= 0) return;
+
+            _settings.WindowX = b.X;
+            _settings.WindowY = b.Y;
+            _settings.WindowWidth = b.Width;
+            _settings.WindowHeight = b.Height;
+            _settings.WindowMaximized = WindowState == FormWindowState.Maximized;
+
+            try { _store.Save(_settings); }
+            catch { /* a locked settings file must never break closing the window */ }
         }
 
         /// <summary>
@@ -564,8 +637,73 @@ namespace VibranceHud
             if (m.Msg == SingleInstance.ShowWindowMessage && SingleInstance.ShowWindowMessage != 0)
                 ShowAndFocus();
 
+            // Report a resize border to Windows. A borderless form gets none for free, which
+            // is why this window could never be resized despite every page carrying Anchor
+            // flags and MinimumSize being set. Suppressed while maximized, where dragging an
+            // edge is meaningless.
+            if (m.Msg == WM_NCHITTEST && WindowState == FormWindowState.Normal)
+            {
+                // LParam packs the screen position as two SIGNED 16-bit values. Masking with
+                // 0xFFFF loses the sign, so a window dragged onto a monitor at a negative x
+                // (any display left of the primary) would hit-test against nonsense.
+                int lp = m.LParam.ToInt32();
+                var screen = new Point(unchecked((short)(lp & 0xFFFF)),
+                                       unchecked((short)((lp >> 16) & 0xFFFF)));
+
+                int hit = HitTestBorder(PointToClient(screen), ClientSize,
+                    Design.Tokens.Scale(ResizeGrip)) switch
+                {
+                    BorderHit.Left => HTLEFT,
+                    BorderHit.Right => HTRIGHT,
+                    BorderHit.Top => HTTOP,
+                    BorderHit.Bottom => HTBOTTOM,
+                    BorderHit.TopLeft => HTTOPLEFT,
+                    BorderHit.TopRight => HTTOPRIGHT,
+                    BorderHit.BottomLeft => HTBOTTOMLEFT,
+                    BorderHit.BottomRight => HTBOTTOMRIGHT,
+                    _ => 0,
+                };
+
+                if (hit != 0) { m.Result = (IntPtr)hit; return; }
+            }
+
             base.WndProc(ref m);
         }
+
+        /// <summary>
+        /// Which resize border a client point falls in, if any.
+        ///
+        /// Pure geometry, so the corner-beats-edge precedence is testable without a window.
+        /// </summary>
+        public static BorderHit HitTestBorder(Point p, Size size, int grip)
+        {
+            if (grip <= 0) return BorderHit.None;
+
+            bool left = p.X <= grip, right = p.X >= size.Width - grip;
+            bool top = p.Y <= grip, bottom = p.Y >= size.Height - grip;
+
+            if (top && left) return BorderHit.TopLeft;
+            if (top && right) return BorderHit.TopRight;
+            if (bottom && left) return BorderHit.BottomLeft;
+            if (bottom && right) return BorderHit.BottomRight;
+            if (left) return BorderHit.Left;
+            if (right) return BorderHit.Right;
+            if (top) return BorderHit.Top;
+            if (bottom) return BorderHit.Bottom;
+            return BorderHit.None;
+        }
+
+        /// <summary>Next nav row, wrapping at both ends. Pure so the wrap-around is testable.</summary>
+        public static int NextNavIndex(int current, int count, bool forward)
+        {
+            if (count <= 0) return 0;
+            return ((current + (forward ? 1 : -1)) % count + count) % count;
+        }
+
+        private void ToggleMaximize() =>
+            WindowState = WindowState == FormWindowState.Maximized
+                ? FormWindowState.Normal
+                : FormWindowState.Maximized;
 
         public void OnEngineChanged()
         {
