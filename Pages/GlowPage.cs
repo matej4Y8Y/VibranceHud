@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace VibranceHud.Pages
@@ -88,6 +89,38 @@ namespace VibranceHud.Pages
             const int WM_HSCROLL = 0x0114;
             const int WM_VSCROLL = 0x0115;
             if (m.Msg is WM_HSCROLL or WM_VSCROLL) Invalidate(true);
+
+            // Windows re-shows the scrollbars whenever it recalculates the non-client area,
+            // so they have to be hidden again after it does.
+            const int WM_NCCALCSIZE = 0x0083;
+            if (m.Msg is WM_NCCALCSIZE or WM_HSCROLL or WM_VSCROLL) HideNativeScrollBars();
+        }
+
+        // ---- scrollbars ------------------------------------------------------------------
+        //
+        // AutoScroll brings Windows' own scrollbars with it, and they are the one part of the
+        // app that cannot be themed: a flat grey-and-white bar down the side of a dark glass
+        // panel, plus a horizontal one that had no business being there at all.
+        //
+        // The scrolling itself is kept - wheel, keyboard, AutoScrollPosition all still work -
+        // and only the bars are hidden. Hiding them also hands their width back to the page,
+        // which is why the content no longer sits inside a reserved gutter.
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowScrollBar(IntPtr hWnd, int wBar, bool bShow);
+
+        private const int SB_BOTH = 3;
+
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            base.OnLayout(e);
+            HideNativeScrollBars();
+        }
+
+        private void HideNativeScrollBars()
+        {
+            if (!IsHandleCreated || IsDisposed) return;
+            ShowScrollBar(Handle, SB_BOTH, false);
         }
 
         // ---- centred content column ------------------------------------------------------
@@ -132,8 +165,8 @@ namespace VibranceHud.Pages
             // Captured on first use, after the page has finished building itself.
             _designLeft ??= Controls.Cast<Control>().ToDictionary(c => c, c => c.Left);
 
-            int available = Width - SystemInformation.VerticalScrollBarWidth;
-            int offset = Math.Max(0, (available - _contentWidth) / 2);
+            // The native scrollbars are hidden, so their width is the page's to use.
+            int offset = Math.Max(0, (Width - _contentWidth) / 2);
 
             foreach (Control child in Controls)
             {

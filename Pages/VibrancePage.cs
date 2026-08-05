@@ -61,7 +61,6 @@ namespace VibranceHud.Pages
 
         private readonly GlassButton _resetFine;
 
-        private readonly AdvancedColorSection _advanced;
 
         // ---- share ----
         private readonly Label _shareLabel, _shareHint, _shareStatus;
@@ -197,17 +196,6 @@ namespace VibranceHud.Pages
                 MainHotkeyChanged?.Invoke(mask, vk, true);
             };
             _card.Controls.Add(_mainHotkeyPicker);
-
-            // ---- advanced colour ----
-            //
-            // Collapsed by default, so the page people already use looks exactly as it did.
-            // Everything in it resolves to the display gamma ramp, so the section asks the
-            // machine probe whether that ramp works before offering the controls.
-            _advanced = new AdvancedColorSection(_card,
-                new Font(Theme.FontFamily, 7.5f, FontStyle.Bold), Design.Fonts.Caption);
-            _advanced.Tone = _settings.ResolvedTone;
-            _advanced.ExpandedChanged += (_, _) => LayoutContent();
-            _advanced.ToneChanged += (_, _) => OnAdvancedChanged();
 
             // ---- share ----
             //
@@ -359,7 +347,9 @@ namespace VibranceHud.Pages
             // right while the window was welded at 1040px. Once it could be dragged wide, the
             // two-column grid stretched with it and a slider's readout ended up hundreds of
             // pixels from its own caption - a long way to look to read one number.
-            int available = Width - 2 * PageMargin - SystemInformation.VerticalScrollBarWidth;
+            // No scrollbar width reserved: GlowPage hides the native bars, so that gutter
+            // would just be an unexplained gap down the right-hand side.
+            int available = Width - 2 * PageMargin;
             int cardW = Math.Clamp(available, Design.Tokens.Scale(520), Design.Tokens.Scale(980));
             int innerW = cardW - 2 * CardPad;
 
@@ -400,10 +390,6 @@ namespace VibranceHud.Pages
             _contrast.Place(leftX, y, colW);
             _temperature.Place(rightX, y, colW);
             y += SliderRow.RowHeight + SectionGap;
-
-            // ---- advanced colour, directly under the controls it extends ----
-            _advanced.Place(leftX, y, innerW, colW, ColGap);
-            y += _advanced.PreferredHeight + SectionGap;
 
             // ---- scene presets: compact chips, under the controls they drive ----
             _presetsLabel.SetBounds(leftX, y, innerW, SectionLabelH);
@@ -560,22 +546,6 @@ namespace VibranceHud.Pages
             _store.Save(_settings);
 
             SetShareStatus("Applied — that's their exact look.", ok: true);
-        }
-
-        /// <summary>
-        /// Push the advanced grade at the engine, merging in the gamma slider.
-        ///
-        /// Gamma lives in FINE TUNE rather than in the advanced section, because it predates
-        /// it and is on every saved settings file and every share code. It is still part of
-        /// the same curve, so the two are recombined here - one place, so they cannot drift.
-        /// </summary>
-        private void OnAdvancedChanged()
-        {
-            var tone = _advanced.Tone with { Gamma = _gamma.Slider.Value };
-
-            _engine.Tone = tone;
-            _settings.Tone = tone;
-            _saveDebounce.Trigger();
         }
 
         private void SetShareStatus(string text, bool ok)
