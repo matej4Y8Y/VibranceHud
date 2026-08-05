@@ -15,7 +15,80 @@ namespace VibranceHud.Crosshair
     public sealed class CrosshairConfig
     {
         public string Name { get; set; } = "New crosshair";
+
+        /// <summary>
+        /// Legacy one-of-four shape. Kept only so a crosshair saved before the parts below
+        /// existed still loads as the shape its owner set; new code reads the parts.
+        ///
+        /// Replacing it was the whole point. Real crosshairs are combinations - a cross WITH
+        /// a centre dot, a circle WITH a dot, a plus inside an outline - and four mutually
+        /// exclusive values cannot express any of them. A gallery built on this enum could
+        /// never be more than a handful of entries.
+        /// </summary>
         public CrosshairShape Shape { get; set; } = CrosshairShape.Cross;
+
+        // ---- the parts ----
+        //
+        // Each is independent, so any combination is reachable. Four separate arms give
+        // cross, T, inverted-T, side-only and single-arm shapes from one mechanism, and the
+        // dot and circle sit alongside them rather than instead of them.
+        //
+        // Null means "saved before this existed" and migrates from Shape rather than
+        // resetting somebody's crosshair to nothing.
+
+        public bool? ArmTop { get; set; }
+        public bool? ArmBottom { get; set; }
+        public bool? ArmLeft { get; set; }
+        public bool? ArmRight { get; set; }
+        public bool? ShowCircle { get; set; }
+
+        /// <summary>Centre dot size in tenths of a pixel. Null falls back to the arm
+        /// thickness, which is what the single-shape model always drew.</summary>
+        public int? DotSizeTenths { get; set; }
+
+        /// <summary>Circle radius in tenths of a pixel. Null falls back to gap + arm length,
+        /// which is what the Circle shape always drew.</summary>
+        public int? CircleRadiusTenths { get; set; }
+
+        /// <summary>How opaque the crosshair is, 0-100. Applied on top of the colour's own
+        /// alpha at render time rather than folded into <see cref="ColourArgb"/>, so changing
+        /// colour cannot silently reset it.</summary>
+        public int Opacity { get; set; } = 100;
+
+        // ---- resolved parts, migrating from Shape ----
+
+        private bool ArmFrom(bool? saved, bool legacyDefault) => saved ?? legacyDefault;
+
+        /// <summary>Cross and T both draw the side and bottom arms; only Cross draws the top.
+        /// Dot and Circle draw none.</summary>
+        private bool LegacyHasArms => Shape is CrosshairShape.Cross or CrosshairShape.T;
+
+        public bool ResolvedArmTop => ArmFrom(ArmTop, Shape == CrosshairShape.Cross);
+        public bool ResolvedArmBottom => ArmFrom(ArmBottom, LegacyHasArms);
+        public bool ResolvedArmLeft => ArmFrom(ArmLeft, LegacyHasArms);
+        public bool ResolvedArmRight => ArmFrom(ArmRight, LegacyHasArms);
+
+        public bool ResolvedShowCircle => ShowCircle ?? (Shape == CrosshairShape.Circle);
+
+        /// <summary>The old Dot shape WAS a dot, so it migrates to the dot being on.</summary>
+        public bool ResolvedCentreDot => CentreDot || Shape == CrosshairShape.Dot;
+
+        public float ResolvedDotSize =>
+            (DotSizeTenths ?? (int)System.Math.Round(ResolvedThickness * 10)) / 10f;
+
+        public float ResolvedCircleRadius =>
+            (CircleRadiusTenths ?? (int)System.Math.Round((ResolvedGap + ResolvedSize) * 10)) / 10f;
+
+        /// <summary>Colour with the opacity applied. The one thing the renderer should use.</summary>
+        public int ResolvedColourArgb
+        {
+            get
+            {
+                int alpha = (byte)((ColourArgb >> 24) & 0xFF);
+                int scaled = alpha * System.Math.Clamp(Opacity, 0, 100) / 100;
+                return (ColourArgb & 0x00FFFFFF) | (scaled << 24);
+            }
+        }
 
         /// <summary>Colour as ARGB, so it round-trips through JSON without a converter.</summary>
         public int ColourArgb { get; set; } = unchecked((int)0xFF00FF66);

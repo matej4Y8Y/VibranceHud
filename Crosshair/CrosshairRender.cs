@@ -16,7 +16,9 @@ namespace VibranceHud.Crosshair
             var shapes = CrosshairGeometry.Build(config);
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            var colour = Color.FromArgb(config.ColourArgb);
+            // Resolved, so the opacity slider is applied. Folding opacity into ColourArgb
+            // instead would mean picking a new colour silently reset it.
+            var colour = Color.FromArgb(config.ResolvedColourArgb);
             using var fill = new SolidBrush(colour);
             using var halo = new SolidBrush(Color.FromArgb(190, 0, 0, 0));
 

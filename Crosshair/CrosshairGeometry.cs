@@ -30,30 +30,27 @@ namespace VibranceHud.Crosshair
             var bars = new List<RectangleF>();
             RectangleF? circle = null;
 
-            switch (c.Shape)
+            // Each part is independent, so any combination is reachable - a cross with a dot,
+            // a circle with a dot, a T with a circle round it. The old model could express
+            // exactly four crosshairs; this one can express the lot.
+            if (c.ResolvedArmLeft) bars.Add(new RectangleF(-(gap + size), -half, size, t));
+            if (c.ResolvedArmRight) bars.Add(new RectangleF(gap, -half, size, t));
+            if (c.ResolvedArmBottom) bars.Add(new RectangleF(-half, gap, t, size));
+            if (c.ResolvedArmTop) bars.Add(new RectangleF(-half, -(gap + size), t, size));
+
+            if (c.ResolvedShowCircle)
             {
-                case CrosshairShape.Dot:
-                    // Already only a dot - the centre-dot toggle must not double it up.
-                    bars.Add(new RectangleF(-half, -half, t, t));
-                    break;
-
-                case CrosshairShape.Circle:
-                    float r = gap + size;
-                    circle = new RectangleF(-r, -r, r * 2, r * 2);
-                    break;
-
-                case CrosshairShape.Cross:
-                case CrosshairShape.T:
-                    bars.Add(new RectangleF(-(gap + size), -half, size, t)); // left
-                    bars.Add(new RectangleF(gap, -half, size, t));           // right
-                    bars.Add(new RectangleF(-half, gap, t, size));           // below
-                    if (c.Shape == CrosshairShape.Cross)
-                        bars.Add(new RectangleF(-half, -(gap + size), t, size)); // above
-                    break;
+                float r = Math.Max(0.5f, c.ResolvedCircleRadius);
+                circle = new RectangleF(-r, -r, r * 2, r * 2);
             }
 
-            if (c.CentreDot && c.Shape != CrosshairShape.Dot)
-                bars.Add(new RectangleF(-half, -half, t, t));
+            if (c.ResolvedCentreDot)
+            {
+                // Its own size, so a small crosshair can carry a fat dot and the other way
+                // round. Falls back to the arm thickness, which is what the old model drew.
+                float d = Math.Max(0.5f, c.ResolvedDotSize);
+                bars.Add(new RectangleF(-d / 2f, -d / 2f, d, d));
+            }
 
             return new CrosshairShapes(bars, circle, Bounds(bars, circle));
         }
