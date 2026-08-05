@@ -20,6 +20,28 @@ namespace VibranceHud
         [JsonPropertyName("brightness")]  public int Brightness { get; set; } = 100;
         [JsonPropertyName("gamma")]       public int Gamma { get; set; } = 100;
 
+        // The rest of the look.
+        //
+        // A profile is now created by capturing whatever is on the Display page, so it has to
+        // carry everything that page can set. It previously held only the four above, which
+        // meant "save my look" would silently drop contrast, warmth and the whole advanced
+        // grade - the user would apply their own profile and get a different screen.
+        //
+        // Nullable so a profile saved before these existed reads as "not set" rather than as
+        // a deliberate zero, which for contrast would mean a grey screen.
+        [JsonPropertyName("contrast")]    public int? Contrast { get; set; }
+        [JsonPropertyName("temperature")] public int? Temperature { get; set; }
+        [JsonPropertyName("tone")]        public ToneSettings? Tone { get; set; }
+
+        [JsonIgnore] public int ResolvedContrast => Contrast ?? 100;
+        [JsonIgnore] public int ResolvedTemperature => Temperature ?? 0;
+
+        /// <summary>The grade to apply, with gamma folded in from the standalone field so the
+        /// two can never disagree.</summary>
+        [JsonIgnore]
+        public ToneSettings ResolvedTone =>
+            (Tone ?? ToneSettings.Neutral) with { Gamma = Gamma };
+
         // Game-Hub options (per-game; games with no hub options get an empty object)
         [JsonPropertyName("gameHub")] public GameHubOptions GameHub { get; set; } = new();
 

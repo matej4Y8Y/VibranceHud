@@ -46,12 +46,15 @@ namespace VibranceHud.Pages
 
         private int BuildCard(int top, int width, string title, string subtitle, IReadOnlyList<ISystemTweak> tweaks)
         {
-            const int rowH = 76;
             int headerH = 64;
+            // Height is set from the finished rows further down, not guessed here. Rows are
+            // as tall as their own description needs, because a fixed 18px box silently
+            // clipped the longer ones - "Lets the GPU manage its own work queue..." wrapped
+            // to a second line that was never drawn.
             var card = new CardPanel
             {
                 Location = new Point(40, top),
-                Size = new Size(width, headerH + tweaks.Count * rowH + 12)
+                Size = new Size(width, headerH),
             };
             card.Controls.Add(UiHelpers.Caption(title, 18, 16, 300));
             card.Controls.Add(new Label
@@ -66,36 +69,47 @@ namespace VibranceHud.Pages
 
             int y = headerH;
             foreach (var tweak in tweaks)
-            {
-                AddRow(card, tweak, y, width);
-                y += rowH;
-            }
+                y = AddRow(card, tweak, y, width) + RowGap;
 
+            card.Height = y - RowGap + 16;
             Controls.Add(card);
             return top + card.Height + 20;
         }
 
-        private void AddRow(CardPanel card, ISystemTweak tweak, int y, int width)
+        /// <summary>Breathing room between two tweak rows.</summary>
+        private const int RowGap = 18;
+
+        /// <summary>Lays out one row and returns the y its content ends at.</summary>
+        private int AddRow(CardPanel card, ISystemTweak tweak, int y, int width)
         {
-            // Three stacked, non-overlapping bands: title, description, status line.
-            card.Controls.Add(new Label
+            // Three stacked, non-overlapping bands: title, description, status line. Each
+            // sits under the one above rather than at a hardcoded offset, so a description
+            // that wraps pushes the status down instead of being cut off behind it.
+            int textW = width - 90;   // leaves the toggle its column on the right
+
+            var title = new Label
             {
                 Text = tweak.Label + (tweak.RequiresAdmin ? "   (admin)" : ""),
                 ForeColor = Theme.Text,
                 BackColor = Color.Transparent,
                 Font = LabelFont,
                 Location = new Point(18, y),
-                Size = new Size(width - 90, 20)
-            });
-            card.Controls.Add(new Label
+                AutoSize = true,
+                MaximumSize = new Size(textW, 0),
+            };
+            card.Controls.Add(title);
+
+            var desc = new Label
             {
                 Text = tweak.Description,
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = DescFont,
-                Location = new Point(18, y + 22),
-                Size = new Size(width - 90, 18)
-            });
+                Location = new Point(18, title.Bottom + 4),
+                AutoSize = true,
+                MaximumSize = new Size(textW, 0),
+            };
+            card.Controls.Add(desc);
 
             var status = new Label
             {
@@ -103,8 +117,12 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.Accent,
                 BackColor = Color.Transparent,
                 Font = StatusFont,
-                Location = new Point(18, y + 44),
-                Size = new Size(width - 90, 16)
+                Location = new Point(18, desc.Bottom + 4),
+                AutoSize = true,
+                MaximumSize = new Size(textW, 0),
+                // Reserve the line even while empty, so switching a tweak on doesn't grow
+                // the row and shove everything below it down the page.
+                MinimumSize = new Size(0, 16),
             };
             card.Controls.Add(status);
 
@@ -135,6 +153,11 @@ namespace VibranceHud.Pages
                 Invalidate();
             };
             card.Controls.Add(toggle);
+
+            // The status line is empty until the tweak is applied, and an empty AutoSize
+            // Label collapses - so the row's extent is the tallest of what's actually there,
+            // including the toggle on a row whose text is a single short line.
+            return Math.Max(Math.Max(status.Bottom, desc.Bottom), toggle.Bottom);
         }
 
         private static string StatusLine(ISystemTweak tweak) =>

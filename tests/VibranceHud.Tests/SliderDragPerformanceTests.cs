@@ -123,21 +123,31 @@ namespace VibranceHud.Tests
         {
             var (engine, _, gamma, _) = NewEngine();
             engine.Gamma = 130; // start off-neutral, applied immediately (no drag)
-            int applyBefore = gamma.ApplyCalls;
             int resetBefore = gamma.ResetCalls;
 
             engine.BeginDrag();
             for (int v = 129; v >= 100; v--) engine.Gamma = v;
             engine.EndDrag();
 
-            Assert.Equal(applyBefore, gamma.ApplyCalls);
+            // Landing on neutral clears the ramp rather than installing a near-identity one.
+            // That is the guarantee here; how many times the ramp was touched on the way down
+            // is the throttle's business, covered below.
             Assert.Equal(resetBefore + 1, gamma.ResetCalls);
+            Assert.Equal(100, engine.Gamma);
         }
 
-        /// <summary>Dragging VIBRANCE does still need the driver, but only once at the
-        /// end - not once per mouse-move.</summary>
+        /// <summary>
+        /// Dragging has to move the screen WHILE it happens, and still not once per
+        /// mouse-move.
+        ///
+        /// Both halves matter and they pull against each other. Vibrance below the driver
+        /// ceiling is applied entirely by the driver - the colour matrix is neutral there -
+        /// so deferring the driver write to release left the whole 0-100 range doing nothing
+        /// until the mouse came up, while saturation (pure matrix) updated perfectly. That
+        /// asymmetry is what it looked like from the outside.
+        /// </summary>
         [Fact]
-        public void DraggingVibrance_FlushesTheDriverOnceOnEndDrag()
+        public void DraggingVibrance_ReachesTheDriverDuringTheDrag_ButThrottled()
         {
             var (engine, ctrl, _, _) = NewEngine();
             engine.Vibrance = 0;
@@ -148,9 +158,12 @@ namespace VibranceHud.Tests
             int duringDrag = ctrl.SetLevelCalls - before;
             engine.EndDrag();
 
-            Assert.Equal(0, duringDrag);
-            Assert.Equal(before + 1, ctrl.SetLevelCalls);
-            // Driver caps at its ceiling; 80 is below it so it lands exactly.
+            Assert.True(duringDrag >= 1,
+                "the driver has to be written during the drag or the slider looks dead below 100");
+            Assert.True(duringDrag < 80,
+                "but not once per mouse-move - that write blocks the UI thread");
+
+            // Whatever the throttle skipped is never what you are left looking at.
             Assert.Equal(80, ctrl.LastLevel);
         }
 

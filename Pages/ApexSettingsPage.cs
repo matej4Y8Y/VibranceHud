@@ -24,7 +24,7 @@ namespace VibranceHud.Pages
         private readonly Dictionary<ApexTweak, ToggleSwitch> _toggles = new();
         private Label _status = null!;
 
-        public ApexSettingsPage(DetectedGame game, Action onBack)
+        public ApexSettingsPage(DetectedGame game, Action onBack, IVibranceEngine? engine = null)
         {
             _game = game;
             _service = new ApexSettingsService(ApexSettingsService.DefaultVideoConfigPath());
@@ -63,6 +63,19 @@ namespace VibranceHud.Pages
                     AutoSize = true
                 });
                 y += 28;
+            }
+
+            // ---------- Profile ----------
+            //
+            // Replaces the Profile Editor page. What you set on Display is what gets saved,
+            // so there are no sliders here - configuring the same look twice is exactly why
+            // the old editor went unused.
+            if (engine != null)
+            {
+                var profileCard = GameProfileSection.BuildCard(
+                    _game.Game.Id, _game.Game.DisplayName, engine, Pad, y, CardW);
+                Controls.Add(profileCard);
+                y += profileCard.Height + 16;
             }
 
             // ---------- Quick presets ----------

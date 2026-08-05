@@ -21,25 +21,13 @@ namespace VibranceHud.Pages
             Font = new Font(Theme.FontFamily, 9.5f);
             Padding = new Padding(0, 0, 0, 28);
 
-            var back = new LinkLabel
-            {
-                Text = "‹ Games",
-                LinkColor = Theme.TextDim,
-                ActiveLinkColor = Theme.Accent,
-                LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(40, 26),
-                AutoSize = true,
-                BackColor = Color.Transparent
-            };
-            back.Click += (s, e) => onBack();
-            Controls.Add(back);
-
+            // No back link - the chooser in the nav is how you change game now.
             Controls.Add(new Label
             {
                 Text = game.DisplayName,
                 ForeColor = Theme.Text,
                 Font = new Font(Theme.FontFamily, 18f, FontStyle.Bold),
-                Location = new Point(38, 48),
+                Location = new Point(38, 26),
                 AutoSize = true,
                 BackColor = Color.Transparent
             });
@@ -49,7 +37,7 @@ namespace VibranceHud.Pages
                 Text = "Optimization for this game isn't available yet.",
                 ForeColor = Theme.TextDim,
                 Font = new Font(Theme.FontFamily, 9.5f),
-                Location = new Point(40, 96),
+                Location = new Point(40, 72),
                 AutoSize = true,
                 BackColor = Color.Transparent
             });

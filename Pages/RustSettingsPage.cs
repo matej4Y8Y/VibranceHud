@@ -57,7 +57,7 @@ namespace VibranceHud.Pages
         // docs/design/specs/2026-07-29-remove-nvidia-tweaks.md.
 
         public RustSettingsPage(DetectedGame game, AppSettings settings, SettingsStore store,
-            Audio.AudioEdgeService? audio, Action onBack)
+            Audio.AudioEdgeService? audio, Action onBack, IVibranceEngine? engine = null)
         {
             _game = game;
             _settings = settings;
@@ -101,6 +101,19 @@ namespace VibranceHud.Pages
                     AutoSize = true
                 });
                 y += 28;
+            }
+
+            // ---------- Profile ----------
+            //
+            // Replaces the Profile Editor page. What you set on Display is what gets saved,
+            // so there are no sliders here - configuring the same look twice is exactly why
+            // the old editor went unused.
+            if (engine != null)
+            {
+                var profileCard = GameProfileSection.BuildCard(
+                    _game.Game.Id, _game.Game.DisplayName, engine, Pad, y, CardW);
+                Controls.Add(profileCard);
+                y += profileCard.Height + 16;
             }
 
             // ---------- Quick presets ----------

@@ -25,8 +25,14 @@ namespace VibranceHud.Pages
         private readonly ToggleSwitch _enabled;
         private readonly Label _status;
         private readonly List<ChipButton> _shapes = new();
+        private readonly List<SwatchDot> _colourDots = new();
 
         private const int BaseCardHeight = 630;
+        private const int CardW = 620;
+        private const int Gutter = 18;
+        private const int ContentW = CardW - 2 * Gutter;
+        /// <summary>X for a control pinned to the card's right gutter.</summary>
+        private static int RightOf(int width) => CardW - Gutter - width;
 
         private CrosshairConfig _current;
 
@@ -44,10 +50,10 @@ namespace VibranceHud.Pages
             // combo/buttons land around y=572-600): a shorter card clips its own last row
             // regardless of the page's AutoScroll, since a child can't render past its
             // immediate parent's bounds.
-            _card = new CardPanel { Location = new Point(40, 34), Size = new Size(620, BaseCardHeight) };
-            _card.Controls.Add(UiHelpers.Caption("CROSSHAIR", 18, 16, 240));
+            _card = new CardPanel { Location = new Point(40, 34), Size = new Size(CardW, BaseCardHeight) };
+            _card.Controls.Add(UiHelpers.Caption("CROSSHAIR", Gutter, 16, 240));
 
-            _enabled = new ToggleSwitch { Location = new Point(560, 14), Checked = _service.IsVisible };
+            _enabled = new ToggleSwitch { Location = new Point(RightOf(44), 14), Checked = _service.IsVisible };
             _enabled.CheckedChanged += (s, e) =>
             {
                 if (_enabled.Checked) _service.Show(); else _service.Hide();
@@ -57,7 +63,7 @@ namespace VibranceHud.Pages
             };
             _card.Controls.Add(_enabled);
 
-            _preview = new PreviewBox { Location = new Point(18, 44), Size = new Size(584, 150) };
+            _preview = new PreviewBox { Location = new Point(Gutter, 44), Size = new Size(ContentW, 150) };
             _card.Controls.Add(_preview);
 
             _status = new Label
@@ -65,8 +71,11 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 8.5f),
-                Location = new Point(18, 200),
-                Size = new Size(584, 18)
+                Location = new Point(Gutter, 200),
+                // 26, not 18: the exclusive-fullscreen message measured within a few pixels
+                // of the column width, so on any machine whose font came out slightly wider
+                // it wrapped to a second line that the 18px box then cut off.
+                Size = new Size(ContentW, 26)
             };
             _card.Controls.Add(_status);
 
@@ -104,7 +113,7 @@ namespace VibranceHud.Pages
 
             // ---- Colour + options ----
             _card.Controls.Add(UiHelpers.Caption("COLOUR", 18, y + 186, 200));
-            int cx = 18;
+            int cx = Gutter;
             foreach (var colour in new[]
             {
                 Color.FromArgb(255, 0, 255, 102), Color.FromArgb(255, 0, 255, 255),
@@ -112,22 +121,37 @@ namespace VibranceHud.Pages
                 Color.FromArgb(255, 255, 220, 0), Color.White
             })
             {
-                var dot = new SwatchDot(colour) { Location = new Point(cx, y + 208) };
+                var dot = new SwatchDot(colour)
+                {
+                    Location = new Point(cx, y + 208),
+                    Active = colour.ToArgb() == _current.ColourArgb,
+                };
                 var captured = colour;
-                dot.Click += (s, e) => { _current.ColourArgb = captured.ToArgb(); Push(); };
+                dot.Click += (s, e) =>
+                {
+                    _current.ColourArgb = captured.ToArgb();
+                    // Nothing used to mark the chosen colour, so clicking a dot changed the
+                    // crosshair and left the row looking exactly as it did before.
+                    foreach (var d in _colourDots) d.Active = ReferenceEquals(d, dot);
+                    Push();
+                };
+                _colourDots.Add(dot);
                 _card.Controls.Add(dot);
                 cx += 44;
             }
 
-            var outline = new ToggleSwitch { Location = new Point(560, y + 206), Checked = _current.Outline };
+            var outline = new ToggleSwitch { Location = new Point(RightOf(44), y + 206), Checked = _current.Outline };
             outline.CheckedChanged += (s, e) => { _current.Outline = outline.Checked; Push(); };
+            // Pinned to its own switch rather than floating at a fixed x in the dead space
+            // after the colour dots, which read as an unrelated stray word.
             _card.Controls.Add(new Label
             {
                 Text = "Outline",
                 ForeColor = Theme.Text,
                 BackColor = Color.Transparent,
-                Location = new Point(430, y + 208),
-                AutoSize = true
+                Location = new Point(RightOf(44) - 12 - 100, y + 206),
+                Size = new Size(100, 22),
+                TextAlign = ContentAlignment.MiddleRight
             });
             _card.Controls.Add(outline);
 
@@ -183,7 +207,7 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 8.5f),
-                Location = new Point(560, y),
+                Location = new Point(RightOf(42), y),
                 Size = new Size(42, 16),
                 TextAlign = ContentAlignment.MiddleRight
             };
@@ -193,10 +217,9 @@ namespace VibranceHud.Pages
             {
                 Minimum = min,
                 Maximum = max,
-                Location = new Point(16, y + 20),
-                Width = 586,
                 Value = Math.Clamp(value, min, max)
             };
+            slider.SetTrackBounds(Gutter, y + 20, ContentW);
             slider.ValueChanged += (s, e) => { readout.Text = slider.Value.ToString(); onChange(slider.Value); };
             parent.Controls.Add(slider);
         }
@@ -225,7 +248,7 @@ namespace VibranceHud.Pages
             if (CrosshairService.IsExclusiveFullscreen())
             {
                 _status.Text = "A game is in exclusive fullscreen - no overlay can draw there. "
-                             + "Switch it to borderless and the crosshair will show.";
+                             + "Switch it to borderless.";
                 _status.ForeColor = Theme.Accent;
             }
             else
@@ -272,6 +295,7 @@ namespace VibranceHud.Pages
             if (found == null) return;
             _current = found.Clone();
             foreach (var c in _shapes) c.Active = c.Text == _current.Shape.ToString();
+            SyncColourDots();
             Push();
             RefreshSavedList();
         }
@@ -298,20 +322,20 @@ namespace VibranceHud.Pages
             RefreshSavedList();
         }
 
+        /// <summary>Mark whichever preset colour matches the live config. A loaded or
+        /// hand-picked colour that isn't one of the six presets simply leaves them all
+        /// unringed, which is honest - none of them is the current colour.</summary>
+        private void SyncColourDots()
+        {
+            foreach (var d in _colourDots) d.Active = d.Colour.ToArgb() == _current.ColourArgb;
+        }
+
         private static Button Button(string text, int x, int y, int w)
         {
-            var b = new Button
-            {
-                Text = text,
-                Location = new Point(x, y),
-                Size = new Size(w, 28),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.SurfaceHover,
-                ForeColor = Theme.Text,
-                Font = new Font(Theme.FontFamily, 9f),
-                Cursor = Cursors.Hand
-            };
-            b.FlatAppearance.BorderColor = Theme.Border;
+            // Same styling as the rest of the app's secondary buttons, hover included -
+            // this one used to skip MouseOverBackColor and flash the Windows default blue.
+            var b = SettingsPage.FlatButton(text, x, y, w);
+            b.Height = 28;
             return b;
         }
 
@@ -345,26 +369,51 @@ namespace VibranceHud.Pages
         private sealed class SwatchDot : Control
         {
             private readonly Color _colour;
+            private bool _active;
+            private bool _hover;
+
+            public Color Colour => _colour;
+
+            /// <summary>The currently-chosen colour, ringed the same way the theme swatches
+            /// in Settings are.</summary>
+            public bool Active
+            {
+                get => _active;
+                set { if (_active == value) return; _active = value; Invalidate(); }
+            }
 
             public SwatchDot(Color colour)
             {
                 // SupportsTransparentBackColor must be enabled BEFORE assigning a
                 // transparent BackColor - a plain Control rejects it otherwise.
                 SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
-                       | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+                       | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor
+                       | ControlStyles.ResizeRedraw, true);
                 _colour = colour;
                 Size = new Size(30, 30);
                 Cursor = Cursors.Hand;
                 BackColor = Color.Transparent;
             }
 
+            protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hover = true; Invalidate(); }
+            protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hover = false; Invalidate(); }
+
             protected override void OnPaint(PaintEventArgs e)
             {
-                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                using var b = new SolidBrush(_colour);
-                e.Graphics.FillEllipse(b, 3, 3, Width - 7, Height - 7);
-                using var p = new Pen(Color.FromArgb(120, 255, 255, 255), 1f);
-                e.Graphics.DrawEllipse(p, 3, 3, Width - 7, Height - 7);
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+
+                // Same geometry as the theme swatches in Settings, so "this one is chosen"
+                // looks the same wherever the app asks you to pick a colour.
+                if (_active)
+                    using (var ring = new Pen(Theme.Text, 2f))
+                        g.DrawEllipse(ring, 1, 1, Width - 3, Height - 3);
+
+                var disc = new Rectangle(4, 4, Width - 9, Height - 9);
+                using (var b = new SolidBrush(_colour))
+                    g.FillEllipse(b, disc);
+                using (var p = new Pen(Color.FromArgb(_hover ? 220 : 120, 255, 255, 255), 1f))
+                    g.DrawEllipse(p, disc);
             }
         }
 
@@ -464,36 +513,40 @@ namespace VibranceHud.Pages
                 using var form = new Form
                 {
                     Text = title,
-                    Size = new Size(360, 150),
+                    ClientSize = new Size(344, 116),
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     StartPosition = FormStartPosition.CenterParent,
                     MaximizeBox = false,
                     MinimizeBox = false,
+                    // A one-field prompt has no business claiming its own taskbar button.
+                    ShowInTaskbar = false,
+                    Icon = AppIcon.Value,
                     BackColor = Theme.Background,
-                    ForeColor = Theme.Text
+                    ForeColor = Theme.Text,
+                    Font = new Font(Theme.FontFamily, 9.5f)
                 };
                 var box = new TextBox
                 {
                     Text = initial,
-                    Location = new Point(16, 20),
-                    Width = 310,
+                    Location = new Point(18, 20),
+                    Width = 308,
                     BackColor = Theme.Surface,
                     ForeColor = Theme.Text,
                     BorderStyle = BorderStyle.FixedSingle
                 };
-                var ok = new Button
-                {
-                    Text = "Save",
-                    DialogResult = DialogResult.OK,
-                    Location = new Point(230, 60),
-                    Size = new Size(96, 30),
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = Theme.SurfaceHover,
-                    ForeColor = Theme.Text
-                };
+                var ok = SettingsPage.PrimaryButton("Save", 230, 62, 96, height: 30);
+                ok.DialogResult = DialogResult.OK;
+                // There was no way out of this dialog except the title bar's X - Escape did
+                // nothing, because a FixedDialog without a CancelButton swallows it.
+                var cancel = SettingsPage.FlatButton("Cancel", 126, 62, 96);
+                cancel.Height = 30;
+                cancel.DialogResult = DialogResult.Cancel;
+
                 form.Controls.Add(box);
                 form.Controls.Add(ok);
+                form.Controls.Add(cancel);
                 form.AcceptButton = ok;
+                form.CancelButton = cancel;
                 return form.ShowDialog() == DialogResult.OK ? box.Text : "";
             }
         }

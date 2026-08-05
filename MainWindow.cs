@@ -54,9 +54,8 @@ namespace VibranceHud
         private readonly AccountPage _accountPage;
         private readonly FpsTweaksPage _fpsPage;
         private readonly CrosshairPage _crosshairPage;
-        private readonly ProfileEditorPage _profileEditorPage;
         private readonly Crosshair.CrosshairService _crosshair;
-        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount, _navMonitor, _navKeybinds;
+        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount, _navMonitor, _navKeybinds;
         private readonly MonitorPage _monitorPage;
         private readonly KeybindsPage _keybindsPage;
         private readonly Games.GameSelection _selection;
@@ -165,12 +164,7 @@ namespace VibranceHud
             _fpsPage = new FpsTweaksPage(_tweaks);
             _monitorPage = new MonitorPage(_settings, _store, _selection);
             _keybindsPage = new KeybindsPage(_settings, _store, _selection);
-            _profileEditorPage = new ProfileEditorPage();
-            _profileEditorPage.SetSelectedGame(_selection.Current?.Id, _selection.Current?.DisplayName);
-            _profileEditorPage.SetStatus(_profileCoordinator?.IsRunning ?? false);
-            _profileEditorPage.OnSaved += (_, _) => Select(_navVibrance, _vibrancePage);
-            _profileEditorPage.OnCancelled += (_, _) => Select(_navVibrance, _vibrancePage);
-            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _profileEditorPage, _monitorPage, _keybindsPage })
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _monitorPage, _keybindsPage })
                 AttachField(page);
 
             _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, titleH), Size = new Size(navW, ClientSize.Height - titleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
@@ -190,7 +184,6 @@ namespace VibranceHud
             // entirely at Desktop - a bind has no meaning without one.
             _navKeybinds = MakeNav("Keybinds", iconKind: 8);
             _navFps = MakeNav("FPS Tweaks", iconKind: 4);
-            _navEditor = MakeNav("Profile Editor", iconKind: 2);
             _navSettings = MakeNav("Settings", iconKind: 6);
             _navAccount = MakeNav("Account", iconKind: 3);
 
@@ -206,9 +199,8 @@ namespace VibranceHud
             _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
             _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
-            _navEditor.Click += (s, e) => ShowProfileEditor();
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navAccount });
 
             // The game chooser sits directly above the version, anchored to the bottom of the
             // nav. Above rather than beside: 210px of nav is not enough for a readable game
@@ -438,7 +430,7 @@ namespace VibranceHud
         private NavButton[] NavOrder => new[]
         {
             _navVibrance, _navMonitor, _navCrosshair, _navGames, _navKeybinds,
-            _navFps, _navEditor, _navSettings, _navAccount
+            _navFps, _navSettings, _navAccount
         };
 
         private NavButton MakeNav(string label, int iconKind) => new()
@@ -516,7 +508,6 @@ namespace VibranceHud
             _navFps.Visible = has;
             _navCrosshair.Visible = has;
             _navSettings.Visible = has;
-            _navEditor.Visible = has;
             _navAccount.Visible = true;
             ApplyGameScopedVisibility();
         }
@@ -575,40 +566,34 @@ namespace VibranceHud
         private void OnGameChanged()
         {
             ApplyGameScopedVisibility();
-            _profileEditorPage.SetSelectedGame(_selection.Current?.Id, _selection.Current?.DisplayName);
 
             // Only rebuild the Game tab if it is what the user is looking at; otherwise it
             // rebuilds itself next time they open it.
-            if (ReferenceEquals(_currentPage, _profileEditorPage))
-                _profileEditorPage.Invalidate(true);
-            else if (_navGames.Active)
-                ShowGames();
+            if (_navGames.Active) ShowGames();
         }
 
+        /// <summary>
+        /// The engine goes to every game page so each can offer "use my current look for this
+        /// game". That section replaced the Profile Editor: what is on the Display page is
+        /// what gets saved, rather than a second set of sliders to configure the same look in.
+        /// </summary>
         private GlowPage BuildGamePage(DetectedGame game) => GamePageRouter.Resolve(game.Game.Id) switch
         {
             // No back link any more - the chooser is how you change game, and there is
             // nothing behind this page to go back to.
-            GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
-            GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames),
-            GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames),
-            GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames),
+            GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames, engine: _engine),
+            GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames, engine: _engine),
+            GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames, engine: _engine),
+            GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames, engine: _engine),
             _ => new UnsupportedGamePage(game.Game, onBack: ShowGames),
         };
 
-        /// <summary>"Edit profile" on a game card: point the app at that game, then open the
-        /// editor on it. Selecting rather than just opening means the rest of the app follows
-        /// too, which is the whole point of having one selection.</summary>
+        /// <summary>"Edit profile" on a game card: point the app at that game and open it.
+        /// The profile now lives on the game's own page, so there is nowhere else to go.</summary>
         private void OnEditProfile(SupportedGame game)
         {
             _selection.Select(game.Id);
-            Select(_navEditor, _profileEditorPage);
-        }
-
-        private void ShowProfileEditor()
-        {
-            _profileEditorPage.SetStatus(_profileCoordinator?.IsRunning ?? false);
-            Select(_navEditor, _profileEditorPage);
+            ShowGames();
         }
 
         private void Select(NavButton button, Control page)
@@ -619,7 +604,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
@@ -641,7 +626,7 @@ namespace VibranceHud
 
             if (old != null && old != page &&
                 old != _vibrancePage && old != _settingsPage && old != _accountPage &&
-                old != _fpsPage && old != _crosshairPage && old != _profileEditorPage &&
+                old != _fpsPage && old != _crosshairPage &&
                 old != _monitorPage && old != _keybindsPage)
                 old.Dispose();
         }

@@ -119,6 +119,25 @@ namespace VibranceHud.Tests
             Assert.Equal(115, reloaded.GammaPercent);
         }
 
+
+        [Fact]
+        public void Popup_HidesWhenItLosesFocus()
+        {
+            var engine = new FakeEngine();
+            var store = new SettingsStore(_dir);
+            using var popup = new VibrancePopup(engine, new AppSettings(), store);
+            popup.Show();
+            System.Windows.Forms.Application.DoEvents();
+            Assert.True(popup.Visible);
+
+            typeof(VibrancePopup)
+                .GetMethod("OnDeactivate", System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(popup, new object[] { EventArgs.Empty });
+
+            Assert.False(popup.Visible);
+        }
+
         [Fact]
         public void ThePopupNeverReferencesTheAutoApplyPath()
         {

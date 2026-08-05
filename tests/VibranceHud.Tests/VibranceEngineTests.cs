@@ -220,25 +220,65 @@ namespace VibranceHud.Tests
                 }
 
                 [Fact]
-                public void VibranceSlider_Drag_EngineUpdates_ValueDuringDrag_FlushOnEndDrag()
+                public void Dragging_UpdatesTheScreenLive_ButThrottled_AndFlushesOnRelease()
                 {
-                    // Belt-and-braces for the "user drags saturation in popup over a game" path:
-                    // BeginDrag suppresses overlay writes during the drag (no per-tick flood),
-                    // EndDrag flushes the final value. This is the same flag dance the popup
-                    // relies on - locked in here so a future refactor can't break the
-                    // chip-tracks-cursor-1:1 contract.
+                    // The contract has two halves and they pull against each other.
+                    //
+                    // A drag has to show on screen WHILE it happens - suppressing every write
+                    // until release made the colour appear to lag a whole gesture behind the
+                    // slider, which is what it used to do. But the write is a syscall that
+                    // blocks the UI thread for 10-30ms, and there are 100+ mouse-moves a
+                    // second, so writing on each one stutters the drag.
+                    //
+                    // So: apply immediately, then throttle. This loop runs well inside one
+                    // throttle window, so exactly one write should escape it.
                     var (engine, _, ovl) = NewEngine();
                     engine.BeginDrag();
                     int appliedBefore = ovl.Applied.Count;
 
                     for (int s = 110; s <= 170; s += 10)
-                    {
                         engine.Saturation = s;
-                        Assert.Equal(appliedBefore, ovl.Applied.Count); // drag suppresses
-                    }
 
+                    Assert.True(ovl.Applied.Count > appliedBefore,
+                        "the screen has to follow the slider during the drag, not after it");
+                    Assert.Equal(appliedBefore + 1, ovl.Applied.Count);
+
+                    // And whatever the throttle skipped is never what you're left looking at.
+                    int beforeRelease = ovl.Applied.Count;
                     engine.EndDrag();
-                    Assert.True(ovl.Applied.Count > appliedBefore); // single flush at the end
+                    Assert.True(ovl.Applied.Count > beforeRelease);
+                }
+
+                [Fact]
+                public void Dragging_vibrance_below_the_driver_ceiling_still_moves_the_screen()
+                {
+                    // The reported bug. Under DriverVibranceCeiling the software factor is
+                    // exactly 1.0 - the matrix is neutral and the DRIVER is the entire effect.
+                    // The live-drag path used to flush only the matrix, so this whole half of
+                    // the slider did nothing at all until the mouse was released, while
+                    // saturation (pure matrix) worked perfectly. That asymmetry is the tell.
+                    var (engine, ctrl, _) = NewEngine();
+                    engine.BeginDrag();
+                    ctrl.LastSet = -1;
+
+                    engine.Vibrance = 60;   // comfortably below the ceiling
+
+                    Assert.Equal(60, ctrl.LastSet);
+                }
+
+                [Fact]
+                public void Dragging_gamma_moves_the_screen_before_release()
+                {
+                    // Same class of bug: gamma is a ramp, never part of the colour matrix, so
+                    // flushing only the matrix left this slider inert until release too.
+                    var (engine, _, _, gamma) = NewEngineFull();
+                    engine.BeginDrag();
+                    int before = gamma.Applied.Count;
+
+                    engine.Gamma = 130;
+
+                    Assert.True(gamma.Applied.Count > before,
+                        "gamma has to reach the ramp during the drag, not only on release");
                 }
 
                 [Fact]

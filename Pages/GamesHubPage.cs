@@ -17,7 +17,13 @@ namespace VibranceHud.Pages
             Dock = DockStyle.Fill;
             BackColor = Theme.Background;
             Font = new Font(Theme.FontFamily, 9.5f);
-            Padding = new Padding(40, 32, 40, 32);
+            // The grid is laid out at absolute positions, so a third row of cards - either
+            // from a shorter window or from the catalog growing past six games - simply fell
+            // off the bottom with no way to reach it. Every other page in the app scrolls;
+            // this one didn't. The scroll extent is set explicitly from the row count at the
+            // end of the constructor rather than left to Padding, so the cards keep exactly
+            // the positions they have now.
+            AutoScroll = true;
 
             var header = new Label
             {
@@ -67,6 +73,9 @@ namespace VibranceHud.Pages
                 Controls.Add(card);
                 i++;
             }
+
+            int rows = (i + cols - 1) / cols;
+            AutoScrollMinSize = new Size(0, 104 + rows * (cardH + gap) + 16);
         }
     }
 }
