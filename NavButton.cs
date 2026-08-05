@@ -101,7 +101,14 @@ namespace VibranceHud
             TextRenderer.DrawText(g, Text, labelFont, new Rectangle(52, 0, Width - 56, Height), textColor,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
 
-            if (Focused) UiHelpers.DrawFocusRing(g, ClientRectangle, 0f);
+            // Focus shows as a brighter version of the row's own accent bar, not as a dotted
+            // rectangle. A dashed box drawn around a full-width nav row reads as a rendering
+            // fault rather than as focus - it has no relationship to anything else on screen,
+            // and the row is the one control in the app wide enough for it to look like a
+            // border that should not be there.
+            if (Focused)
+                using (var bar = new SolidBrush(_active ? Theme.Accent : Color.FromArgb(150, Theme.Accent)))
+                    g.FillRectangle(bar, 0, 4, 3, Height - 8);
         }
 
         private static void DrawIcon(Graphics g, int kind, Rectangle r, Color color)

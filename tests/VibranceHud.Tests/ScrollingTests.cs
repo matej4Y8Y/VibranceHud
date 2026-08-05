@@ -87,6 +87,53 @@ namespace VibranceHud.Tests
             Assert.Equal(0, page.AutoScrollPosition.Y);
         }
 
+        /// <summary>
+        /// The wheel has to work with the cursor over a child control.
+        ///
+        /// This is why Display would not scroll at all: Windows sends the wheel to whatever
+        /// is under the cursor, and on these pages that is almost always a card or a slider.
+        /// None of them scroll, none of them passed it on, so the page only ever saw the
+        /// wheel in the gaps between controls - and on Display the card covers everything
+        /// worth pointing at.
+        /// </summary>
+        [Fact]
+        public void TheWheelWorksWhenTheCursorIsOverAChildControl()
+        {
+            Theme.Apply("Violet");
+            using var page = new TallPage();
+            page.CreateControl();
+
+            var child = page.Controls.Cast<Control>().First();
+            child.CreateControl();
+
+            // Exactly what Windows does: raise the wheel on the control under the cursor.
+            typeof(Control)
+                .GetMethod("OnMouseWheel", System.Reflection.BindingFlags.Instance
+                                         | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(child, new object[]
+                {
+                    new MouseEventArgs(MouseButtons.None, 0, 0, 0, -120)
+                });
+
+            Assert.True(page.AutoScrollPosition.Y < 0,
+                "the wheel over a child did nothing - the page never received it");
+        }
+
+        [Fact]
+        public void AWheelNotchMovesAUsefulDistance()
+        {
+            Theme.Apply("Violet");
+            using var page = new TallPage();
+            page.CreateControl();
+
+            page.TestScrollWheel(-120);
+            int moved = -page.AutoScrollPosition.Y;
+
+            // The first attempt moved 18px a notch, which read as the page being stuck.
+            Assert.True(moved >= 40, $"one notch moved only {moved}px - that feels stuck");
+            Assert.True(moved <= 200, $"one notch moved {moved}px - that overshoots");
+        }
+
         [Fact]
         public void TheWheelDoesNothingOnAPageThatFits()
         {

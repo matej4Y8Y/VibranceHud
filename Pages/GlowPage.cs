@@ -92,11 +92,13 @@ namespace VibranceHud.Pages
 
             if (AutoScroll && extent > 0)
             {
-                // Three lines per notch, matching Windows' own default.
+                // Windows' own line count, at a line height that matches this app's rows.
+                // The first attempt used 6px per line, which came out at 18px a notch and
+                // felt like the page was stuck.
                 int lines = SystemInformation.MouseWheelScrollLines;
                 if (lines <= 0) lines = 3;
 
-                int step = e.Delta * lines * 6 / 120;
+                int step = e.Delta * lines * 22 / 120;
                 int target = Math.Clamp(-AutoScrollPosition.Y - step, 0, extent);
 
                 AutoScrollPosition = new Point(-AutoScrollPosition.X, target);
@@ -114,6 +116,53 @@ namespace VibranceHud.Pages
         /// <summary>Test seam: OnMouseWheel is protected and a unit test has no message loop.</summary>
         internal void TestScrollWheel(int delta) =>
             OnMouseWheel(new MouseEventArgs(MouseButtons.None, 0, 0, 0, delta));
+
+        // ---- wheel from anywhere on the page ---------------------------------------------
+        //
+        // Windows sends WM_MOUSEWHEEL to the control under the cursor. On these pages that is
+        // almost always a card, a slider or a label - none of which scroll, and none of which
+        // pass it on - so the page itself only ever saw the wheel in the gaps between
+        // controls. In practice Display never scrolled at all, because the card covers
+        // everything worth pointing at.
+        //
+        // Every descendant forwards instead. Subscribing rather than subclassing keeps this
+        // out of the individual controls, and ControlAdded catches anything built later -
+        // the crosshair gallery rebuilds its cells whenever a favourite changes.
+
+        private void HookWheelForwarding(Control root)
+        {
+            foreach (Control child in root.Controls)
+            {
+                child.MouseWheel -= ForwardWheel;
+                child.MouseWheel += ForwardWheel;
+
+                child.ControlAdded -= OnDescendantAdded;
+                child.ControlAdded += OnDescendantAdded;
+
+                HookWheelForwarding(child);
+            }
+        }
+
+        private void OnDescendantAdded(object? sender, ControlEventArgs e)
+        {
+            e.Control.MouseWheel -= ForwardWheel;
+            e.Control.MouseWheel += ForwardWheel;
+            HookWheelForwarding(e.Control);
+        }
+
+        private void ForwardWheel(object? sender, MouseEventArgs e) => OnMouseWheel(e);
+
+        protected override void OnControlAdded(ControlEventArgs e)
+        {
+            base.OnControlAdded(e);
+            OnDescendantAdded(this, e);
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            HookWheelForwarding(this);
+        }
 
         protected override void WndProc(ref Message m)
         {
