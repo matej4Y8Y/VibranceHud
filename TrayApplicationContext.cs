@@ -164,6 +164,12 @@ namespace VibranceHud
             _settings.VibrancePercent = _engine.Vibrance;
             _settings.SaturationPercent = _engine.Saturation;
 
+            // The advanced grade. Carries gamma with it, so this also covers the standalone
+            // gamma setting - ResolvedTone takes it from GammaPercent so the two cannot drift.
+            // A settings file written before advanced colour existed resolves to neutral,
+            // which means upgrading changes nobody's screen.
+            _engine.Tone = _settings.ResolvedTone;
+
             // Resolve the theme (migrating the old light/dark bool) and pin the name back,
             // persisting once so the migration doesn't re-run every launch.
             var palette = ThemeCatalog.Resolve(_settings.ThemeName, _settings.LightTheme);

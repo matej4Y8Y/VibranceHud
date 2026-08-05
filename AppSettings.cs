@@ -292,5 +292,24 @@ namespace VibranceHud
 
         /// <summary>True when the window was last closed maximized, so it returns that way.</summary>
         public bool WindowMaximized { get; set; }
+
+        // ---- Advanced colour ----
+
+        /// <summary>
+        /// The advanced colour grade — highlights, shadows, whites, blacks, fade and split
+        /// toning.
+        ///
+        /// Nullable so a settings file written before advanced colour existed resolves to
+        /// neutral rather than to a zero-initialised grade, which would mean gamma 0. See
+        /// <see cref="ToneSettings.ResolvedGamma"/> for why that distinction matters.
+        /// </summary>
+        public ToneSettings? Tone { get; set; }
+
+        /// <summary>The grade to actually apply, with gamma taken from the existing
+        /// standalone setting so the two can never disagree. Not serialized - it is derived,
+        /// and writing it would duplicate state that already has one home.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public ToneSettings ResolvedTone =>
+            (Tone ?? ToneSettings.Neutral) with { Gamma = GammaPercent };
     }
 }

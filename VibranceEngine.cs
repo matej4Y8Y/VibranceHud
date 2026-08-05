@@ -14,8 +14,8 @@ namespace VibranceHud
     ///                       scaled equally. Works on any GPU, and is what takes the
     ///                       picture past the driver's own 100% ceiling.
     ///
-    /// Saturation, brightness and eye care all fold into a single screen matrix, so
-    /// there's only ever one pass over the screen.
+    /// Saturation, brightness, contrast and temperature all fold into a single screen matrix,
+    /// so there's only ever one pass over the screen.
     /// </summary>
     public sealed class VibranceEngine : IVibranceEngine
     {
@@ -35,7 +35,17 @@ namespace VibranceHud
         public const int MinGamma = 50;
         public const int MaxGamma = 150;
 
-        /// <summary>Warmth used when the eye-care toggle is on (0-1).</summary>
+        /// <summary>Contrast, as a percentage. Stops at 150 for the same reason brightness
+        /// stops at 170: past it the highlights clip to flat white and the shadows crush to
+        /// flat black, which is lost detail, not more contrast.</summary>
+        public const int MinContrast = 50;
+        public const int MaxContrast = 150;
+
+        /// <summary>White balance, -100 (cool) through 0 (neutral) to +100 (warm).</summary>
+        public const int MinTemperature = -100;
+        public const int MaxTemperature = 100;
+
+        /// <summary>Legacy warmth strength used to migrate the old on/off control.</summary>
         public const float EyeCareWarmth = 0.5f;
 
         private readonly IVibranceController _controller;
@@ -46,7 +56,8 @@ namespace VibranceHud
         private int _saturation = 100;
         private int _brightness = 100;
         private int _gamma = 100;
-        private bool _eyeCare;
+        private int _contrast = 100;
+        private int _temperature;
         private bool _dragging;
         private bool _overlaySuspended;
 
@@ -83,6 +94,9 @@ namespace VibranceHud
         public void BeginDrag()
                 {
             _dragging = true;
+            // Start elapsed so the very first movement paints immediately instead of waiting
+            // out an interval - otherwise every drag begins with a visible dead moment.
+            _dragClock.Reset();
         }
 
         /// <summary>End a slider drag. Flushes the overlay with the current value in a
@@ -91,6 +105,7 @@ namespace VibranceHud
                 public void EndDrag()
                 {
                     _dragging = false;
+                    _dragClock.Stop();
 
                     // Flush the driver level only if the drag actually moved vibrance.
                     // Dragging saturation/brightness/gamma leaves the driver value alone,
@@ -220,25 +235,108 @@ namespace VibranceHud
             set
             {
                 _gamma = Math.Clamp(value, MinGamma, MaxGamma);
-                // SetDeviceGammaRamp is a slow syscall (tens of ms on some drivers) and it
-                // used to run on every mouse-move of the gamma slider, which is what made
-                // that slider the worst-feeling one. Defer to EndDrag like everything else.
-                if (_dragging) _gammaDirty = true;
+                // SetDeviceGammaRamp is a slow syscall (tens of ms on some drivers), so during
+                // a drag it goes through the same throttle as everything else rather than
+                // running on every mouse-move. It does have to run DURING the drag though -
+                // gamma is not in the colour matrix, so leaving it to EndDrag meant this
+                // slider showed nothing at all until you let go.
+                if (_dragging) { _gammaDirty = true; ScheduleOverlayApply(); }
                 else ApplyGammaRamp();
             }
         }
 
-        /// <summary>Blue-light reduction (warm tint) for comfortable late-night use.</summary>
+        private ToneSettings _tone = ToneSettings.Neutral;
+
+        /// <summary>
+        /// The advanced colour grade: highlights, shadows, whites, blacks, fade and split
+        /// toning. Everything here resolves to the display gamma ramp, which is a per-channel
+        /// lookup table and therefore the only path in this app that can express a non-linear
+        /// curve at all — the colour matrix cannot, by construction.
+        ///
+        /// <see cref="Gamma"/> keeps its own property because it predates this and appears in
+        /// every saved settings file and every share code, but it is really just one field of
+        /// the same grade. Setting either rebuilds the same ramp.
+        /// </summary>
+        public ToneSettings Tone
+        {
+            get => _tone with { Gamma = _gamma };
+            set
+            {
+                var incoming = value.Normalized;
+                if (_tone == incoming && _gamma == incoming.Gamma) return;
+
+                _tone = incoming;
+                _gamma = Math.Clamp(incoming.Gamma, MinGamma, MaxGamma);
+
+                // Same throttle as Gamma: SetDeviceGammaRamp is a slow syscall, but it still
+                // has to run during a drag or the advanced sliders would show nothing until
+                // the mouse came up.
+                if (_dragging) { _gammaDirty = true; ScheduleOverlayApply(); }
+                else ApplyGammaRamp();
+            }
+        }
+
+        /// <summary>Contrast, 50-150 (100 = untouched). Folds into the same colour matrix as
+        /// saturation and brightness, so it costs nothing extra to apply.</summary>
+        public int Contrast
+        {
+            get => _contrast;
+            set
+            {
+                _contrast = Math.Clamp(value, MinContrast, MaxContrast);
+                ScheduleOverlayApply();
+            }
+        }
+
+        /// <summary>
+        /// White balance, -100 (cool) to +100 (warm), 0 = untouched.
+        ///
+        /// Replaces the old fixed warm-light switch. The same curve remains for migration:
+        /// +50 produces exactly the old look, while the visible control now spans cool to warm.
+        /// </summary>
+        public int Temperature
+        {
+            get => _temperature;
+            set
+            {
+                _temperature = Math.Clamp(value, MinTemperature, MaxTemperature);
+                ScheduleOverlayApply();
+            }
+        }
+
+        /// <summary>
+        /// Legacy compatibility view onto <see cref="Temperature"/>. Old saved settings and
+        /// existing engine tests still migrate to the same warm value; this is not exposed in UI.
+        /// </summary>
         public bool EyeCare
         {
-            get => _eyeCare;
-            set { _eyeCare = value; ApplyAll(); }
+            get => _temperature >= EyeCareTemperature;
+            set => Temperature = value ? EyeCareTemperature : 0;
+        }
+
+        /// <summary>Where the old fixed warm-light switch sat on the new scale.</summary>
+        public const int EyeCareTemperature = (int)(EyeCareWarmth * 100);
+
+        /// <summary>
+        /// Measure whether the colour effect lands in what screen capture reads, then put the
+        /// user's colours back exactly as they were.
+        ///
+        /// Overlay writes are suspended for the duration so nothing races the probe - the
+        /// animation timer and any slider movement would otherwise be re-applying the user's
+        /// real values in the middle of the measurement and turn it into noise.
+        /// </summary>
+        public CaptureProbe RunCaptureProbe()
+        {
+            SuspendOverlay();
+            try { return CaptureDiagnostic.Probe(_overlay); }
+            finally { ResumeOverlay(); }
         }
 
         public void Reset()
         {
             _brightness = 100;
-            _eyeCare = false;
+            _temperature = 0;
+            _contrast = 100;
             _gamma = 100;
             _gammaRamp.Reset();
             _saturation = 100;
@@ -338,11 +436,19 @@ namespace VibranceHud
                 ? _controller.DefaultLevel
                 : Math.Min(_vibrance, DriverVibranceCeiling));
 
-        /// <summary>Install (or clear) the gamma ramp for the current gamma value.</summary>
+        /// <summary>
+        /// Install (or clear) the gamma ramp for the whole current grade.
+        ///
+        /// Neutral resets rather than pushing an identity ramp. Windows does not restore a
+        /// gamma ramp when a process exits, so leaving one applied that does nothing is both
+        /// wasted work and something that can be left behind on a crash.
+        /// </summary>
         private void ApplyGammaRamp()
         {
-            if (_gamma == 100) _gammaRamp.Reset();
-            else _gammaRamp.Apply(GammaCurve.Build(_gamma / 100f));
+            var tone = _tone with { Gamma = _gamma };
+
+            if (tone.IsNeutral) _gammaRamp.Reset();
+            else _gammaRamp.Apply(ToneCurve.Build(tone));
         }
 
         /// <summary>Everything the display state depends on, applied in one go. Used by the
@@ -353,15 +459,47 @@ namespace VibranceHud
             ScheduleOverlayApply();
         }
 
+        /// <summary>
+        /// How often the screen is allowed to update while a slider is being dragged.
+        ///
+        /// Dragging used to skip the overlay entirely and only apply on release, which made
+        /// the screen change once, at the end - the colour appeared to lag a whole gesture
+        /// behind the control. Applying on every mouse-move is the other extreme: the write
+        /// is a syscall that blocks the UI thread for 10-30ms and there are 100+ moves a
+        /// second, so the drag stutters.
+        ///
+        /// 45ms is about 22 updates a second. Fast enough to read as the screen following
+        /// your hand, slow enough that the UI thread is free the rest of the time.
+        /// </summary>
+        private const int LiveDragIntervalMs = 45;
+
+        private readonly System.Diagnostics.Stopwatch _dragClock = new();
+
         private void ScheduleOverlayApply()
                         {
-                    // During a slider drag, skip the overlay write entirely. The chip on the
-                    // page tracks the cursor 1:1 via WinForms' own repaint cycle, so the user
-                    // still sees the value change. The expensive MagSetFullscreenColorEffect
-                    // syscall would otherwise block the UI thread for ~10-30ms per call, which
-                    // is what makes the slider feel jumpy on Mag-path systems. EndDrag flushes
-                    // the final value in a single write.
-                    if (_dragging) return;
+                    // Live preview during a drag, throttled. EndDrag still flushes the exact
+                    // final value, so whatever the throttle skipped is never what you're left
+                    // looking at.
+                    if (_dragging)
+                    {
+                        if (_overlaySuspended) return;
+                        if (_dragClock.IsRunning && _dragClock.ElapsedMilliseconds < LiveDragIntervalMs)
+                            return;
+                        _dragClock.Restart();
+
+                        // Flush the driver and the gamma ramp too, not just the matrix.
+                        //
+                        // Below DriverVibranceCeiling the software factor is exactly 1.0 - the
+                        // matrix contributes nothing and the driver IS the whole effect. Gamma
+                        // never touches the matrix at all; it is a ramp. So an overlay-only
+                        // live update left both of those frozen until release: vibrance did
+                        // nothing at all under 100, and dragging 0 -> 300 stayed grey the whole
+                        // way because the driver was still parked at 0.
+                        if (_driverDirty) { _driverDirty = false; ApplyDriverVibrance(); }
+                        if (_gammaDirty) { _gammaDirty = false; ApplyGammaRamp(); }
+                        ApplyOverlay();
+                        return;
+                    }
                     // While the host form has lost focus the overlay is gated off (Clear() at
                     // SuspendOverlay time). Re-applying here would silently re-enable the
                     // effect and undo the suspend - the alt-tab-from-game case then ends up
@@ -378,13 +516,14 @@ namespace VibranceHud
             // rather than leaving 0-100 to a driver that isn't there.
             float vibrance = SoftwareVibranceFactor(_vibrance, _controller.IsAvailable, _streamingMode);
             float saturation = _saturation / 100f;
+            float contrast = _contrast / 100f;
             float brightness = _brightness / 100f;
-            float warmth = _eyeCare ? EyeCareWarmth : 0f;
+            float warmth = _temperature / 100f;
 
-            if (ColorAdjust.IsIdentity(saturation, vibrance, brightness, warmth))
+            if (ColorAdjust.IsIdentity(saturation, vibrance, contrast, brightness, warmth))
                 _overlay.Clear();
             else
-                _overlay.Apply(ColorAdjust.Build(saturation, vibrance, brightness, warmth));
+                _overlay.Apply(ColorAdjust.Build(saturation, vibrance, contrast, brightness, warmth));
         }
     }
 }
