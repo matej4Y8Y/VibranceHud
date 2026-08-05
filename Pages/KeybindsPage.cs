@@ -207,7 +207,11 @@ namespace VibranceHud.Pages
             }
 
             _hint.Text = $"Drag a command onto a key. Right-click a key to clear it. "
-                       + $"Nothing reaches {game.DisplayName} until you press write.";
+                       + $"Nothing reaches {game.DisplayName} until you press write."
+                       + (GameDefaultBinds.Knows(game.Id)
+                            ? "  Amber keys are what the game uses by default — if you've "
+                              + "rebound things in-game, yours may differ."
+                            : "");
             SetEnabled(true);
             BuildPalette(game.Id);
             RefreshKeyboard();
@@ -266,6 +270,11 @@ namespace VibranceHud.Pages
             }
 
             _keyboard.Bound = bound;
+
+            // What the game itself already uses, so nobody binds over their own reload.
+            // Defaults, not a reading of their config - the hint text says so.
+            _keyboard.GameDefaults = GameDefaultBinds.For(game.Id);
+
             _keyboard.Invalidate();
             RefreshBindList(game.Id);
             RefreshRunningWarning(game.Id);
@@ -352,10 +361,22 @@ namespace VibranceHud.Pages
             RefreshKeyboard();
 
             var command = GameCommands.ById(game.Id, commandId);
-            SetStatus(command == null
-                ? $"Cleared {key}. Press write to update {game.DisplayName}."
-                : $"{command.Label} on {key}. Press write to update {game.DisplayName}.",
-                Theme.TextDim);
+            if (command == null)
+            {
+                SetStatus($"Cleared {key}. Press write to update {game.DisplayName}.", Theme.TextDim);
+                return;
+            }
+
+            // Say it plainly at the moment it happens, rather than letting somebody discover
+            // in a match that their reload is gone. Not a dialog: this is a warning, not a
+            // decision - the bind is theirs to make and undoing it is one right-click.
+            GameDefaultBinds.For(game.Id).TryGetValue(key, out var replaced);
+
+            SetStatus(replaced == null
+                ? $"{command.Label} on {key}. Press write to update {game.DisplayName}."
+                : $"{command.Label} on {key} — that's {game.DisplayName}'s {replaced} key by "
+                  + $"default. Right-click to undo.",
+                replaced == null ? Theme.TextDim : Color.FromArgb(240, 180, 90));
         }
 
         private void ClearAll()

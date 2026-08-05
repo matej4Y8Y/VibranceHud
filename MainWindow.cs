@@ -177,22 +177,22 @@ namespace VibranceHud
             // Every row gets its own glyph. Crosshair used to share the vibrance circle and
             // Profile Editor used to share Settings' sliders, so three of the seven rows
             // were only told apart by their label.
-            _navVibrance = MakeNav("Display", position: 0, iconKind: 0);
+            _navVibrance = MakeNav("Display", iconKind: 0);
             // Monitor sits next to Display because they are the same subject: Display is what
             // colour the picture is, Monitor is what shape it is. Resolution used to be a card
             // inside Rust's page, which meant a CS2 player could not reach it at all.
-            _navMonitor = MakeNav("Monitor", position: 1, iconKind: 7);
-            _navCrosshair = MakeNav("Crosshair", position: 2, iconKind: 5);
+            _navMonitor = MakeNav("Monitor", iconKind: 7);
+            _navCrosshair = MakeNav("Crosshair", iconKind: 5);
             // Singular. The app is pointed at one game now - chosen in the nav below - so
             // this tab is that game, not a catalogue to browse.
-            _navGames = MakeNav("Game", position: 3, iconKind: 1);
+            _navGames = MakeNav("Game", iconKind: 1);
             // Directly under Game because it only exists for a game, and it is hidden
             // entirely at Desktop - a bind has no meaning without one.
-            _navKeybinds = MakeNav("Keybinds", position: 4, iconKind: 8);
-            _navFps = MakeNav("FPS Tweaks", position: 5, iconKind: 4);
-            _navEditor = MakeNav("Profile Editor", position: 6, iconKind: 2);
-            _navSettings = MakeNav("Settings", position: 7, iconKind: 6);
-            _navAccount = MakeNav("Account", position: 8, iconKind: 3);
+            _navKeybinds = MakeNav("Keybinds", iconKind: 8);
+            _navFps = MakeNav("FPS Tweaks", iconKind: 4);
+            _navEditor = MakeNav("Profile Editor", iconKind: 2);
+            _navSettings = MakeNav("Settings", iconKind: 6);
+            _navAccount = MakeNav("Account", iconKind: 3);
 
             // Until the license is valid, only the Account tab is reachable. The
             // other tabs are still constructed (so the user sees the full nav once
@@ -331,6 +331,7 @@ namespace VibranceHud
             MinimumSize = new Size(Design.Tokens.Scale(900), Design.Tokens.Scale(600));
 
             _titleBar.Height = titleH;
+            LayoutNav();
             _nav.Location = new Point(0, titleH);
             _nav.Size = new Size(navW, ClientSize.Height - titleH);
             _contentHost.Location = new Point(navW, titleH);
@@ -432,13 +433,44 @@ namespace VibranceHud
             _userInteracting = true;
         }
 
-        private NavButton MakeNav(string label, int position, int iconKind) => new()
+        /// <summary>The nav rows in the order they appear. One list, so the order is stated
+        /// once instead of being implied by a position argument at each construction site.</summary>
+        private NavButton[] NavOrder => new[]
+        {
+            _navVibrance, _navMonitor, _navCrosshair, _navGames, _navKeybinds,
+            _navFps, _navEditor, _navSettings, _navAccount
+        };
+
+        private NavButton MakeNav(string label, int iconKind) => new()
         {
             IconKind = iconKind,
             Text = label,
-            Location = new Point(0, Design.Tokens.Scale(16 + position * 48)),
             Size = new Size(Design.Tokens.Scale(NavW), Design.Tokens.Scale(46))
         };
+
+        /// <summary>
+        /// Stack the visible rows with no holes.
+        ///
+        /// Rows used to carry a fixed position each, computed as 16 + index * 48. Keybinds
+        /// hides itself whenever no game is selected - which is the default - so that left a
+        /// 48px gap sitting between Game and FPS Tweaks on most launches, reading as a
+        /// rendering fault rather than as a hidden tab. Positions are now assigned from
+        /// whatever is actually visible.
+        /// </summary>
+        private void LayoutNav()
+        {
+            int y = Design.Tokens.Scale(16);
+            int step = Design.Tokens.Scale(48);
+            int width = Design.Tokens.Scale(NavW);
+            int height = Design.Tokens.Scale(46);
+
+            foreach (var button in NavOrder)
+            {
+                if (!button.Visible) continue;
+                button.SetBounds(0, y, width, height);
+                y += step;
+            }
+        }
 
         private Label TitleGlyph(string text, int x) => new()
         {
@@ -500,6 +532,11 @@ namespace VibranceHud
         {
             bool licensed = _license.HasValidLicense;
             _navKeybinds.Visible = licensed && _selection.Current != null;
+
+            // Close the hole this leaves. Keybinds is hidden by default - Desktop is the
+            // default selection - so without this the nav ships with a blank 48px slot
+            // between Game and FPS Tweaks on most launches.
+            LayoutNav();
 
             // If the user was on Keybinds and just went back to Desktop, they are now looking
             // at a page whose tab has gone. Move them somewhere that still exists.
