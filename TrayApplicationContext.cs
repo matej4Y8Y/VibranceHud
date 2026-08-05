@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using VibranceHud.License;
+using VibranceHud.Controls;
 
 namespace VibranceHud
 {
@@ -51,6 +52,16 @@ namespace VibranceHud
         private System.Windows.Forms.Timer? _betaGateTimer;
         private System.Windows.Forms.Timer? _licenceTimer;
 
+        private Games.GameSelection? _gameSelection;
+
+        /// <summary>
+        /// The game the app is pointed at. Owned here rather than by the window because a
+        /// theme change disposes the window and builds a new one - a selection living in the
+        /// window would reset every time somebody changed colour scheme.
+        /// </summary>
+        private Games.GameSelection GameSelectionInstance =>
+            _gameSelection ??= new Games.GameSelection(_settings, _store);
+
         public TrayApplicationContext(LicenseService? license = null)
         {
             _license = license ?? new LicenseService();
@@ -73,6 +84,9 @@ namespace VibranceHud
             _settings.OverlayMode = OverlayModeResolver.Resolve(_overlay);
             _settings.DxFailure = (_overlay as IDisplayOverlay)?.LastFailure ?? DxInitFailureKind.None;
             _settings.DxFailureMessage = (_overlay as IDisplayOverlay)?.LastFailureMessage ?? "";
+            // The raw code too. Without it an uncategorised failure is undiagnosable - and
+            // uncategorised is exactly the case where somebody needs to send us something.
+            _settings.DxFailureCode = (_overlay as IDisplayOverlay)?.LastFailureCode ?? 0;
             _store.Save(_settings);
 
             // If we started on the Magnification fallback, keep trying for DX11 in the
@@ -100,7 +114,19 @@ namespace VibranceHud
             // Restore where the user left things last session.
             _engine.Brightness = _settings.BrightnessPercent;
             _engine.Gamma = _settings.GammaPercent;
-            _engine.EyeCare = _settings.EyeCare;
+            _engine.Contrast = _settings.ContrastPercent;
+            _engine.Temperature = _settings.ResolvedTemperature;
+
+            // Resolution moved off the Rust page onto the Monitor tab, where it works for
+            // every game. Carry anyone's existing Rust choice across so it keeps happening
+            // rather than silently stopping the first time they update.
+            if (_settings.RustResolutionWidth > 0 && _settings.RustResolutionHeight > 0
+                && MonitorRules.For(_settings.MonitorRules, "rust") == null)
+            {
+                _settings.MonitorRules = MonitorRules.Set(_settings.MonitorRules, "rust",
+                    _settings.RustResolutionWidth, _settings.RustResolutionHeight);
+                _store.Save(_settings);
+            }
 
             // The software path's neutral moved from 100 to 50 so the number means the same
             // thing on every GPU. Anyone who saved a value under the old meaning gets it
@@ -122,7 +148,15 @@ namespace VibranceHud
             // Set before the vibrance values below: it decides whether the driver gets the
             // value or is parked at neutral, so applying it afterwards would leave the driver
             // holding a level Streaming Mode is supposed to have taken off it.
-            _engine.StreamingMode = _settings.StreamingMode;
+            //
+            // Only acted on where it can achieve something. On the Magnification path - which
+            // is every install today, because the DX11 path is deliberately switched off -
+            // the colour matrix is invisible to capture whether this is on or off. Honouring
+            // it there parks the driver's non-linear vibrance and hands the range to a linear
+            // software approximation: a visibly worse picture, bought for nothing. The saved
+            // preference is left untouched so it comes back if the capture path ever lands.
+            _engine.StreamingMode = _settings.StreamingMode
+                && CaptureStatus.ToggleCanHelp(_settings.OverlayMode, _engine.DriverAvailable);
             // Resolved properties migrate an old combined "Level" on first run after
             // vibrance and saturation became separate controls.
             _engine.Vibrance = _settings.ResolvedVibrance;
@@ -148,7 +182,7 @@ namespace VibranceHud
             if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey, GameSelectionInstance);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) =>
@@ -163,12 +197,10 @@ namespace VibranceHud
             // another app may already own this combo; the tray menu still works.
             if (!RegisterHotKey(_hotkeyWindow.Handle, HOTKEY_ID, _settings.HotkeyModifierMask, _settings.HotkeyVirtualKey))
             {
-            MessageBox.Show(
-            $"Couldn't register {GetHotkeyDisplay()} (another app may already be using it). " +
-            "You can still open the slider from the tray icon.",
-            "PlexusX",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Warning);
+            GlassDialog.Show(null, "Shortcut already taken",
+                $"Couldn't register {GetHotkeyDisplay()} — another app is probably already using it.\n\n" +
+                "You can still open the slider from the tray icon, or pick a different combo on the Display page.",
+                GlassDialogButtons.Ok, GlassDialogTone.Warning);
             }
 
             // The main-window hotkey is opt-in (the picker on the Vibrance page enables
@@ -287,9 +319,9 @@ namespace VibranceHud
                     _ => "Your PlexusX licence is no longer valid.",
                 };
 
-                MessageBox.Show(
+                GlassDialog.Show(null, "Licence ended",
                     reason + "\n\nPlexusX will close. Enter a new key next time you open it.",
-                    "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    GlassDialogButtons.Ok, GlassDialogTone.Warning);
 
                 // Close rather than trying to run on in some disabled half-state. The next
                 // launch hits the activation dialog in Program.cs, which is the one place
@@ -349,15 +381,18 @@ namespace VibranceHud
         /// reports WHY through the out params - the failed DxOverlay is disposed here, so
         /// this is the only chance to capture its reason before it's gone.</summary>
         private static ISaturationOverlay? TryCreateDxOverlay(
-            out DxInitFailureKind failure, out string failureMessage)
+            out DxInitFailureKind failure, out string failureMessage, out int failureCode)
         {
             var dx = new DxOverlay();
             if (dx.IsAvailable)
             {
                 failure = DxInitFailureKind.None;
                 failureMessage = "";
+                failureCode = 0;
                 return dx;
             }
+
+            failureCode = dx.LastFailureCode;
             failure = dx.LastFailure;
             failureMessage = dx.LastFailureMessage;
             dx.Dispose();
@@ -365,11 +400,11 @@ namespace VibranceHud
         }
 
         /// <summary>Overload for the retry path, which only cares whether it worked.</summary>
-        private static ISaturationOverlay? TryCreateDxOverlay() => TryCreateDxOverlay(out _, out _);
+        private static ISaturationOverlay? TryCreateDxOverlay() => TryCreateDxOverlay(out _, out _, out _);
 
         private static ISaturationOverlay TryCreateOverlay()
         {
-            var dx = TryCreateDxOverlay(out var failure, out var failureMessage);
+            var dx = TryCreateDxOverlay(out var failure, out var failureMessage, out var failureCode);
             if (dx != null) return dx;
 
             // DX11 init failed (no DX11 GPU, broken driver, locked session, GPU memory taken
@@ -378,7 +413,7 @@ namespace VibranceHud
             // wrap it, because that path is invisible to OBS/Discord/ShadowPlay and most of
             // those causes clear up on their own. UpgradingOverlay moves us to DX11 as soon
             // as it becomes available instead of stranding the session on the fallback.
-            return new UpgradingOverlay(new MagOverlay(), TryCreateDxOverlay, failure, failureMessage);
+            return new UpgradingOverlay(new MagOverlay(), TryCreateDxOverlay, failure, failureMessage, failureCode);
         }
 
         /// <summary>
@@ -481,10 +516,10 @@ namespace VibranceHud
                 if (_license.State == LicenseState.Revoked)
                 {
                     _splash.Close();
-                    MessageBox.Show(
-                        "This license key has been deactivated by the developer.\n\n" +
-                        "If you believe this is a mistake, please get in touch.",
-                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    GlassDialog.Show(null, "Key deactivated",
+                        "This licence key has been deactivated by the developer.\n\n" +
+                        "If you think that's a mistake, please get in touch.",
+                        GlassDialogButtons.Ok, GlassDialogTone.Warning);
                     ExitThread();
                     return;
                 }
@@ -609,7 +644,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey);
+            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey, GameSelectionInstance);
             _window.ShowAndFocus();
             old.Dispose();
         }
@@ -648,17 +683,12 @@ namespace VibranceHud
             // whether they're installed on this PC: the per-service hub applier
             // gracefully no-ops when a game is missing, and the watcher just emits
             // launch events for games the user adds later.
-            var idToExe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-            ["rust"]     = "RustClient",
-            ["cs2"]      = "cs2",
-            ["apex"]     = "r5apex",
-            ["fortnite"] = "FortniteClient-Win64-Shipping",
-            };
-
-            var watcher = new GameProcessWatcher(idToExe);
+            // Process names come from the catalogue now, so adding a game is one entry in
+            // SupportedGames rather than an edit here plus one in every service.
+            var watcher = new GameProcessWatcher(Games.SupportedGames.ProcessNames);
             var applyEngine = new ProfileApplyEngine(_engine, new GameHubApplier());
-            var coordinator = new ProfileEngineCoordinator(watcher, applyEngine, new GameProfileApplyGate(_settings));
+            var coordinator = new ProfileEngineCoordinator(
+                watcher, applyEngine, new GameProfileApplyGate(_settings), _settings);
             coordinator.Start();
 
             _profileCoordinator = coordinator;

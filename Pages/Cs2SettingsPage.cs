@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using VibranceHud.Cs2;
 using VibranceHud.Games;
+using VibranceHud.Controls;
 
 namespace VibranceHud.Pages
 {
@@ -36,34 +37,21 @@ namespace VibranceHud.Pages
             int y = 26;
 
             // ---------- Header ----------
-            var back = new LinkLabel
-            {
-                Text = "‹ Games",
-                LinkColor = Theme.TextDim,
-                ActiveLinkColor = Theme.Accent,
-                LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(Pad, y),
-                AutoSize = true,
-                BackColor = Color.Transparent
-            };
-            back.Click += (s, e) => onBack();
-            Controls.Add(back);
-
+            // No back link - the chooser in the nav is how you change game now.
             Controls.Add(new Label
             {
                 Text = "Counter-Strike 2",
                 ForeColor = Theme.Text,
                 Font = new Font(Theme.FontFamily, 18f, FontStyle.Bold),
-                Location = new Point(Pad - 2, y + 22),
+                Location = new Point(Pad - 2, y),
                 AutoSize = true,
                 BackColor = Color.Transparent
             });
 
-            var launch = SettingsPage.FlatButton("▶  Launch CS2", Pad + CardW - 150, y + 24, 150);
-            launch.BackColor = Theme.AccentDim;
+            var launch = SettingsPage.PrimaryButton("▶  Launch CS2", Pad + CardW - 150, y + 2, 150);
             launch.Click += (s, e) => Shell($"steam://run/{_game.Game.SteamAppId}");
             Controls.Add(launch);
-            y += 82;
+            y += 60;
 
             if (Cs2SettingsService.IsCs2Running())
             {
@@ -104,34 +92,19 @@ namespace VibranceHud.Pages
 
             // ---------- Tweaks ----------
             var tweaks = Cs2Tweaks.All;
-            var tw = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 60 + tweaks.Count * 60) };
+            // Height comes from the finished rows, and each row's description wraps inside
+            // its own column instead of sitting in a fixed 18px box it can overflow.
+            var tw = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 60) };
             tw.Controls.Add(UiHelpers.Caption("FPS & VISUAL TWEAKS", 18, 16, 300));
             int ty = 48;
             foreach (var tweak in tweaks)
             {
-                tw.Controls.Add(new Label
-                {
-                    Text = tweak.Label,
-                    ForeColor = Theme.Text,
-                    BackColor = Color.Transparent,
-                    Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold),
-                    Location = new Point(18, ty),
-                    Size = new Size(CardW - 90, 18)
-                });
-                tw.Controls.Add(new Label
-                {
-                    Text = tweak.Description,
-                    ForeColor = Theme.TextDim,
-                    BackColor = Color.Transparent,
-                    Font = new Font(Theme.FontFamily, 8.5f),
-                    Location = new Point(18, ty + 20),
-                    Size = new Size(CardW - 90, 18)
-                });
                 var toggle = new ToggleSwitch { Location = new Point(CardW - 62, ty + 6), Checked = tweak.IsOn(current) };
                 _toggles[tweak] = toggle;
                 tw.Controls.Add(toggle);
-                ty += 60;
+                ty = TweakRow.Add(tw, tweak.Label, tweak.Description, ty, CardW, toggle) + TweakRow.Gap;
             }
+            tw.Height = ty - TweakRow.Gap + 16;
             Controls.Add(tw);
             y += tw.Height + 16;
 
@@ -192,10 +165,7 @@ namespace VibranceHud.Pages
             y += 108;
 
             // ---------- Apply ----------
-            var apply = SettingsPage.FlatButton("Apply Changes", Pad, y, 180);
-            apply.BackColor = Theme.AccentDim;
-            apply.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
-            apply.Height = 38;
+            var apply = SettingsPage.PrimaryButton("Apply Changes", Pad, y, 180, height: 38);
             apply.Click += (s, e) => Apply();
             Controls.Add(apply);
 
@@ -205,6 +175,10 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 Location = new Point(Pad + 194, y + 10),
                 AutoSize = true,
+                // Apply() puts raw exception messages in here ("Couldn't write autoexec.cfg:
+                // Access to the path ... is denied"), which are as long as Windows feels like
+                // making them. Uncapped, that ran off the page instead of wrapping.
+                MaximumSize = new Size(CardW - 194, 0),
                 BackColor = Color.Transparent
             };
             Controls.Add(_status);
@@ -221,10 +195,10 @@ namespace VibranceHud.Pages
         {
             if (Cs2SettingsService.IsCs2Running())
             {
-                var proceed = MessageBox.Show(
-                    "CS2 is running and may overwrite these changes when it exits.\n\n" +
-                    "Apply anyway? (Recommended: close CS2 first.)",
-                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                var proceed = GlassDialog.Show(FindForm(), "CS2 is running",
+                    "CS2 may overwrite these changes when it exits.\n\n" +
+                    "Close CS2 first if you want them to stick. Apply anyway?",
+                    GlassDialogButtons.YesNo, GlassDialogTone.Warning);
                 if (proceed != DialogResult.Yes) return;
             }
 

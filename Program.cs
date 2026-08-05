@@ -129,6 +129,9 @@ namespace VibranceHud
                         if (!string.IsNullOrEmpty(logPath))
                             body += "\n\nA crash report was written to:\n" + logPath +
                                     "\nPlease attach that file to your bug report.";
+                        // Deliberately a native MessageBox rather than GlassDialog. This runs
+                        // when the themed UI is the thing that failed, and can fire before
+                        // Theme has ever been applied - so it must not depend on any of it.
                         MessageBox.Show(body, "PlexusX",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }

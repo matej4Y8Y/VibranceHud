@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using VibranceHud.Fortnite;
 using VibranceHud.Games;
+using VibranceHud.Controls;
 
 namespace VibranceHud.Pages
 {
@@ -36,34 +37,21 @@ namespace VibranceHud.Pages
             int y = 26;
 
             // ---------- Header ----------
-            var back = new LinkLabel
-            {
-                Text = "‹ Games",
-                LinkColor = Theme.TextDim,
-                ActiveLinkColor = Theme.Accent,
-                LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(Pad, y),
-                AutoSize = true,
-                BackColor = Color.Transparent
-            };
-            back.Click += (s, e) => onBack();
-            Controls.Add(back);
-
+            // No back link - the chooser in the nav is how you change game now.
             Controls.Add(new Label
             {
                 Text = "Fortnite",
                 ForeColor = Theme.Text,
                 Font = new Font(Theme.FontFamily, 18f, FontStyle.Bold),
-                Location = new Point(Pad - 2, y + 22),
+                Location = new Point(Pad - 2, y),
                 AutoSize = true,
                 BackColor = Color.Transparent
             });
 
-            var launch = SettingsPage.FlatButton("▶  Launch Fortnite", Pad + CardW - 170, y + 24, 170);
-            launch.BackColor = Theme.AccentDim;
+            var launch = SettingsPage.PrimaryButton("▶  Launch Fortnite", Pad + CardW - 170, y + 2, 170);
             launch.Click += (s, e) => Shell("com.epicgames.launcher://apps/Fortnite?action=launch&silent=true");
             Controls.Add(launch);
-            y += 82;
+            y += 60;
 
             if (FortniteSettingsService.IsFortniteRunning())
             {
@@ -104,34 +92,21 @@ namespace VibranceHud.Pages
 
             // ---------- Tweaks ----------
             var tweaks = FortniteTweaks.All;
-            var tw = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 60 + tweaks.Count * 60) };
+            // Height comes from the finished rows, and each row's description wraps inside
+            // its own column instead of sitting in a fixed 18px box it can overflow. Two of
+            // Fortnite's descriptions are the longest in the app and were the closest to
+            // being cut.
+            var tw = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 60) };
             tw.Controls.Add(UiHelpers.Caption("FPS & VISUAL TWEAKS", 18, 16, 300));
             int ty = 48;
             foreach (var tweak in tweaks)
             {
-                tw.Controls.Add(new Label
-                {
-                    Text = tweak.Label,
-                    ForeColor = Theme.Text,
-                    BackColor = Color.Transparent,
-                    Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold),
-                    Location = new Point(18, ty),
-                    Size = new Size(CardW - 90, 18)
-                });
-                tw.Controls.Add(new Label
-                {
-                    Text = tweak.Description,
-                    ForeColor = Theme.TextDim,
-                    BackColor = Color.Transparent,
-                    Font = new Font(Theme.FontFamily, 8.5f),
-                    Location = new Point(18, ty + 20),
-                    Size = new Size(CardW - 90, 18)
-                });
                 var toggle = new ToggleSwitch { Location = new Point(CardW - 62, ty + 6), Checked = tweak.IsOn(current) };
                 _toggles[tweak] = toggle;
                 tw.Controls.Add(toggle);
-                ty += 60;
+                ty = TweakRow.Add(tw, tweak.Label, tweak.Description, ty, CardW, toggle) + TweakRow.Gap;
             }
+            tw.Height = ty - TweakRow.Gap + 16;
             Controls.Add(tw);
             y += tw.Height + 16;
 
@@ -155,10 +130,7 @@ namespace VibranceHud.Pages
             y += 108;
 
             // ---------- Apply ----------
-            var apply = SettingsPage.FlatButton("Apply Changes", Pad, y, 180);
-            apply.BackColor = Theme.AccentDim;
-            apply.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
-            apply.Height = 38;
+            var apply = SettingsPage.PrimaryButton("Apply Changes", Pad, y, 180, height: 38);
             apply.Click += (s, e) => Apply();
             Controls.Add(apply);
 
@@ -168,6 +140,8 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 Location = new Point(Pad + 194, y + 10),
                 AutoSize = true,
+                // Holds raw exception text on failure - uncapped it ran off the page.
+                MaximumSize = new Size(CardW - 194, 0),
                 BackColor = Color.Transparent
             };
             Controls.Add(_status);
@@ -184,10 +158,10 @@ namespace VibranceHud.Pages
         {
             if (FortniteSettingsService.IsFortniteRunning())
             {
-                var proceed = MessageBox.Show(
-                    "Fortnite is running and may overwrite these changes when it exits.\n\n" +
-                    "Apply anyway? (Recommended: close Fortnite first.)",
-                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                var proceed = GlassDialog.Show(FindForm(), "Fortnite is running",
+                    "Fortnite may overwrite these changes when it exits.\n\n" +
+                    "Close Fortnite first if you want them to stick. Apply anyway?",
+                    GlassDialogButtons.YesNo, GlassDialogTone.Warning);
                 if (proceed != DialogResult.Yes) return;
             }
 

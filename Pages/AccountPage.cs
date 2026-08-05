@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using VibranceHud.License;
+using VibranceHud.Controls;
 
 namespace VibranceHud.Pages
 {
@@ -127,9 +128,9 @@ namespace VibranceHud.Pages
         /// </summary>
         private void DeactivateAndReactivate()
         {
-            var confirm = MessageBox.Show(FindForm(),
-                "Deactivate this license? PlexusX will ask for a new activation key.",
-                "Deactivate license", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var confirm = GlassDialog.Show(FindForm(), "Deactivate licence",
+                "PlexusX will ask for a new activation key straight away. Continue?",
+                GlassDialogButtons.YesNo, GlassDialogTone.Warning);
             if (confirm != DialogResult.Yes) return;
 
             _license.Deactivate();

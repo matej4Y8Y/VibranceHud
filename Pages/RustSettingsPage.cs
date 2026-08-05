@@ -6,6 +6,7 @@ using System.IO;
 using System.Windows.Forms;
 using VibranceHud.Games;
 using VibranceHud.Rust;
+using VibranceHud.Controls;
 
 namespace VibranceHud.Pages
 {
@@ -19,6 +20,10 @@ namespace VibranceHud.Pages
     {
         private const int CardW = 720;
         private const int Pad = 40;
+        /// <summary>Text gutter inside a card; captions, readouts and slider tracks all
+        /// line up on it.</summary>
+        private const int Gutter = 18;
+        private const int ContentW = CardW - 2 * Gutter;
 
         private static readonly (string name, int value)[] QualityLevels =
         {
@@ -67,34 +72,23 @@ namespace VibranceHud.Pages
             int y = 26;
 
             // ---------- Header ----------
-            var back = new LinkLabel
-            {
-                Text = "‹ Games",
-                LinkColor = Theme.TextDim,
-                ActiveLinkColor = Theme.Accent,
-                LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(Pad, y),
-                AutoSize = true,
-                BackColor = Color.Transparent
-            };
-            back.Click += (s, e) => onBack();
-            Controls.Add(back);
-
+            // No "‹ Games" link. The app is pointed at one game from the chooser in the nav,
+            // so there is no list behind this page to go back to - the link would have led
+            // somewhere that no longer exists as a destination.
             Controls.Add(new Label
             {
                 Text = "Rust",
                 ForeColor = Theme.Text,
                 Font = new Font(Theme.FontFamily, 18f, FontStyle.Bold),
-                Location = new Point(Pad - 2, y + 22),
+                Location = new Point(Pad - 2, y),
                 AutoSize = true,
                 BackColor = Color.Transparent
             });
 
-            var launch = SettingsPage.FlatButton("▶  Launch Rust", Pad + CardW - 150, y + 24, 150);
-            launch.BackColor = Theme.AccentDim;
+            var launch = SettingsPage.PrimaryButton("▶  Launch Rust", Pad + CardW - 150, y + 2, 150);
             launch.Click += (s, e) => LaunchRust();
             Controls.Add(launch);
-            y += 82;
+            y += 60;
 
             if (RustSettingsService.IsRustRunning())
             {
@@ -133,60 +127,16 @@ namespace VibranceHud.Pages
             Controls.Add(presetCard);
             y += presetCard.Height + 16;
 
-            // ---------- Monitor resolution ----------
-            // Built from what this monitor actually reports, so it can never offer a mode
-            // that would black-screen someone.
-            var supported = DisplayModes.BestPerResolution(DisplayController.SupportedModes());
-            var offered = supported.Take(11).ToList();
-            int resCols = 3, resW = (CardW - 36 - (resCols - 1) * 10) / resCols, resH = 32;
-            int resRows = (offered.Count + 1 + resCols - 1) / resCols;
-            var resCard = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 74 + resRows * (resH + 10)) };
-            resCard.Controls.Add(UiHelpers.Caption("MONITOR RESOLUTION", 18, 16, 300));
-            resCard.Controls.Add(new Label
-            {
-                Text = "Switches your desktop to this on launch, at your monitor's highest refresh rate. Restored when Rust closes.",
-                ForeColor = Theme.TextDim,
-                BackColor = Color.Transparent,
-                Font = new Font(Theme.FontFamily, 8f),
-                Location = new Point(18, 36),
-                AutoSize = true
-            });
-
-            _selectedResW = _settings.RustResolutionWidth;
-            _selectedResH = _settings.RustResolutionHeight;
-
-            // "Native" first, then the monitor's resolutions.
-            var choices = new List<(string label, int w, int h)> { ("Native", 0, 0) };
-            foreach (var m in offered) choices.Add(($"{m.Width}x{m.Height}", m.Width, m.Height));
-
-            for (int i = 0; i < choices.Count; i++)
-            {
-                var (label, cw, ch) = choices[i];
-                var chip = new ChipButton
-                {
-                    Text = label,
-                    Font = new Font(Theme.FontFamily, 8.5f),
-                    Size = new Size(resW, resH),
-                    Location = new Point(18 + (i % resCols) * (resW + 10), 62 + (i / resCols) * (resH + 10)),
-                    Active = cw == _selectedResW && ch == _selectedResH
-                };
-                chip.Click += (s, e) =>
-                {
-                    _selectedResW = cw;
-                    _selectedResH = ch;
-                    _settings.RustResolutionWidth = cw;
-                    _settings.RustResolutionHeight = ch;
-                    _store.Save(_settings);
-                    foreach (var c in _resChips) c.Active = ReferenceEquals(c, chip);
-                };
-                _resChips.Add(chip);
-                resCard.Controls.Add(chip);
-            }
-            Controls.Add(resCard);
-            y += resCard.Height + 16;
+            // Resolution used to be a card here. It moved to the Monitor tab: it is a display
+            // setting, not a Rust setting, and having it here meant a CS2 or Apex player could
+            // not reach it at all while a Rust player only found it by accident. The launch
+            // behaviour is unchanged - the rule now lives in AppSettings.MonitorRules and the
+            // profile coordinator applies it for every game, not just this one.
 
             // ---------- Graphics ----------
-            var gfx = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 214) };
+            // 232, not 214: at 214 the FOV slider's bottom edge landed exactly on the card's
+            // bottom rim, so the thumb sat right on the rounded border with no breathing room.
+            var gfx = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 232) };
             gfx.Controls.Add(UiHelpers.Caption("GRAPHICS QUALITY", 18, 16, 260));
             _selectedQuality = ReadInt(current, "graphics.quality", 3);
             BuildChipRow(gfx, QualityLevels, 18, 42, _qualityChips, _selectedQuality, v => _selectedQuality = v);
@@ -213,14 +163,13 @@ namespace VibranceHud.Pages
             {
                 Minimum = 60,
                 Maximum = 90,
-                Location = new Point(16, 182),
-                Width = CardW - 32,
                 Value = Math.Clamp(ReadInt(current, "graphics.fov", 90), 60, 90)
             };
+            _fov.SetTrackBounds(Gutter, 184, ContentW);
             _fov.ValueChanged += (s, e) => _fovValue.Text = _fov.Value.ToString();
             gfx.Controls.Add(_fov);
             Controls.Add(gfx);
-            y += 230;
+            y += gfx.Height + 16;
 
             // ---------- Optimization & tweaks ----------
             var tweaks = RustTweaks.All;
@@ -325,10 +274,9 @@ namespace VibranceHud.Pages
                 {
                     Minimum = 5,
                     Maximum = 100,
-                    Location = new Point(16, 122),
-                    Width = CardW - 32,
                     Value = Math.Clamp(_settings.AudioEdgeThresholdPercent, 5, 100)
                 };
+                ceiling.SetTrackBounds(Gutter, 122, ContentW);
                 ceiling.ValueChanged += (s, e) =>
                 {
                     ceilingValue.Text = $"{ceiling.Value}%";
@@ -375,10 +323,7 @@ namespace VibranceHud.Pages
             y += 108;
 
             // ---------- Apply ----------
-            var apply = SettingsPage.FlatButton("Apply Changes", Pad, y, 180);
-            apply.BackColor = Theme.AccentDim;
-            apply.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
-            apply.Height = 38;
+            var apply = SettingsPage.PrimaryButton("Apply Changes", Pad, y, 180, height: 38);
             apply.Click += (s, e) => Apply();
             Controls.Add(apply);
 
@@ -388,6 +333,8 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 Location = new Point(Pad + 194, y + 10),
                 AutoSize = true,
+                // Holds raw exception text on failure - uncapped it ran off the page.
+                MaximumSize = new Size(CardW - 194, 0),
                 BackColor = Color.Transparent
             };
             Controls.Add(_status);
@@ -412,10 +359,10 @@ namespace VibranceHud.Pages
         {
             if (RustSettingsService.IsRustRunning())
             {
-                var proceed = MessageBox.Show(
-                    "Rust is running and will overwrite these changes when it exits.\n\n" +
-                    "Apply anyway? (Recommended: close Rust first.)",
-                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                var proceed = GlassDialog.Show(FindForm(), "Rust is running",
+                    "Rust will overwrite these changes when it exits.\n\n" +
+                    "Close Rust first if you want them to stick. Apply anyway?",
+                    GlassDialogButtons.YesNo, GlassDialogTone.Warning);
                 if (proceed != DialogResult.Yes) return;
             }
 
@@ -474,13 +421,25 @@ namespace VibranceHud.Pages
                 SetStatus("Launching Rust…" + extra, Theme.TextDim);
         }
 
+        /// <summary>
+        /// Width a row's text may use before it has to wrap: the card's content column minus
+        /// the toggle parked on the right and a gap.
+        ///
+        /// AutoSize on its own grows a Label to one endless line, and a Label just clips at
+        /// its parent's edge - so the Audio Edge hint ran off the side of the card and stopped
+        /// mid-word ("...at nearly the same lev"). Nothing warns you; it only shows up by
+        /// looking at it.
+        /// </summary>
+        private const int RowTextW = ContentW - 56;
+
         private static Label RowLabel(string text, int x, int y) => new()
         {
             Text = text,
             ForeColor = Theme.Text,
             BackColor = Color.Transparent,
             Location = new Point(x, y),
-            AutoSize = true
+            AutoSize = true,
+            MaximumSize = new Size(RowTextW, 0),
         };
 
         private static Label RowHint(string text, int x, int y) => new()
@@ -490,7 +449,8 @@ namespace VibranceHud.Pages
             BackColor = Color.Transparent,
             Font = new Font(Theme.FontFamily, 8f),
             Location = new Point(x, y),
-            AutoSize = true
+            AutoSize = true,
+            MaximumSize = new Size(RowTextW, 0),
         };
 
         private void ReloadFrom(RustConfig cfg)

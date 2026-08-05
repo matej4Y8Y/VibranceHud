@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using VibranceHud.Controls;
 
 namespace VibranceHud.Pages
 {
@@ -10,6 +11,13 @@ namespace VibranceHud.Pages
     /// </summary>
     public sealed class SettingsPage : GlowPage
     {
+        /// <summary>Text gutter inside a card. Captions, labels and slider tracks all line
+        /// up on it, on both edges.</summary>
+        private const int Gutter = 18;
+        private const int CardLeft = 40;
+        private const int CardTop = 40;
+        private const int CardGap = 20;
+
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
         private readonly Action<int> _onOpacityChanged;
@@ -38,7 +46,33 @@ namespace VibranceHud.Pages
 
             int width = 620;
 
-            var general = new CardPanel { Location = new Point(40, 40), Size = new Size(width, 112) };
+            // Cards used to carry hand-written absolute Y positions. They had drifted out of
+            // step - two of the seven gaps were 12px against 20px everywhere else, and the
+            // About card's Y put it in the middle of the page while its code sat at the
+            // bottom. A cursor keeps the rhythm even and makes the reading order on screen
+            // the same as the reading order in this file.
+            int cardY = CardTop;
+            CardPanel Card(int height)
+            {
+                var c = new CardPanel { Location = new Point(CardLeft, cardY), Size = new Size(width, height) };
+                cardY += height + CardGap;
+                return c;
+            }
+
+            // Re-fit a card to whatever its children actually came out as, and shift the
+            // cursor by the difference. Wrapped text can't be measured before it exists, and
+            // guessing a fixed height is how the Recording card ended up one line short of
+            // its own contents - silently, because a Label just clips.
+            void FitToContent(CardPanel c, int bottomPad = 18)
+            {
+                int bottom = 0;
+                foreach (Control child in c.Controls) bottom = Math.Max(bottom, child.Bottom);
+                int wanted = bottom + bottomPad;
+                cardY += wanted - c.Height;
+                c.Height = wanted;
+            }
+
+            var general = Card(112);
             general.Controls.Add(UiHelpers.Caption("GENERAL", 18, 16, 200));
             general.Controls.Add(new Label
             {
@@ -61,29 +95,28 @@ namespace VibranceHud.Pages
             };
             general.Controls.Add(startupToggle);
 
-            // DX11 is deliberately disabled (see the note in DxDevice) because the
-                        // overlay initialises but renders nothing, so every install runs the
-                        // Magnification path. That used to surface here as an orange "Fallback"
-                        // warning plus a failure reason and a Retry button - i.e. every single
-                        // user was told their PC had a problem, and offered a retry that could
-                        // never succeed. Now it states the known limitation plainly instead of
-                        // dressing a shipped decision up as a fault on their machine.
+            // This line used to end with "For recordings, turn on Show my colours in
+                        // recordings below." That was wrong, and wrong in the worst direction:
+                        // the Magnification path is invisible to capture whether that switch is
+                        // on or off, so anyone who followed the advice paid image quality for
+                        // nothing and then blamed the app when their stream still looked flat.
+                        // The Recording card now states the real position; this one sticks to
+                        // naming the engine and its consequence.
                         bool usingFallback = _settings.OverlayMode == VibranceHud.OverlayMode.Mag;
                         general.Controls.Add(new Label
                         {
-                            // No longer true as of Streaming Mode - and a stale "not supported
-                            // yet" sitting above the switch that supports it is worse than
-                            // saying nothing, because people believe the warning and never
-                            // scroll down.
                             Text = usingFallback
-                                ? "Colour effect runs on the Magnification path. For recordings, "
-                                  + "turn on Show my colours in recordings below."
+                                ? "Display engine: Magnification - shows on your monitor, but "
+                                  + "not in recordings. Same on every PC; see Recording below."
                                 : "Display engine: DX11",
                             ForeColor = Theme.TextDim,
                             BackColor = Color.Transparent,
                             Font = new Font(Theme.FontFamily, 8.5f),
-                            Location = new Point(18, 78),
-                            AutoSize = true
+                            Location = new Point(Gutter, 78),
+                            AutoSize = true,
+                            // Wraps inside the card rather than running out of it - the
+                            // fallback wording is long enough to reach the edge.
+                            MaximumSize = new Size(width - 2 * Gutter, 0),
                         });
                         // A reason and a Retry button are only meaningful when DX11 failed for a
                         // machine-specific cause the user could act on. The DX path is currently
@@ -171,10 +204,13 @@ namespace VibranceHud.Pages
                             };
                             general.Controls.Add(retryBtn);
                         }
+                        // The engine line wraps to two lines on the fallback wording, which
+                        // would have run past a hardcoded 112px card.
+                        FitToContent(general);
                         Controls.Add(general);
 
             // ---- Theme picker (colour swatches) ----
-            var themeCard = new CardPanel { Location = new Point(40, 172), Size = new Size(width, 120) };
+            var themeCard = Card(120);
             themeCard.Controls.Add(UiHelpers.Caption("THEME", 18, 16, 200));
             int sx = 18;
             foreach (var palette in ThemeCatalog.All)
@@ -209,7 +245,7 @@ namespace VibranceHud.Pages
             // ---- Custom background image ----
             // The picked image sits behind the plexus field, and its dominant colour
             // becomes the accent - so the theme matches whatever the user drops in.
-            var bgCard = new CardPanel { Location = new Point(40, 312), Size = new Size(width, 208) };
+            var bgCard = Card(208);
             bgCard.Controls.Add(UiHelpers.Caption("BACKGROUND IMAGE", 18, 16, 260));
 
             var bgHint = new Label
@@ -244,11 +280,10 @@ namespace VibranceHud.Pages
             {
                 Minimum = Theming.ImagePalette.MinDim,
                 Maximum = Theming.ImagePalette.MaxDim,
-                Location = new Point(16, 112),
-                Width = width - 32,
                 Value = Math.Clamp(_settings.CustomBackgroundDim,
                                    Theming.ImagePalette.MinDim, Theming.ImagePalette.MaxDim)
             };
+            dimSlider.SetTrackBounds(Gutter, 112, width - 2 * Gutter);
             dimSlider.ValueChanged += (s, e) =>
             {
                 _custom?.SetDim(dimSlider.Value);
@@ -272,10 +307,9 @@ namespace VibranceHud.Pages
             {
                 Minimum = 0,
                 Maximum = Theming.AppBackground.MaxBlur,
-                Location = new Point(16, 168),
-                Width = width - 32,
                 Value = Math.Clamp(_settings.CustomBackgroundBlur, 0, Theming.AppBackground.MaxBlur)
             };
+            blurSlider.SetTrackBounds(Gutter, 168, width - 2 * Gutter);
             blurSlider.ValueChanged += (s, e) =>
             {
                 _custom?.SetBlur(blurSlider.Value);
@@ -326,7 +360,7 @@ namespace VibranceHud.Pages
             bgCard.Controls.Add(dimSlider);
             Controls.Add(bgCard);
 
-            var appearance = new CardPanel { Location = new Point(40, 540), Size = new Size(width, 108) };
+            var appearance = Card(100);
             appearance.Controls.Add(UiHelpers.Caption("WINDOW OPACITY", 18, 16, 240));
             var opacityValue = new Label
             {
@@ -343,10 +377,9 @@ namespace VibranceHud.Pages
             {
                 Minimum = 50,
                 Maximum = 100,
-                Location = new Point(16, 52),
-                Width = width - 32,
                 Value = Clamp(settings.OpacityPercent)
             };
+            opacitySlider.SetTrackBounds(Gutter, 52, width - 2 * Gutter);
             opacitySlider.ValueChanged += (s, e) =>
             {
                 _onOpacityChanged(opacitySlider.Value);
@@ -357,59 +390,180 @@ namespace VibranceHud.Pages
             appearance.Controls.Add(opacitySlider);
             Controls.Add(appearance);
 
-            var updates = new CardPanel { Location = new Point(40, 660), Size = new Size(width, 92) };
+            var updates = Card(92);
             updates.Controls.Add(UiHelpers.Caption("UPDATES", 18, 16, 200));
             var checkBtn = FlatButton("Check for updates", 18, 44, 180);
             checkBtn.Click += async (s, e) => await UpdateService.CheckManuallyAsync();
             updates.Controls.Add(checkBtn);
             Controls.Add(updates);
 
-            // ---- About ----
+            // ---- Recording ----
             if (engine != null)
             {
-                var recording = new CardPanel { Location = new Point(40, 934), Size = new Size(width, 150) };
-                recording.Controls.Add(UiHelpers.Caption("RECORDING", 18, 16, 200));
+                var overlayMode = _settings.OverlayMode;
+                bool driverVibrance = engine.DriverAvailable;
+                bool canHelp = CaptureStatus.ToggleCanHelp(overlayMode, driverVibrance);
+
+                var recording = Card(150);   // re-fitted to its content below
+                recording.Controls.Add(UiHelpers.Caption("RECORDING", Gutter, 16, 200));
+
+                // Renamed. "Show my colours in recordings" promised an outcome the app can
+                // only sometimes deliver, and said nothing when it couldn't. This names the
+                // action; the live line underneath states the outcome.
                 recording.Controls.Add(new Label
                 {
-                    Text = "Show my colours in recordings",
-                    ForeColor = Theme.Text,
+                    Text = "Move my colours where recording can see them",
+                    ForeColor = canHelp ? Theme.Text : Theme.TextDim,
                     BackColor = Color.Transparent,
-                    Location = new Point(18, 46),
+                    Location = new Point(Gutter, 46),
                     AutoSize = true
                 });
 
                 var streaming = new ToggleSwitch
                 {
                     Location = new Point(width - 62, 44),
-                    Checked = _settings.StreamingMode
+                    // Never show it on when it isn't doing anything. Anyone on the fallback
+                    // who had already been talked into turning it on was looking at a lit
+                    // switch that was quietly costing them picture quality.
+                    Checked = canHelp && _settings.StreamingMode,
+                    Enabled = canHelp,
                 };
+
+                var verdict = new Label
+                {
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8.5f, FontStyle.Bold),
+                    Location = new Point(Gutter, 74),
+                    AutoSize = true,
+                };
+
+                var reason = new Label
+                {
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Location = new Point(Gutter, 96),
+                    // AutoSize with a capped width, NOT a fixed box. The old fixed 62px box
+                    // was one line short of its own text, so the sentence telling people to
+                    // use Display Capture instead of Game Capture - the single thing that
+                    // decides whether this feature appears to work - was clipped off the
+                    // bottom and nobody ever read it.
+                    AutoSize = true,
+                    MaximumSize = new Size(width - 2 * Gutter, 0),
+                };
+
+                void RefreshVerdict()
+                {
+                    var state = CaptureStatus.Resolve(overlayMode, driverVibrance, streaming.Checked);
+                    verdict.Text = CaptureStatus.Headline(state);
+                    verdict.ForeColor = state == CaptureState.Visible ? Theme.Text : Theme.Accent;
+                    reason.Text = CaptureStatus.Reason(state, driverVibrance)
+                                + "\r\n\r\n" + CaptureStatus.AlwaysTrue;
+                }
+
                 streaming.CheckedChanged += (s2, e2) =>
                 {
                     engine.StreamingMode = streaming.Checked;
                     _settings.StreamingMode = streaming.Checked;
                     _store.Save(_settings);
+                    RefreshVerdict();
                 };
-                recording.Controls.Add(streaming);
+                RefreshVerdict();
 
-                recording.Controls.Add(new Label
+                recording.Controls.Add(streaming);
+                recording.Controls.Add(verdict);
+                recording.Controls.Add(reason);
+
+                // Deliberately no "fallback reason" line here. The DX path is switched off on
+                // purpose and fails identically on every machine, so printing an HRESULT next
+                // to it would dress our own decision up as a fault on the user's PC - the
+                // exact thing the engine label above was changed to stop doing.
+
+                // ---- "why don't my colours record?" ----
+                // 8 of 20 testers reported their colours DID reach a screen share, which the
+                // code says should be impossible. Rather than keep guessing across machines
+                // we don't have, each PC measures itself and hands back a report.
+                var testBtn = FlatButton("Test my recording setup", Gutter, reason.Bottom + 16, 210);
+                var copyBtn = FlatButton("Copy report", Gutter + 220, reason.Bottom + 16, 140);
+                copyBtn.Enabled = false;
+
+                var result = new Label
                 {
-                    Text = "Normally your viewers see the game without your colours - the effect is " +
-                           "added after the point recording software reads the screen. This moves it " +
-                           "earlier so it shows up.\r\n\r\n" +
-                           "In OBS use Display Capture, not Game Capture. Costs a little image quality.",
                     ForeColor = Theme.TextDim,
                     BackColor = Color.Transparent,
-                    Location = new Point(18, 74),
-                    Size = new Size(width - 40, 62),
-                });
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Location = new Point(Gutter, testBtn.Bottom + 12),
+                    AutoSize = true,
+                    MaximumSize = new Size(width - 2 * Gutter, 0),
+                    // Space is reserved up front rather than grown later: the card's height is
+                    // fixed once at build time, and a label that got taller afterwards would
+                    // push its text out through the bottom of the card.
+                    MinimumSize = new Size(width - 2 * Gutter, 58),
+                    Text = "Takes about five seconds and will flash your screen while it "
+                         + "measures. Nothing is sent anywhere - it puts a report on your "
+                         + "clipboard for you to paste to us.",
+                };
+
+                string report = "";
+                testBtn.Click += async (s2, e2) =>
+                {
+                    var go = GlassDialog.Show(FindForm(), "Test my recording setup",
+                        "This flashes your screen on and off for about five seconds while it "
+                        + "measures what recording software actually receives.\r\n\r\nRun it now?",
+                        GlassDialogButtons.YesNo);
+                    if (go != DialogResult.Yes) return;
+
+                    testBtn.Enabled = false;
+                    testBtn.Text = "Measuring…";
+                    result.ForeColor = Theme.TextDim;
+                    result.Text = "Measuring - leave the screen alone for a few seconds.";
+
+                    // Off the UI thread: the probe sleeps between samples, and running it here
+                    // would freeze the window (and its animation) into "Not Responding".
+                    var probe = await System.Threading.Tasks.Task.Run(() => engine.RunCaptureProbe());
+                    report = CaptureDiagnostic.BuildReport(_settings, driverVibrance, probe);
+
+                    testBtn.Enabled = true;
+                    testBtn.Text = "Test my recording setup";
+                    copyBtn.Enabled = true;
+
+                    result.ForeColor = probe.ReachesCapture ? Theme.Text : Theme.Accent;
+                    result.Text = (probe.Ran
+                        ? "Result: " + probe.Note + "."
+                        : "Couldn't measure: " + probe.Note + ".")
+                        + "\r\n\r\nHit Copy report, then paste it to us on Discord.";
+                };
+
+                copyBtn.Click += (s2, e2) =>
+                {
+                    if (report.Length == 0) return;
+                    try
+                    {
+                        Clipboard.SetText(report);
+                        result.ForeColor = Theme.TextDim;
+                        result.Text = "Report copied. Paste it to us on Discord - it has no "
+                                    + "personal details in it, only your graphics setup.";
+                    }
+                    catch
+                    {
+                        result.ForeColor = Theme.Accent;
+                        result.Text = "Couldn't reach the clipboard. Try again in a moment.";
+                    }
+                };
+
+                recording.Controls.Add(testBtn);
+                recording.Controls.Add(copyBtn);
+                recording.Controls.Add(result);
+
+                FitToContent(recording);
                 Controls.Add(recording);
             }
 
+            // ---- Share ----
             if (engine != null)
             {
-                // Sits below Recording. Both are additive cards under the existing layout, so
-                // nothing above them had to move.
-                var share = new CardPanel { Location = new Point(40, 1104), Size = new Size(width, 150) };
+                var share = Card(150);
                 share.Controls.Add(UiHelpers.Caption("SHARE", 18, 16, 200));
                 share.Controls.Add(new Label
                 {
@@ -429,6 +583,9 @@ namespace VibranceHud.Pages
                     ForeColor = Theme.Text,
                     Font = new Font("Consolas", 10f),
                     CharacterCasing = CharacterCasing.Upper,
+                    // An empty monospace box next to a button called Apply says nothing about
+                    // what belongs in it.
+                    PlaceholderText = "PX-XXXXXXXXX",
                 };
                 share.Controls.Add(codeBox);
 
@@ -462,11 +619,24 @@ namespace VibranceHud.Pages
                 copy.Click += (s2, e2) =>
                 {
                     var code = ProfileCode.Encode(new ProfileCode(
-                        engine.Vibrance, engine.Saturation, engine.Brightness, engine.Gamma));
+                        engine.Vibrance, engine.Saturation, engine.Brightness, engine.Gamma,
+                        engine.Contrast, engine.Temperature));
                     codeBox.Text = code;
-                    Clipboard.SetText(code);
-                    shareStatus.ForeColor = Theme.TextDim;
-                    shareStatus.Text = code + "  -  copied, paste it anywhere";
+                    // Another process holding the clipboard open makes SetText throw. That
+                    // was an unhandled exception on a button click - i.e. the crash dialog -
+                    // for something as ordinary as a clipboard manager being busy. The code
+                    // is in the box either way, so the user can still copy it by hand.
+                    try
+                    {
+                        Clipboard.SetText(code);
+                        shareStatus.ForeColor = Theme.TextDim;
+                        shareStatus.Text = code + "  -  copied, paste it anywhere";
+                    }
+                    catch
+                    {
+                        shareStatus.ForeColor = Theme.Accent;
+                        shareStatus.Text = "Couldn't reach the clipboard - copy the code above.";
+                    }
                 };
 
                 apply.Click += (s2, e2) =>
@@ -484,11 +654,15 @@ namespace VibranceHud.Pages
                     engine.Saturation = incoming.Saturation;
                     engine.Brightness = incoming.Brightness;
                     engine.Gamma = incoming.Gamma;
+                    engine.Contrast = incoming.Contrast;
+                    engine.Temperature = incoming.Temperature;
 
                     _settings.VibrancePercent = incoming.Vibrance;
                     _settings.SaturationPercent = incoming.Saturation;
                     _settings.BrightnessPercent = incoming.Brightness;
                     _settings.GammaPercent = incoming.Gamma;
+                    _settings.ContrastPercent = incoming.Contrast;
+                    _settings.Temperature = incoming.Temperature;
                     _store.Save(_settings);
 
                     shareStatus.ForeColor = Theme.TextDim;
@@ -498,7 +672,8 @@ namespace VibranceHud.Pages
                 Controls.Add(share);
             }
 
-            var about = new CardPanel { Location = new Point(40, 764), Size = new Size(width, 150) };
+            // ---- About ---- (last, so the version and the Discord link close the page)
+            var about = Card(150);
             about.Controls.Add(new LogoBox
             {
                 Image = BrandAssets.HorizontalLogo(Theme.IsLight),
@@ -541,6 +716,7 @@ namespace VibranceHud.Pages
 
         private static int Clamp(int pct) => Math.Clamp(pct, 50, 100);
 
+
         internal static Button FlatButton(string text, int x, int y, int width)
         {
             var b = new Button
@@ -560,5 +736,43 @@ namespace VibranceHud.Pages
             b.FlatAppearance.MouseOverBackColor = Theme.Border;
             return b;
         }
+
+        /// <summary>
+        /// The accent-filled version of <see cref="FlatButton"/>, for the one action a page
+        /// exists to perform (Launch, Apply, Save).
+        ///
+        /// Exists because every caller used to write the same three lines by hand - accent
+        /// background, bold font, taller - and every one of them also set ForeColor to
+        /// <c>Theme.Text</c>, which on the light theme is near-black text on a near-black
+        /// fill. <see cref="Theme.OnAccentDim"/> is the readable pairing.
+        /// </summary>
+        internal static Button PrimaryButton(string text, int x, int y, int width, int height = 32)
+        {
+            var b = FlatButton(text, x, y, width);
+            b.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
+            b.Height = height;
+            RestylePrimary(b);
+            return b;
+        }
+
+        /// <summary>Re-read the accent colours onto a primary button. A stock
+        /// <see cref="Button"/> keeps whatever colours it was built with, so anything that
+        /// switches theme while a button is alive (the onboarding theme picker) has to call
+        /// this or the button keeps painting the old palette.</summary>
+        internal static void RestylePrimary(Button b)
+        {
+            b.BackColor = Theme.AccentDim;
+            b.ForeColor = Theme.OnAccentDim;
+            b.FlatAppearance.BorderColor = Theme.Border;
+            // Hover lifts the fill towards the full accent rather than jumping to it - the
+            // full accent is near-black on the light theme and near-white on the dark ones,
+            // so either way it would collide with the label colour on hover.
+            b.FlatAppearance.MouseOverBackColor = Blend(Theme.AccentDim, Theme.Accent, 0.35f);
+        }
+
+        private static Color Blend(Color from, Color to, float amount) => Color.FromArgb(
+            (int)(from.R + (to.R - from.R) * amount),
+            (int)(from.G + (to.G - from.G) * amount),
+            (int)(from.B + (to.B - from.B) * amount));
     }
 }

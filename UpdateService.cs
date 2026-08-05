@@ -27,6 +27,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using VibranceHud.Controls;
 
 namespace VibranceHud
 {
@@ -544,15 +545,15 @@ namespace VibranceHud
                 var update = await TryGetUpdateAsync();
                 if (update == null)
                 {
-                    MessageBox.Show($"You're on the latest version ({CurrentVersion}).",
-                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    GlassDialog.Show(null, "You're up to date",
+                        $"PlexusX {CurrentVersion} is the latest version.");
                     return;
                 }
 
-                var choice = MessageBox.Show(
-                    $"PlexusX {update.Version} is available (you have {CurrentVersion}).\n\n" +
-                    "Download and install it now? PlexusX will restart.",
-                    "PlexusX", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                var choice = GlassDialog.Show(null, "Update available",
+                    $"PlexusX {update.Version} is ready to install — you're on {CurrentVersion}.\n\n" +
+                    "PlexusX will restart once it's done.",
+                    GlassDialogButtons.YesNo);
                 if (choice != DialogResult.Yes) return;
 
                 var progress = new Progress<int>(p =>
@@ -563,13 +564,14 @@ namespace VibranceHud
                     var detail = string.IsNullOrEmpty(LastDownloadError)
                         ? ""
                         : "\n\nDetails: " + LastDownloadError;
-                    MessageBox.Show("The update couldn't be downloaded. You can grab it from the releases page." + detail,
-                        "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    GlassDialog.Show(null, "Update didn't download",
+                        "The update couldn't be downloaded. You can grab it from the releases page instead." + detail,
+                        GlassDialogButtons.Ok, GlassDialogTone.Warning);
                     return;
                 }
 
-                MessageBox.Show($"PlexusX {update.Version} has been downloaded. Restart PlexusX to finish installing.",
-                    "PlexusX", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                GlassDialog.Show(null, "Ready to install",
+                    $"PlexusX {update.Version} has been downloaded. Restart PlexusX to finish installing.");
                 Application.Exit();
             }
             finally
