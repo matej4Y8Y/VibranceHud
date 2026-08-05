@@ -40,7 +40,11 @@ namespace VibranceHud
         private readonly CrosshairPage _crosshairPage;
         private readonly ProfileEditorPage _profileEditorPage;
         private readonly Crosshair.CrosshairService _crosshair;
-        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount;
+        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount, _navMonitor, _navKeybinds;
+        private readonly MonitorPage _monitorPage;
+        private readonly KeybindsPage _keybindsPage;
+        private readonly Games.GameSelection _selection;
+        private readonly GameChooser _gameChooser;
         private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
         private readonly ProfileEngineCoordinator? _profileCoordinator;
@@ -53,7 +57,8 @@ namespace VibranceHud
             ProfileEngineCoordinator? profileCoordinator = null,
             LicenseService? license = null,
             Func<uint, uint, bool>? onHotkeyChanged = null,
-            Action<uint, uint, bool>? onMainHotkeyChanged = null)
+            Action<uint, uint, bool>? onMainHotkeyChanged = null,
+            Games.GameSelection? selection = null)
         {
             _crosshair = crosshair ?? new Crosshair.CrosshairService();
             _profileCoordinator = profileCoordinator;
@@ -61,6 +66,9 @@ namespace VibranceHud
             _engine = engine;
             _settings = settings;
             _store = store;
+            // Owned by the tray so it survives the window rebuild a theme change causes;
+            // constructed here only when nobody handed one in (tests, standalone use).
+            _selection = selection ?? new Games.GameSelection(settings, store);
             _tweaks = tweaks;
             _audio = audio;
             _onThemeChanged = onThemeChanged;
@@ -70,28 +78,37 @@ namespace VibranceHud
             Text = "PlexusX";
             Icon = AppIcon.Value;
             BackColor = Theme.Background;
-            ClientSize = new Size(1040, 680);
-            MinimumSize = new Size(900, 600);
+
+            // Everything below is laid out in logical pixels and scaled from here, so the
+            // same numbers are correct at 100% and 200%.
+            Design.Tokens.Dpi = DeviceDpi;
+
+            ClientSize = new Size(Design.Tokens.Scale(1040), Design.Tokens.Scale(680));
+            MinimumSize = new Size(Design.Tokens.Scale(900), Design.Tokens.Scale(600));
             Opacity = Math.Clamp(settings.OpacityPercent, 50, 100) / 100.0;
-            Font = new Font(Theme.FontFamily, 9f);
+            Font = Design.Fonts.Label;
             DoubleBuffered = true;
 
             _field.Resize(ClientSize.Width, ClientSize.Height);
             Theming.AppBackground.Resize(ClientSize.Width, ClientSize.Height);
 
-            _titleBar = new GlowPanel { Field = _field, Scrim = 110, Location = new Point(0, 0), Size = new Size(ClientSize.Width, TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
+            int titleH = Design.Tokens.Scale(TitleH);
+            int navW = Design.Tokens.Scale(NavW);
+
+            _titleBar = new GlowPanel { Field = _field, Scrim = 110, Location = new Point(0, 0), Size = new Size(ClientSize.Width, titleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right };
             _titleBar.MouseDown += DragWindow;
 
+            int logoH = Design.Tokens.Scale(24);
             var logo = new LogoBox
             {
                 Image = BrandAssets.HorizontalLogo(Theme.IsLight),
-                Location = new Point(20, (TitleH - 24) / 2),
-                Size = new Size(180, 24)
+                Location = new Point(Design.Tokens.Scale(20), (titleH - logoH) / 2),
+                Size = new Size(Design.Tokens.Scale(180), logoH)
             };
             logo.MouseDown += DragWindow;
-            var close = TitleGlyph("✕", ClientSize.Width - 42);
+            var close = TitleGlyph("✕", ClientSize.Width - Design.Tokens.Scale(42));
             close.Click += (s, e) => Hide();
-            var min = TitleGlyph("─", ClientSize.Width - 78);
+            var min = TitleGlyph("─", ClientSize.Width - Design.Tokens.Scale(78));
             min.Click += (s, e) => WindowState = FormWindowState.Minimized;
             _titleBar.Controls.AddRange(new Control[] { logo, close, min });
             Controls.Add(_titleBar);
@@ -105,22 +122,36 @@ namespace VibranceHud
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
             _fpsPage = new FpsTweaksPage(_tweaks);
+            _monitorPage = new MonitorPage(_settings, _store, _selection);
+            _keybindsPage = new KeybindsPage(_settings, _store, _selection);
             _profileEditorPage = new ProfileEditorPage();
-            _profileEditorPage.PopulateGames(GetEditorGames());
+            _profileEditorPage.SetSelectedGame(_selection.Current?.Id, _selection.Current?.DisplayName);
             _profileEditorPage.SetStatus(_profileCoordinator?.IsRunning ?? false);
             _profileEditorPage.OnSaved += (_, _) => Select(_navVibrance, _vibrancePage);
             _profileEditorPage.OnCancelled += (_, _) => Select(_navVibrance, _vibrancePage);
-            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _profileEditorPage })
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _profileEditorPage, _monitorPage, _keybindsPage })
                 AttachField(page);
 
-            _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, TitleH), Size = new Size(NavW, ClientSize.Height - TitleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
-            _navVibrance = MakeNav("Vibrance", position: 0, iconKind: 0);
-            _navCrosshair = MakeNav("Crosshair", position: 1, iconKind: 0);
-            _navGames = MakeNav("Games", position: 2, iconKind: 1);
-            _navFps = MakeNav("FPS Tweaks", position: 3, iconKind: 4);
-            _navEditor = MakeNav("Profile Editor", position: 4, iconKind: 2);
-            _navSettings = MakeNav("Settings", position: 5, iconKind: 2);
-            _navAccount = MakeNav("Account", position: 6, iconKind: 3);
+            _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, titleH), Size = new Size(navW, ClientSize.Height - titleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
+            // Every row gets its own glyph. Crosshair used to share the vibrance circle and
+            // Profile Editor used to share Settings' sliders, so three of the seven rows
+            // were only told apart by their label.
+            _navVibrance = MakeNav("Display", position: 0, iconKind: 0);
+            // Monitor sits next to Display because they are the same subject: Display is what
+            // colour the picture is, Monitor is what shape it is. Resolution used to be a card
+            // inside Rust's page, which meant a CS2 player could not reach it at all.
+            _navMonitor = MakeNav("Monitor", position: 1, iconKind: 7);
+            _navCrosshair = MakeNav("Crosshair", position: 2, iconKind: 5);
+            // Singular. The app is pointed at one game now - chosen in the nav below - so
+            // this tab is that game, not a catalogue to browse.
+            _navGames = MakeNav("Game", position: 3, iconKind: 1);
+            // Directly under Game because it only exists for a game, and it is hidden
+            // entirely at Desktop - a bind has no meaning without one.
+            _navKeybinds = MakeNav("Keybinds", position: 4, iconKind: 8);
+            _navFps = MakeNav("FPS Tweaks", position: 5, iconKind: 4);
+            _navEditor = MakeNav("Profile Editor", position: 6, iconKind: 2);
+            _navSettings = MakeNav("Settings", position: 7, iconKind: 6);
+            _navAccount = MakeNav("Account", position: 8, iconKind: 3);
 
             // Until the license is valid, only the Account tab is reachable. The
             // other tabs are still constructed (so the user sees the full nav once
@@ -128,40 +159,56 @@ namespace VibranceHud
             // buttons exist - visibility=null would NRE.
             ApplyLicenseVisibility();
             _navVibrance.Click += (s, e) => ShowVibrance();
+            _navMonitor.Click += (s, e) => Select(_navMonitor, _monitorPage);
+            _navKeybinds.Click += (s, e) => Select(_navKeybinds, _keybindsPage);
             _navGames.Click += (s, e) => ShowGames();
             _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
             _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navEditor.Click += (s, e) => ShowProfileEditor();
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount });
+
+            // The game chooser sits directly above the version, anchored to the bottom of the
+            // nav. Above rather than beside: 210px of nav is not enough for a readable game
+            // name and a version string side by side.
+            _gameChooser = new GameChooser(_selection)
+            {
+                Location = new Point(Design.Tokens.Scale(14), _nav.Height - Design.Tokens.Scale(88)),
+                Size = new Size(navW - Design.Tokens.Scale(28), Design.Tokens.Scale(46)),
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+            };
+            _nav.Controls.Add(_gameChooser);
 
             var version = new Label
             {
                 Text = AppInfo.VersionText,
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
-                Font = new Font(Theme.FontFamily, 8f),
-                Location = new Point(22, _nav.Height - 30),
+                Font = Design.Fonts.Caption,
+                Location = new Point(Design.Tokens.Scale(22), _nav.Height - Design.Tokens.Scale(30)),
                 AutoSize = true,
                 Anchor = AnchorStyles.Bottom | AnchorStyles.Left
             };
             version.MouseDown += DragWindow;
             _nav.Controls.Add(version);
+
+            // Everything that is scoped to a game rebuilds when the selection changes.
+            _selection.Changed += (_, _) => OnGameChanged();
             Controls.Add(_nav);
 
             _contentHost = new Panel
             {
-                Location = new Point(NavW, TitleH),
-                Size = new Size(ClientSize.Width - NavW, ClientSize.Height - TitleH),
+                Location = new Point(navW, titleH),
+                Size = new Size(ClientSize.Width - navW, ClientSize.Height - titleH),
                 BackColor = Theme.Background,
                 AutoScroll = false,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
             Controls.Add(_contentHost);
 
-            AddDivider(new Point(0, TitleH), new Size(ClientSize.Width, 1), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right);
-            AddDivider(new Point(NavW, TitleH), new Size(1, ClientSize.Height - TitleH), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom);
+            AddDivider(new Point(0, titleH), new Size(ClientSize.Width, Design.Tokens.Scale(1)), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right);
+            AddDivider(new Point(navW, titleH), new Size(Design.Tokens.Scale(1), ClientSize.Height - titleH), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom);
 
             Resize += (s, e) =>
             {
@@ -178,10 +225,56 @@ namespace VibranceHud
             ShowVibrance();
         }
 
+        /// <summary>
+        /// Follow the monitor the window is on.
+        ///
+        /// With PerMonitorV2 Windows raises this when the window crosses onto a display with
+        /// a different scale factor, and hands over the rectangle it wants us to occupy.
+        /// Taking that rectangle verbatim is what keeps the window the same physical size
+        /// across the boundary; computing our own makes it jump.
+        ///
+        /// Order matters: tokens first, then fonts (which are sized from them), then layout.
+        /// </summary>
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+
+            Design.Tokens.Dpi = e.DeviceDpiNew;
+            Design.Fonts.Rebuild();
+            RelayoutForDpi();
+        }
+
+        /// <summary>Re-place the chrome at the new scale. Children carry Anchor flags, so
+        /// they follow from these three.</summary>
+        private void RelayoutForDpi()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+
+            int titleH = Design.Tokens.Scale(TitleH);
+            int navW = Design.Tokens.Scale(NavW);
+
+            SuspendLayout();
+
+            MinimumSize = new Size(Design.Tokens.Scale(900), Design.Tokens.Scale(600));
+
+            _titleBar.Height = titleH;
+            _nav.Location = new Point(0, titleH);
+            _nav.Size = new Size(navW, ClientSize.Height - titleH);
+            _contentHost.Location = new Point(navW, titleH);
+            _contentHost.Size = new Size(ClientSize.Width - navW, ClientSize.Height - titleH);
+
+            if (_currentPage is GlowPage page) AttachField(page);
+
+            ResumeLayout(true);
+            Invalidate(true);
+        }
+
         private void AttachField(GlowPage page)
         {
             page.Field = _field;
-            page.FieldOffset = new Point(NavW, TitleH);
+            // Scaled: the offset has to match where the content host actually sits, or the
+            // particle field visibly jumps as it crosses from the nav into the page.
+            page.FieldOffset = new Point(Design.Tokens.Scale(NavW), Design.Tokens.Scale(TitleH));
         }
 
         private void OnAnimationTick(object? sender, EventArgs e)
@@ -195,10 +288,17 @@ namespace VibranceHud
             var foreground = GetForegroundWindow() == Handle && Visible && WindowState != FormWindowState.Minimized;
             if (!foreground) { _last = DateTime.UtcNow; return; }
 
+            var elapsed = Math.Min((DateTime.UtcNow - _last).TotalSeconds, 0.1);
+
+            // The page's fade-in runs even while the user is holding a slider or the window
+            // is otherwise "interacting" - it is a one-shot transition, and freezing it
+            // half-faded would look like the app had hung.
+            if (_currentPage is GlowPage fading) fading.TickIntro(elapsed);
+
             if (_userInteracting) { _last = DateTime.UtcNow; return; }
 
             var now = DateTime.UtcNow;
-            _field.Update(Math.Min((now - _last).TotalSeconds, 0.1));
+            _field.Update(elapsed);
             _last = now;
 
             _titleBar.Invalidate(true);
@@ -268,16 +368,16 @@ namespace VibranceHud
         {
             IconKind = iconKind,
             Text = label,
-            Location = new Point(0, 16 + position * 48),
-            Size = new Size(NavW, 46)
+            Location = new Point(0, Design.Tokens.Scale(16 + position * 48)),
+            Size = new Size(Design.Tokens.Scale(NavW), Design.Tokens.Scale(46))
         };
 
         private Label TitleGlyph(string text, int x) => new()
         {
             Text = text,
             ForeColor = Theme.TextDim,
-            Font = new Font(Theme.FontFamily, 10f),
-            Size = new Size(32, TitleH),
+            Font = Design.Fonts.Body,
+            Size = new Size(Design.Tokens.Scale(32), Design.Tokens.Scale(TitleH)),
             Location = new Point(x, 0),
             TextAlign = ContentAlignment.MiddleCenter,
             Cursor = Cursors.Hand,
@@ -312,11 +412,31 @@ namespace VibranceHud
             bool has = _license.HasValidLicense;
             _navVibrance.Visible = has;
             _navGames.Visible = has;
+            _navMonitor.Visible = has;
             _navFps.Visible = has;
             _navCrosshair.Visible = has;
             _navSettings.Visible = has;
             _navEditor.Visible = has;
             _navAccount.Visible = true;
+            ApplyGameScopedVisibility();
+        }
+
+        /// <summary>
+        /// Hide the tabs that only mean something with a game selected.
+        ///
+        /// Keybinds is the whole tab: the commands, their syntax and the file they land in are
+        /// all per-game, so at Desktop there is nothing it could show. Hiding it beats showing
+        /// an empty page that explains why it is empty.
+        /// </summary>
+        private void ApplyGameScopedVisibility()
+        {
+            bool licensed = _license.HasValidLicense;
+            _navKeybinds.Visible = licensed && _selection.Current != null;
+
+            // If the user was on Keybinds and just went back to Desktop, they are now looking
+            // at a page whose tab has gone. Move them somewhere that still exists.
+            if (!_navKeybinds.Visible && ReferenceEquals(_currentPage, _keybindsPage))
+                ShowVibrance();
         }
 
         private void ShowVibrance()
@@ -325,17 +445,58 @@ namespace VibranceHud
             _vibrancePage.Refresh();
         }
 
+        /// <summary>
+        /// The Game tab. With a game selected this IS that game's page - no grid, no
+        /// click-through. At Desktop it falls back to the catalogue, which is now an empty
+        /// state ("pick one") rather than a permanent hub.
+        /// </summary>
         private void ShowGames()
         {
-            var page = new GamesHubPage(OnConfigureGame, OnEditProfile);
+            // Catch a game installed or uninstalled since the window opened. Cheap, and it
+            // means the tab is never pointed at something that has gone.
+            _selection.Refresh();
+
+            GlowPage page = _selection.Detected is { } detected
+                ? BuildGamePage(detected)
+                : new GamesHubPage(d => _selection.Select(d.Game.Id), OnEditProfile);
+
             AttachField(page);
             Select(_navGames, page);
         }
 
+        /// <summary>Rebuild whatever is scoped to the selected game. Only the Game tab and the
+        /// Profile Editor care - Display, Crosshair, FPS Tweaks and Settings are global and
+        /// deliberately untouched.</summary>
+        private void OnGameChanged()
+        {
+            ApplyGameScopedVisibility();
+            _profileEditorPage.SetSelectedGame(_selection.Current?.Id, _selection.Current?.DisplayName);
+
+            // Only rebuild the Game tab if it is what the user is looking at; otherwise it
+            // rebuilds itself next time they open it.
+            if (ReferenceEquals(_currentPage, _profileEditorPage))
+                _profileEditorPage.BeginIntro();
+            else if (_navGames.Active)
+                ShowGames();
+        }
+
+        private GlowPage BuildGamePage(DetectedGame game) => GamePageRouter.Resolve(game.Game.Id) switch
+        {
+            // No back link any more - the chooser is how you change game, and there is
+            // nothing behind this page to go back to.
+            GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
+            GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames),
+            GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames),
+            GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames),
+            _ => new UnsupportedGamePage(game.Game, onBack: ShowGames),
+        };
+
+        /// <summary>"Edit profile" on a game card: point the app at that game, then open the
+        /// editor on it. Selecting rather than just opening means the rest of the app follows
+        /// too, which is the whole point of having one selection.</summary>
         private void OnEditProfile(SupportedGame game)
         {
-            _profileEditorPage.PopulateGames(new[] { (game.Id, game.DisplayName) });
-            _profileEditorPage.SelectGame(game.Id);
+            _selection.Select(game.Id);
             Select(_navEditor, _profileEditorPage);
         }
 
@@ -343,27 +504,6 @@ namespace VibranceHud
         {
             _profileEditorPage.SetStatus(_profileCoordinator?.IsRunning ?? false);
             Select(_navEditor, _profileEditorPage);
-        }
-
-        private IEnumerable<(string Id, string Name)> GetEditorGames()
-        {
-            foreach (var g in VibranceHud.Games.SupportedGames.All)
-                yield return (g.Id, g.DisplayName);
-        }
-
-        private void OnConfigureGame(DetectedGame game)
-        {
-            GlowPage page = GamePageRouter.Resolve(game.Game.Id) switch
-            {
-                GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames),
-                GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames),
-                GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames),
-                GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames),
-                _ => new UnsupportedGamePage(game.Game, onBack: ShowGames),
-            };
-            AttachField(page);
-            SetContent(page);
-            SetActive(_navGames);
         }
 
         private void Select(NavButton button, Control page)
@@ -374,7 +514,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navEditor, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
@@ -394,9 +534,14 @@ namespace VibranceHud
             _contentHost.ResumeLayout();
             _currentPage = page;
 
+            // Fade the incoming page up from the background so a change of tab - or of game -
+            // reads as the app moving somewhere rather than the window flickering.
+            if (page is GlowPage arriving) arriving.BeginIntro();
+
             if (old != null && old != page &&
                 old != _vibrancePage && old != _settingsPage && old != _accountPage &&
-                old != _fpsPage && old != _crosshairPage && old != _profileEditorPage)
+                old != _fpsPage && old != _crosshairPage && old != _profileEditorPage &&
+                old != _monitorPage && old != _keybindsPage)
                 old.Dispose();
         }
 

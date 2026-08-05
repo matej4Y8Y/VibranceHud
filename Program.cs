@@ -32,7 +32,18 @@ namespace VibranceHud
             // Always best-effort: Cleanup() never throws.
             CrashLog.Cleanup();
 
-            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            // PerMonitorV2, not SystemAware.
+            //
+            // SystemAware makes Windows bitmap-stretch the entire window at any scale factor
+            // above 100% - which is most gaming laptops and every 1440p/4K monitor - and
+            // stretched text is the single strongest "cheap app" signal there is. V2 renders
+            // natively at the monitor's own DPI, and additionally scales the non-client area
+            // and dialogs, which V1 leaves behind.
+            //
+            // This only works because layout goes through Design.Tokens; with the old
+            // hardcoded pixel positions, per-monitor awareness would have moved the blur
+            // problem into a clipping problem.
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 

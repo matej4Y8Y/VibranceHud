@@ -21,7 +21,7 @@ namespace VibranceHud.Design
     public static class Fonts
     {
         private static Font? _display, _title, _heading, _body, _label, _caption, _micro;
-        private static Font? _bodyBold, _labelBold, _captionBold;
+        private static Font? _bodyBold, _labelBold, _captionBold, _headingRegular;
 
         public static Font Display => _display ??= Make(20f, FontStyle.Bold);
         public static Font Title => _title ??= Make(15f, FontStyle.Bold);
@@ -34,6 +34,9 @@ namespace VibranceHud.Design
         public static Font BodyBold => _bodyBold ??= Make(9.5f, FontStyle.Bold);
         public static Font LabelBold => _labelBold ??= Make(9f, FontStyle.Bold);
         public static Font CaptionBold => _captionBold ??= Make(8.5f, FontStyle.Bold);
+
+        /// <summary>Regular-weight heading, for the large slider captions.</summary>
+        public static Font HeadingRegular => _headingRegular ??= Make(11.5f);
 
         /// <summary>Resolve a role to its regular-weight font.</summary>
         public static Font For(FontRole role) => role switch
@@ -51,17 +54,23 @@ namespace VibranceHud.Design
             => new(Theme.FontFamily, size, style);
 
         /// <summary>
-        /// Drop every cached font so the next access rebuilds. Safe to call repeatedly, and
-        /// safe to call before anything has been created.
+        /// Drop every cached font so the next access rebuilds at the current DPI. Safe to
+        /// call repeatedly, and safe before anything has been created.
+        ///
+        /// Deliberately does NOT dispose the outgoing fonts. Stock controls copy the Font
+        /// reference they were given and hold it until told otherwise, so disposing here
+        /// would leave every Label on screen pointing at a dead GDI handle and throw on the
+        /// next repaint - a guaranteed crash on the first monitor change rather than the
+        /// stale-size cosmetic bug this is fixing.
+        ///
+        /// The abandoned fonts are collectable and Font has a finalizer that frees the
+        /// handle, so the cost is a handful of small objects per DPI change - which happens
+        /// at most a few times in a session.
         /// </summary>
         public static void Rebuild()
         {
-            foreach (var f in new[] { _display, _title, _heading, _body, _label, _caption,
-                                      _micro, _bodyBold, _labelBold, _captionBold })
-                f?.Dispose();
-
             _display = _title = _heading = _body = _label = _caption = _micro = null;
-            _bodyBold = _labelBold = _captionBold = null;
+            _bodyBold = _labelBold = _captionBold = _headingRegular = null;
         }
     }
 }

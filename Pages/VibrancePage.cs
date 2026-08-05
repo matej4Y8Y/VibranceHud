@@ -6,169 +6,176 @@ using System.Windows.Forms;
 namespace VibranceHud.Pages
 {
     /// <summary>
-    /// The home page: the big vibrance readout, the 0-200% slider (notch at 100 = driver
-    /// max), the presets, and below them the brightness calibration slider and the eye-care
-    /// toggle - all over the shared particle-field background from <see cref="GlowPage"/>.
+    /// The Display page.
+    ///
+    /// Layout: a header band, then one card holding PRIMARY (saturation and vibrance, at the
+    /// large size), FINE TUNE (brightness/gamma/contrast/temperature in a 2x2 grid), SCENE
+    /// PRESETS (compact chips) and SHORTCUTS.
+    ///
+    /// Sliders come before presets on purpose. The presets are a shortcut to a slider
+    /// position, so putting them first pushed the thing they are a shortcut to below the
+    /// fold, and the page opened on decoration instead of on its own controls.
+    ///
+    /// Every visible thing on this page is a real child control. Nothing is painted at
+    /// absolute coordinates in OnPaint, and that is the whole point: the page scrolls, and a
+    /// scrolled page moves its children while leaving painted text exactly where it was. The
+    /// previous version mixed the two and every caption ended up sitting on top of its own
+    /// slider the moment a scrollbar appeared. Controls all move together, so the bug has
+    /// nowhere left to live.
+    ///
+    /// The card's height comes from where its contents actually finish, so a longer section
+    /// or a wider font pushes the card out rather than off the bottom of it.
     /// </summary>
     public sealed class VibrancePage : GlowPage
     {
+        private const int SaveDebounceMs = 500;
+
+        // Logical pixels, resolved at the current DPI. Properties rather than consts so a
+        // window moved to a differently-scaled monitor re-lays out at the new size instead
+        // of keeping the pixel counts it started with.
+        private static int PageMargin => Design.Tokens.Scale(28);
+        private static int CardPad => Design.Tokens.Scale(Design.Tokens.XL);
+        private static int SectionGap => Design.Tokens.Scale(26);
+        private static int ColGap => Design.Tokens.Scale(28);
+        private static int ChipGap => Design.Tokens.Scale(Design.Tokens.M);
+        /// <summary>Glyph and name on one line, the preset's own colour swatch beneath.</summary>
+        private static int ChipHeight => Design.Tokens.Scale(74);
+        private static int SectionLabelH => Design.Tokens.Scale(22);
+
+        /// <summary>Width of the FINE TUNE section's Reset button.</summary>
+        private static int ResetW => Design.Tokens.Scale(76);
+        private static int ResetH => Design.Tokens.Scale(26);
+
         private readonly VibranceEngine _engine;
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
-
-        // Sliders fire ValueChanged on every mouse-move during a drag - saving on each one
-        // would hammer disk I/O and risk torn writes. Debounce so one save happens ~500ms
-        // after the user stops moving a slider, not on every intermediate value.
-        private const int SaveDebounceMs = 500;
         private readonly DebouncedAction _saveDebounce;
 
-        private readonly FlatSlider _slider;     // saturation (software, 0-200)
-        private readonly FlatSlider _vibrance;   // driver Digital Vibrance (0-100)
-        private readonly FlatSlider _brightness;
-        private readonly FlatSlider _gamma;
-        private readonly HotkeyPicker _hotkeyPicker;
-        private readonly HotkeyPicker _mainHotkeyPicker;
-        private readonly ToggleSwitch _eyeCare;
-        private readonly List<ChipButton> _chips = new();
-        private readonly List<(int Vib, int Sat)> _presetValues = new();
+        private readonly CardPanel _card;
+        private readonly Label _title, _subtitle;
+        private readonly Label _presetsLabel, _primaryLabel, _fineLabel, _shortcutsLabel;
+        private readonly Label _popupHotkeyLabel, _mainHotkeyLabel;
 
-        private int _cx, _colW, _numberY, _captionY, _scaleY, _presetCapY;
-        private int _vibCapY, _hotkeyCapY, _brightCapY, _gammaCapY, _eyeY;
-        private int _mainHotkeyCapY;
+        private readonly SliderRow _saturation, _vibrance, _brightness, _gamma, _contrast, _temperature;
+        private readonly HotkeyPicker _hotkeyPicker, _mainHotkeyPicker;
 
-        // Which rectangle each slider's numeric readout occupies. Used to repaint just
-        // that text during a drag instead of the whole page - see InvalidateReadout.
-        private Rectangle SaturationReadout => new(_cx, _numberY, _colW, 84);
-        private Rectangle VibranceReadout => new(_cx + _colW - 110, _vibCapY, 110, 16);
-        private Rectangle BrightnessReadout => new(_cx + _colW - 50, _brightCapY, 50, 16);
-        private Rectangle GammaReadout => new(_cx + _colW - 50, _gammaCapY, 50, 16);
+        private readonly GlassButton _resetFine;
+        private readonly List<PresetChip> _chips = new();
+        private readonly List<DisplayPreset> _presets = new();
+        private readonly ToolTip _presetTips = new() { InitialDelay = 350, ReshowDelay = 120 };
 
-        /// <summary>
-        /// Repaint one readout rather than the entire page.
-        ///
-        /// A bare Invalidate() here repaints everything GlowPage draws underneath us: the
-        /// background image and all 65 nodes plus their connecting lines of the shared
-        /// particle field. That field animates on its own 33ms timer and does not change
-        /// because a slider moved, so during a drag - which raises ValueChanged on every
-        /// mouse-move, easily 100+/sec - it was re-rasterising the whole scene several
-        /// times per animation frame purely to redraw a number. That was the largest
-        /// single contributor to the drag feeling heavy.
-        /// </summary>
-        private void InvalidateReadout(Rectangle r)
-        {
-            // Before the first layout pass the rects are all zero-sized; fall back to a
-            // full repaint so the initial render is still correct.
-            if (_colW <= 0) { Invalidate(); return; }
-            r.Inflate(6, 6); // cover antialiased glyph edges
-            Invalidate(r);
-        }
+        private bool _applyingPreset;
+        private bool _dragging;
 
-        /// <summary>Raised when the user picks a new quick-vibrance hotkey combo. The
-        /// tray forwards to <see cref="TrayApplicationContext.ReRegisterHotkey"/> so the
-        /// OS-level RegisterHotKey is swapped without a restart.
-        ///
-        /// Returns whether the combo actually bound, so the picker can say "in use by
-        /// another app" instead of displaying a dead hotkey as if it were live.</summary>
         public event Func<uint, uint, bool>? HotkeyChanged;
-
-        /// <summary>Raised when the user picks a new main-window hotkey combo (or disables
-        /// the existing one). Argument is (modifier mask, virtual key, enabled). The tray
-        /// forwards to TrayApplicationContext.ReRegisterMainHotkey so the OS-level
-        /// RegisterHotKey is swapped without a restart.</summary>
         public event Action<uint, uint, bool>? MainHotkeyChanged;
 
-        // Built once - OnPaint runs ~30x/sec, so never allocate fonts inside it.
-        private static readonly Font NumberFont = new(Theme.FontFamily, 46f, FontStyle.Bold);
-        private static readonly Font CaptionFont = new(Theme.FontFamily, 8f, FontStyle.Bold);
-        private static readonly Font SmallFont = new(Theme.FontFamily, 8f);
-        private static readonly Font RowFont = new(Theme.FontFamily, 9.5f);
-
         public VibrancePage(VibranceEngine engine, AppSettings settings, SettingsStore store)
+        {
+            _engine = engine;
+            _settings = settings;
+            _store = store;
+            _saveDebounce = new DebouncedAction(() => _store.Save(_settings), SaveDebounceMs);
+
+            AutoScroll = true;
+            Font = Design.Fonts.Label;
+
+            _title = PageLabel("Display", Design.Fonts.Display, Theme.Text);
+            _subtitle = PageLabel("Pick a scene, then fine-tune it.",
+                Design.Fonts.Label, Theme.TextDim);
+
+            _card = new CardPanel();
+            Controls.Add(_card);
+
+            _presetsLabel = SectionLabel("SCENE PRESETS");
+            foreach (var preset in DisplayPresets.All)
+            {
+                var captured = preset;
+                var chip = new PresetChip
                 {
-                    _engine = engine;
-                    _settings = settings;
-                    _store = store;
-                    _saveDebounce = new DebouncedAction(() => _store.Save(_settings), SaveDebounceMs);
-                                Font = new Font(Theme.FontFamily, 9f);
+                    Caption = preset.Name,
+                    Subtitle = preset.Subtitle,
+                    Kind = preset.Name.ToLowerInvariant(),
+                    Photo = BrandAssets.PresetChip(preset.Name.ToLowerInvariant()),
+                    // The chip previews the preset by running a grey ramp through the very
+                    // matrix the overlay would apply, so the swatch can never drift from
+                    // what the preset actually does.
+                    Matrix = ColorAdjust.Build(
+                        saturation: 1f,
+                        vibrance: 1f,
+                        contrast: preset.Contrast / 100f,
+                        brightness: preset.Brightness / 100f,
+                        warmth: preset.Temperature / 100f),
+                };
+                chip.Click += (_, _) => ApplyPreset(captured);
+                // The compact chip only has room for the name, so what each look actually
+                // does lives on hover rather than being dropped.
+                _presetTips.SetToolTip(chip, preset.Subtitle);
+                _presets.Add(preset);
+                _chips.Add(chip);
+                _card.Controls.Add(chip);
+            }
 
-                                // Layout must fit the entire page content (4 sliders + presets +
-                                // eye-care + 2 hotkey pickers) into the default 628-px content-host
-                                // height with no scroll. The previous layout assumed 700 px of height
-                                // and used AutoScroll as a crutch, which interacted poorly with the
-                                // content host's own AutoScroll (added in v0.9.0) - the two scroll
-                                // surfaces fought each other and the bottom hotkey picker clipped.
-                                // With AutoScroll gone here, this page is now a single fixed-size
-                                // block that the content host scrolls if the window is too small.
+            // The two headline controls, at the large size. Everything else on the page is
+            // trim for these two.
+            _primaryLabel = SectionLabel("PRIMARY");
+            _saturation = Row("Saturation", 0, VibranceEngine.MaxSaturation, 100, _engine.Saturation,
+                v => { _engine.Saturation = v; _settings.SaturationPercent = v; }, large: true,
+                format: v => $"{v}%");
+            _vibrance = Row("Vibrance", 0, VibranceEngine.MaxVibrance,
+                VibranceEngine.DriverVibranceCeiling, _engine.Vibrance,
+                v => { _engine.Vibrance = v; _settings.VibrancePercent = v; }, large: true,
+                // Without a driver this says why instead of showing a number that does
+                // nothing - "no NVIDIA GPU" was the wrong answer on every gaming laptop.
+                format: v => VibranceStatus.Readout(_engine.DriverState, v));
 
-                    // Saturation is the headline control: it's the one that goes past the driver
-                    // ceiling, and it works without an NVIDIA GPU.
-                    _slider = new FlatSlider
-                    {
-                        Minimum = 0,
-                        Maximum = VibranceEngine.MaxSaturation,
-                        Notch = 100,
-                        Value = _engine.Saturation
-                    };
-                    _slider.ValueChanged += (s, e) =>
-                    {
-                        _engine.Saturation = _slider.Value;
-                        _settings.SaturationPercent = _slider.Value;
-                        UpdateActiveChip();
-                        InvalidateReadout(SaturationReadout);
-                        _saveDebounce.Trigger();
-                    };
-                    // Tell the engine when the user is actively dragging so it can suppress
-                    // overlay writes during the drag (the chip tracks the cursor 1:1; the
-                    // screen catches up on MouseUp via EndDrag's single flush).
-                    _slider.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-                    _slider.MouseUp += (s, e) => _engine.EndDrag();
-                    Controls.Add(_slider);
+            // Getting back to neutral meant dragging four sliders and knowing what neutral
+            // was for each - 100, 100, 100, and 0, which is not something anyone should have
+            // to remember. Presets can reach neutral too, but only via "Balanced", which
+            // reads like a look rather than an undo.
+            _fineLabel = SectionLabel("FINE TUNE");
+            _resetFine = new GlassButton { Text = "Reset", Kind = GlassButtonKind.Ghost };
+            _resetFine.Click += (_, _) => ResetFineTune();
+            _card.Controls.Add(_resetFine);
+            // Each ramp is chosen to mean the control it belongs to: temperature really does
+            // run blue to amber, brightness really does run dark to light. The slider ends up
+            // describing itself.
+            _brightness = Row("Brightness", VibranceEngine.MinBrightness, VibranceEngine.MaxBrightness,
+                100, _engine.Brightness,
+                v => { _engine.Brightness = v; _settings.BrightnessPercent = v; },
+                palette: SliderPalette.Luminance, format: v => $"{v}%");
+            _gamma = Row("Gamma", VibranceEngine.MinGamma, VibranceEngine.MaxGamma, 100, _engine.Gamma,
+                v => { _engine.Gamma = v; _settings.GammaPercent = v; },
+                palette: SliderPalette.Luminance, format: v => $"{v / 100f:0.00}");
+            _contrast = Row("Contrast", VibranceEngine.MinContrast, VibranceEngine.MaxContrast,
+                100, _engine.Contrast,
+                v => { _engine.Contrast = v; _settings.ContrastPercent = v; },
+                palette: SliderPalette.Contrast, format: v => $"{v}%");
+            _temperature = Row("Temperature", VibranceEngine.MinTemperature, VibranceEngine.MaxTemperature,
+                0, _engine.Temperature,
+                v => { _engine.Temperature = v; _settings.Temperature = v; },
+                palette: SliderPalette.Temperature, format: TemperatureText);
 
-            _vibrance = new FlatSlider
-            {
-                Minimum = 0,
-                Maximum = VibranceEngine.MaxVibrance,
-                // The notch marks where the driver runs out and software takes over.
-                Notch = VibranceEngine.DriverVibranceCeiling,
-                Value = _engine.Vibrance
-            };
-            _vibrance.ValueChanged += (s, e) =>
-            {
-                _engine.Vibrance = _vibrance.Value;
-                _settings.VibrancePercent = _vibrance.Value;
-                UpdateActiveChip();
-                InvalidateReadout(VibranceReadout);
-                _saveDebounce.Trigger();
-            };
-            _vibrance.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            _vibrance.MouseUp += (s, e) => _engine.EndDrag();
-            Controls.Add(_vibrance);
+            _shortcutsLabel = SectionLabel("SHORTCUTS");
+            _popupHotkeyLabel = CardLabel("Quick colour popup");
+            _mainHotkeyLabel = CardLabel("Open main window");
 
-            // Hotkey picker: seeded from settings, raised through the page so the tray can
-            // swap the live RegisterHotKey without the page having to know about Win32.
             _hotkeyPicker = new HotkeyPicker
             {
                 ModifierMask = _settings.HotkeyModifierMask,
-                VirtualKey = _settings.HotkeyVirtualKey
+                VirtualKey = _settings.HotkeyVirtualKey,
             };
             _hotkeyPicker.HotkeyChanged += (mask, vk) =>
             {
                 _settings.HotkeyModifierMask = mask;
                 _settings.HotkeyVirtualKey = vk;
                 _store.Save(_settings);
-                // Feed the registration result straight back to the picker so a combo
-                // another app owns is reported where the user is looking. With no listener
-                // attached (tests, standalone use) assume success rather than showing a
-                // spurious failure.
-                bool bound = HotkeyChanged?.Invoke(mask, vk) ?? true;
-                _hotkeyPicker.ReportBindingResult(bound);
+                // Report back whether it actually bound, so a combo another app owns is said
+                // where the user is looking instead of only in the tray menu.
+                _hotkeyPicker.ReportBindingResult(HotkeyChanged?.Invoke(mask, vk) ?? true);
             };
-            Controls.Add(_hotkeyPicker);
+            _card.Controls.Add(_hotkeyPicker);
 
-            // Second picker for the main-window hotkey (separate from the popup).
-            // Default-disabled so existing users do not get a surprise binding - the
-            // moment the user picks a combo here, the flag flips on and the tray
-            // starts registering it.
             _mainHotkeyPicker = new HotkeyPicker
             {
                 ModifierMask = _settings.MainHotkeyModifierMask,
@@ -182,227 +189,261 @@ namespace VibranceHud.Pages
                 _store.Save(_settings);
                 MainHotkeyChanged?.Invoke(mask, vk, true);
             };
-            Controls.Add(_mainHotkeyPicker);
+            _card.Controls.Add(_mainHotkeyPicker);
 
-            // Presets set BOTH controls. These pairs reproduce exactly what the old
-            // combined 0-200 slider did at 50/100/150/200, so nothing shifts on upgrade.
-            (string name, int vib, int sat)[] presets =
-            {
-                ("Natural", 50, 100), ("Standard", 100, 100),
-                ("Vivid", 100, 150), ("Max", 100, 200)
-            };
-            foreach (var (name, vib, sat) in presets)
-            {
-                var chip = new ChipButton { Text = name, Level = sat, Font = new Font(Theme.FontFamily, 9f) };
-                int v = vib, t = sat;
-                chip.Click += (s, e) => { _vibrance.Value = v; _slider.Value = t; };
-                _chips.Add(chip);
-                _presetValues.Add((vib, sat));
-                Controls.Add(chip);
-            }
+            RefreshReadouts();
             UpdateActiveChip();
 
-            _brightness = new FlatSlider
-            {
-                Minimum = VibranceEngine.MinBrightness,
-                Maximum = VibranceEngine.MaxBrightness,
-                Notch = 100,
-                Value = _engine.Brightness
-            };
-            _brightness.ValueChanged += (s, e) =>
-            {
-                _engine.Brightness = _brightness.Value;
-                _settings.BrightnessPercent = _brightness.Value;
-                InvalidateReadout(BrightnessReadout);
-                _saveDebounce.Trigger();
-            };
-            _brightness.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            _brightness.MouseUp += (s, e) => _engine.EndDrag();
-            Controls.Add(_brightness);
-
-            _gamma = new FlatSlider
-            {
-                Minimum = VibranceEngine.MinGamma,
-                Maximum = VibranceEngine.MaxGamma,
-                Notch = 100,
-                Value = _engine.Gamma
-            };
-            _gamma.ValueChanged += (s, e) =>
-            {
-                _engine.Gamma = _gamma.Value;
-                _settings.GammaPercent = _gamma.Value;
-                InvalidateReadout(GammaReadout);
-                _saveDebounce.Trigger();
-            };
-            _gamma.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            _gamma.MouseUp += (s, e) => _engine.EndDrag();
-            Controls.Add(_gamma);
-
-            _eyeCare = new ToggleSwitch { Checked = _engine.EyeCare };
-            _eyeCare.CheckedChanged += (s, e) =>
-            {
-                _engine.EyeCare = _eyeCare.Checked;
-                _settings.EyeCare = _eyeCare.Checked;
-                _store.Save(_settings);
-            };
-            Controls.Add(_eyeCare);
-
-            Resize += (s, e) => LayoutContent();
-            HandleCreated += (s, e) => LayoutContent();
+            Resize += (_, _) => LayoutContent();
+            HandleCreated += (_, _) => LayoutContent();
         }
 
-        private void LayoutContent()
-                {
-                    _colW = Math.Min(560, Width - 80);
-                    _cx = (Width - _colW) / 2;
-                    // Dense packing - the whole page (100% + caption + saturation slider +
-                    // 0/100/200 scale + presets chips + 3 more sliders + eye care + 2 hotkey
-                    // pickers) must fit in 628 px (the default content-host height). All
-                    // spacing numbers below were tuned to fit exactly that - don't add any
-                    // new vertical gaps without removing one elsewhere first.
-                    int top = 8;
+        // ---- construction helpers ----------------------------------------------------
 
-                                _numberY = top;
-                                // The "100%" headline is drawn in a 84-px-tall box (NumberFont 46f,
-                                // centered). The SATURATION caption must sit BELOW that box or the
-                                // two overlap. top + 92 leaves a 0 px gap; top + 96 adds 4 px of
-                                // breathing room that matches the visual rhythm the original
-                                // 90-px gap (against the previous top of 128) used to provide.
-                                _captionY = top + 96;
-                                int sliderY = top + 120;
-                                _slider.SetBounds(_cx, sliderY, _colW, 32);
-                                _scaleY = sliderY + 34;
-                                _presetCapY = sliderY + 60;         // 60 (was 70) - tighter under-slider gap
-
-                                int chipW = (_colW - 3 * 10) / 4;
-                                int chipY = sliderY + 84;           // 84 (was 92) - tighter
-                                for (int i = 0; i < _chips.Count; i++)
-                                    _chips[i].SetBounds(_cx + i * (chipW + 10), chipY, chipW, 36);
-
-                                _vibCapY = chipY + 50;              // 50 (was 56)
-                                _vibrance.SetBounds(_cx, chipY + 70, _colW, 32);   // 70 (was 78)
-
-                                // Brightness, Gamma, then Eye care, then the two hotkey pickers at the
-                                // very bottom. Each band is 36 px tall (caption 16 + 4 gap + slider 32
-                                // overlaps caption by 16 - net 36).
-                                _brightCapY = chipY + 110;           // 110 (was 122)
-                                _brightness.SetBounds(_cx, chipY + 130, _colW, 32);  // 130 (was 144)
-
-                                _gammaCapY = chipY + 162;            // 162 (was 188) - pulls gamma row up so eye-care fits
-                                _gamma.SetBounds(_cx, chipY + 182, _colW, 32);    // 182 (was 210)
-
-                                _eyeY = chipY + 224;                // 224 (was 262) - tightens eye-care row
-                                _eyeCare.SetBounds(_cx + _colW - 44, _eyeY - 2, 44, 22);
-
-                                // Hotkey pickers - placed directly under eye-care with minimum gap.
-                                // Each picker is 40 px tall (picker Height), caption sits 4 px above it.
-                                int hotkeyW = 300;
-                                hotkeyW = Math.Max(HotkeyPicker.PickerMinimumSize.Width,
-                                    Math.Min(hotkeyW, _colW));
-                                int hotkeyH = HotkeyPicker.PickerDefaultSize.Height;
-                                int hotkeyX = _cx + (_colW - hotkeyW) / 2;
-
-                                _hotkeyCapY = _eyeY + 28;            // caption 28 px under eye-care row baseline
-                                _hotkeyPicker.SetBounds(hotkeyX, _hotkeyCapY + 16, hotkeyW, hotkeyH);
-
-                                _mainHotkeyCapY = _hotkeyCapY + 60;  // 60 (was 70) - tighter between two pickers
-                                _mainHotkeyPicker.SetBounds(hotkeyX, _mainHotkeyCapY + 16, hotkeyW, hotkeyH);
-
-                    Invalidate();
-                }
-
-        protected override void OnPaint(PaintEventArgs e)
+        private Label PageLabel(string text, Font font, Color colour)
         {
-            base.OnPaint(e); // particle-field background
-            var g = e.Graphics;
+            var l = new Label
+            {
+                Text = text,
+                Font = font,
+                ForeColor = colour,
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+            };
+            Controls.Add(l);
+            return l;
+        }
 
-            // Frosted-glass panel behind the content - the plexus shows through it, dimmed.
-            var panel = new RectangleF(_cx - 36, _numberY - 28, _colW + 72, 800);
-            Glass.PaintPanel(g, panel, 24, fillAlpha: 165);
+        private Label SectionLabel(string text)
+        {
+            var l = new Label
+            {
+                Text = UiHelpers.Spaced(text),
+                Font = Design.Fonts.Micro,
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+            };
+            _card.Controls.Add(l);
+            return l;
+        }
 
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        private Label CardLabel(string text)
+        {
+            var l = new Label
+            {
+                Text = text,
+                Font = Design.Fonts.Label,
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+            };
+            _card.Controls.Add(l);
+            return l;
+        }
 
-            TextRenderer.DrawText(g, $"{_slider.Value}%", NumberFont,
-                new Rectangle(_cx, _numberY, _colW, 84), Theme.Text,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        /// <summary>Build one slider row and wire it to the engine, the settings file and the
+        /// preset highlight in one place, so no row can quietly forget one of the three.</summary>
+        private SliderRow Row(string caption, int min, int max, int? notch, int value,
+            Action<int> apply, bool large = false, SliderPalette? palette = null,
+            Func<int, string>? format = null)
+        {
+            var row = new SliderRow(_card, caption, min, max, notch, value, large, palette, format);
 
-            TextRenderer.DrawText(g, UiHelpers.Spaced("SATURATION"), CaptionFont,
-                new Rectangle(_cx, _captionY, _colW, 16), Theme.TextDim, TextFormatFlags.HorizontalCenter);
+            row.Slider.ValueChanged += (_, _) =>
+            {
+                apply(row.Slider.Value);
+                _saveDebounce.Trigger();
 
-            TextRenderer.DrawText(g, "0", SmallFont, new Rectangle(_cx, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Left);
-            TextRenderer.DrawText(g, "100", SmallFont, new Rectangle(_cx, _scaleY, _colW, 14), Theme.TextDim, TextFormatFlags.HorizontalCenter);
-            TextRenderer.DrawText(g, "200", SmallFont, new Rectangle(_cx + _colW - 40, _scaleY, 40, 14), Theme.TextDim, TextFormatFlags.Right);
+                // The chip highlight is NOT recomputed here. It compares four values against
+                // four presets and can invalidate four transparent chips, all of which repaint
+                // the card's glass underneath them - per mouse-move, to answer a question whose
+                // answer only matters once the user has stopped moving. Settled on DragEnd.
+                if (!_dragging && !_applyingPreset) UpdateActiveChip();
+            };
 
-            TextRenderer.DrawText(g, UiHelpers.Spaced("PRESETS"), CaptionFont,
-                new Rectangle(_cx, _presetCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
+            // Suppress overlay writes for the duration of a drag: the thumb tracks the cursor
+            // from WinForms' own repaint, and the screen catches up in one write on release.
+            row.Slider.DragBegin += (_, _) => { _dragging = true; _engine.BeginDrag(); };
+            row.Slider.DragEnd += (_, _) =>
+            {
+                _dragging = false;
+                _engine.EndDrag();
+                UpdateActiveChip();
+            };
+            return row;
+        }
 
-            // ---- Vibrance (driver) ----
-            TextRenderer.DrawText(g, UiHelpers.Spaced("VIBRANCE"), CaptionFont,
-                new Rectangle(_cx, _vibCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
-            // Wider than the other readouts on purpose: when the driver is missing this says
-            // why, and "no NVIDIA GPU" was the wrong answer on every gaming laptop.
-            TextRenderer.DrawText(g,
-                VibranceStatus.Readout(_engine.DriverState, _vibrance.Value),
-                SmallFont, new Rectangle(_cx + _colW - 240, _vibCapY, 240, 16),
-                Theme.TextDim, TextFormatFlags.Right);
+        // ---- layout ------------------------------------------------------------------
 
-            // ---- Brightness calibration ----
-            TextRenderer.DrawText(g, UiHelpers.Spaced("BRIGHTNESS"), CaptionFont,
-                new Rectangle(_cx, _brightCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
-            TextRenderer.DrawText(g, $"{_brightness.Value}%", SmallFont,
-                new Rectangle(_cx + _colW - 50, _brightCapY, 50, 16), Theme.TextDim, TextFormatFlags.Right);
+        private void LayoutContent()
+        {
+            if (Width <= 0) return;
 
-            // ---- Gamma ----
-            TextRenderer.DrawText(g, UiHelpers.Spaced("GAMMA"), CaptionFont,
-                new Rectangle(_cx, _gammaCapY, 240, 16), Theme.TextDim, TextFormatFlags.Left);
-            TextRenderer.DrawText(g, $"{_gamma.Value / 100f:0.00}", SmallFont,
-                new Rectangle(_cx + _colW - 50, _gammaCapY, 50, 16), Theme.TextDim, TextFormatFlags.Right);
+            int cardW = Math.Max(Design.Tokens.Scale(520),
+                Width - 2 * PageMargin - SystemInformation.VerticalScrollBarWidth);
+            int innerW = cardW - 2 * CardPad;
+            int colW = (innerW - ColGap) / 2;
+            int leftX = CardPad;
+            int rightX = CardPad + colW + ColGap;
 
-            // ---- Eye care ----
-            TextRenderer.DrawText(g, "Eye care  (warm light)", RowFont,
-                new Rectangle(_cx, _eyeY, 300, 20), Theme.Text, TextFormatFlags.Left);
+            // Title box is sized from the font, not from a number that happened to fit the
+            // old one. At 30px the 'p' and 'y' descenders in "Display" were being sliced off.
+            _title.SetBounds(PageMargin, Design.Tokens.Scale(16), cardW, Design.Tokens.Scale(38));
+            _subtitle.SetBounds(PageMargin, Design.Tokens.Scale(56), cardW, Design.Tokens.Scale(22));
 
-            // ---- Quick hotkey vibrance (last element on the page) ----
-            // Lowercase, regular weight - not the all-caps style of the slider
-            // captions, since this is a small one-shot config row rather than a
-            // primary control section.
-            TextRenderer.DrawText(g, "Quick hotkey vibrance", SmallFont,
-                new Rectangle(_cx, _hotkeyCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
+            int cardTop = Design.Tokens.Scale(86);
+            int y = CardPad;
 
-            // ---- Main window hotkey (one row below the popup hotkey) ----
-            TextRenderer.DrawText(g, "Open main window", SmallFont,
-                new Rectangle(_cx, _mainHotkeyCapY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
+            // ---- primary: the two headline sliders, side by side and larger ----
+            _primaryLabel.SetBounds(leftX, y, innerW, SectionLabelH);
+            y += SectionLabelH + Design.Tokens.Scale(8);
+            _saturation.Place(leftX, y, colW);
+            _vibrance.Place(rightX, y, colW);
+            y += SliderRow.LargeRowHeight + SectionGap;
+
+            // ---- fine tune: 2x2 of the smaller controls ----
+            //
+            // The label stops short of the Reset button rather than running the full inner
+            // width. It used to span the whole row with the button sitting inside it, and
+            // because the label is transparent and added to the card first, it painted over
+            // the button - which is why Reset showed up as an empty outline with no text.
+            _fineLabel.SetBounds(leftX, y, innerW - ResetW - Design.Tokens.Scale(Design.Tokens.S), SectionLabelH);
+            _resetFine.SetBounds(leftX + innerW - ResetW, y - Design.Tokens.Scale(4), ResetW, ResetH);
+            y += SectionLabelH + Design.Tokens.Scale(6);
+            _brightness.Place(leftX, y, colW);
+            _gamma.Place(rightX, y, colW);
+            y += SliderRow.RowHeight;
+            _contrast.Place(leftX, y, colW);
+            _temperature.Place(rightX, y, colW);
+            y += SliderRow.RowHeight + SectionGap;
+
+            // ---- scene presets: compact chips, under the controls they drive ----
+            _presetsLabel.SetBounds(leftX, y, innerW, SectionLabelH);
+            y += SectionLabelH + Design.Tokens.Scale(8);
+
+            int chipW = (innerW - (_chips.Count - 1) * ChipGap) / Math.Max(1, _chips.Count);
+            for (int i = 0; i < _chips.Count; i++)
+                _chips[i].SetBounds(leftX + i * (chipW + ChipGap), y, chipW, ChipHeight);
+            y += ChipHeight + SectionGap;
+
+            // ---- shortcuts ----
+            _shortcutsLabel.SetBounds(leftX, y, innerW, SectionLabelH);
+            y += SectionLabelH + Design.Tokens.Scale(6);
+
+            int pickerH = Design.Tokens.Scale(HotkeyPicker.PickerDefaultSize.Height);
+            _popupHotkeyLabel.SetBounds(leftX, y, colW, Design.Tokens.Scale(18));
+            _mainHotkeyLabel.SetBounds(rightX, y, colW, Design.Tokens.Scale(18));
+            y += Design.Tokens.Scale(20);
+            _hotkeyPicker.SetBounds(leftX, y, colW, pickerH);
+            _mainHotkeyPicker.SetBounds(rightX, y, colW, pickerH);
+            y += pickerH;
+
+            // The card ends where its contents do, plus the same padding it started with.
+            _card.SetBounds(PageMargin, cardTop, cardW, y + CardPad);
+
+            // Scroll extent covers the header band, the card and a margin underneath.
+            AutoScrollMinSize = new Size(0, cardTop + _card.Height + PageMargin);
+        }
+
+        // ---- behaviour ---------------------------------------------------------------
+
+        private void ApplyPreset(DisplayPreset preset)
+        {
+            // One flag around the whole set: each slider's ValueChanged would otherwise
+            // recompute the highlight against a half-applied preset and clear it.
+            // Saturation and vibrance are deliberately untouched: they are the user's own
+            // taste, and a preset that reset them would throw that away on every biome change.
+            _applyingPreset = true;
+            try
+            {
+                _brightness.Slider.Value = preset.Brightness;
+                _gamma.Slider.Value = preset.Gamma;
+                _contrast.Slider.Value = preset.Contrast;
+                _temperature.Slider.Value = preset.Temperature;
+            }
+            finally
+            {
+                _applyingPreset = false;
+            }
+
+            RefreshReadouts();
+            UpdateActiveChip();
+            _store.Save(_settings);
+        }
+
+        /// <summary>Put the four tone controls back to neutral, leaving saturation and
+        /// vibrance - the user's own look - exactly where they are.</summary>
+        private void ResetFineTune()
+        {
+            _applyingPreset = true;
+            try
+            {
+                _brightness.Slider.Value = 100;
+                _gamma.Slider.Value = 100;
+                _contrast.Slider.Value = 100;
+                _temperature.Slider.Value = 0;
+            }
+            finally { _applyingPreset = false; }
+
+            RefreshReadouts();
+            UpdateActiveChip();
+            _store.Save(_settings);
         }
 
         private void UpdateActiveChip()
         {
-            // A preset lights up only when BOTH controls still match it - Natural and
-            // Standard share saturation 100 and differ only in vibrance.
             for (int i = 0; i < _chips.Count; i++)
-            {
-                var (vib, sat) = _presetValues[i];
-                _chips[i].Active = _vibrance.Value == vib && _slider.Value == sat;
-            }
+                _chips[i].Active = _presets[i].Matches(
+                    _brightness.Slider.Value, _gamma.Slider.Value,
+                    _contrast.Slider.Value, _temperature.Slider.Value);
         }
+
+        /// <summary>Re-read every readout. Only for programmatic changes (a preset, a load,
+        /// the tray reset) - a moving slider updates its own row and nothing else.</summary>
+        private void RefreshReadouts()
+        {
+            foreach (var row in new[] { _saturation, _vibrance, _brightness, _gamma, _contrast, _temperature })
+                row.SyncValueText();
+        }
+
+        /// <summary>A bare signed number means nothing here; the direction is the point.</summary>
+        internal static string TemperatureText(int value) => value switch
+        {
+            0 => "Neutral",
+            < 0 => $"Cool {-value}",
+            _ => $"Warm {value}",
+        };
 
         public new void Refresh()
         {
-            _slider.Value = _engine.Saturation;
-            _vibrance.Value = _engine.Vibrance;
-            _brightness.Value = _engine.Brightness;
-            _gamma.Value = _engine.Gamma;
-            _eyeCare.Checked = _engine.EyeCare;
+            _saturation.Slider.Value = _engine.Saturation;
+            _vibrance.Slider.Value = _engine.Vibrance;
+            _brightness.Slider.Value = _engine.Brightness;
+            _gamma.Slider.Value = _engine.Gamma;
+            _contrast.Slider.Value = _engine.Contrast;
+            _temperature.Slider.Value = _engine.Temperature;
+
             _hotkeyPicker.ModifierMask = _settings.HotkeyModifierMask;
             _hotkeyPicker.VirtualKey = _settings.HotkeyVirtualKey;
             _mainHotkeyPicker.ModifierMask = _settings.MainHotkeyModifierMask;
             _mainHotkeyPicker.VirtualKey = _settings.MainHotkeyEnabled ? _settings.MainHotkeyVirtualKey : 0;
+
+            RefreshReadouts();
             UpdateActiveChip();
             Invalidate();
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _saveDebounce.Dispose();
+            if (disposing)
+            {
+                _saveDebounce.Dispose();
+                _presetTips.Dispose();
+            }
             base.Dispose(disposing);
         }
     }
