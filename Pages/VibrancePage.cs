@@ -60,6 +60,11 @@ namespace VibranceHud.Pages
         private readonly HotkeyPicker _hotkeyPicker, _mainHotkeyPicker;
 
         private readonly GlassButton _resetFine;
+
+        // ---- share ----
+        private readonly Label _shareLabel, _shareHint, _shareStatus;
+        private readonly TextBox _codeBox;
+        private readonly GlassButton _copyCode, _applyCode;
         private readonly List<PresetChip> _chips = new();
         private readonly List<DisplayPreset> _presets = new();
         private readonly ToolTip _presetTips = new() { InitialDelay = 350, ReshowDelay = 120 };
@@ -190,6 +195,38 @@ namespace VibranceHud.Pages
                 MainHotkeyChanged?.Invoke(mask, vk, true);
             };
             _card.Controls.Add(_mainHotkeyPicker);
+
+            // ---- share ----
+            //
+            // Lives here rather than at the bottom of Settings, where it used to be. It
+            // describes the sliders on this page, and nobody was finding it three cards down
+            // a different tab - which matters, because a code passed between friends is how
+            // the app spreads.
+            _shareLabel = SectionLabel("SHARE");
+            _shareHint = CardLabel("Paste a friend's code to get their exact look, or copy yours to send.");
+
+            _codeBox = new TextBox
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Theme.Background,
+                ForeColor = Theme.Text,
+                Font = new Font("Consolas", 10f),
+                CharacterCasing = CharacterCasing.Upper,
+                // An empty monospace box next to a button called Apply says nothing about
+                // what belongs in it.
+                PlaceholderText = "PX-XXXXXXXXX",
+            };
+            _card.Controls.Add(_codeBox);
+
+            _copyCode = new GlassButton { Text = "Copy my code", Kind = GlassButtonKind.Ghost };
+            _copyCode.Click += (_, _) => CopyMyCode();
+            _card.Controls.Add(_copyCode);
+
+            _applyCode = new GlassButton { Text = "Apply", Kind = GlassButtonKind.Primary };
+            _applyCode.Click += (_, _) => ApplyCode();
+            _card.Controls.Add(_applyCode);
+
+            _shareStatus = CardLabel("");
 
             RefreshReadouts();
             UpdateActiveChip();
@@ -340,7 +377,31 @@ namespace VibranceHud.Pages
             y += Design.Tokens.Scale(20);
             _hotkeyPicker.SetBounds(leftX, y, colW, pickerH);
             _mainHotkeyPicker.SetBounds(rightX, y, colW, pickerH);
-            y += pickerH;
+            y += pickerH + SectionGap;
+
+            // ---- share ----
+            _shareLabel.SetBounds(leftX, y, innerW, SectionLabelH);
+            y += SectionLabelH + Design.Tokens.Scale(4);
+
+            _shareHint.SetBounds(leftX, y, innerW, Design.Tokens.Scale(20));
+            y += Design.Tokens.Scale(26);
+
+            int btnH = Design.Tokens.Scale(30);
+            int applyW = Design.Tokens.Scale(84);
+            int copyW = Design.Tokens.Scale(120);
+            int gap = Design.Tokens.Scale(Design.Tokens.S);
+            int boxW = innerW - applyW - copyW - 2 * gap;
+
+            // The box is a stock TextBox, which centres its own text vertically inside a
+            // height it picks from the font. Matching the buttons' height would leave the
+            // caret sitting high, so it keeps its natural height and is centred against them.
+            _codeBox.SetBounds(leftX, y + (btnH - _codeBox.Height) / 2, boxW, _codeBox.Height);
+            _copyCode.SetBounds(leftX + boxW + gap, y, copyW, btnH);
+            _applyCode.SetBounds(leftX + boxW + copyW + 2 * gap, y, applyW, btnH);
+            y += btnH + Design.Tokens.Scale(6);
+
+            _shareStatus.SetBounds(leftX, y, innerW, Design.Tokens.Scale(20));
+            y += Design.Tokens.Scale(20);
 
             // The card ends where its contents do, plus the same padding it started with.
             _card.SetBounds(PageMargin, cardTop, cardW, y + CardPad);
@@ -392,6 +453,72 @@ namespace VibranceHud.Pages
             RefreshReadouts();
             UpdateActiveChip();
             _store.Save(_settings);
+        }
+
+        // ---- share ----------------------------------------------------------------------
+
+        /// <summary>Everything on this page, as one code.</summary>
+        private ProfileCode CurrentLook() => new(
+            _engine.Vibrance, _engine.Saturation, _engine.Brightness, _engine.Gamma,
+            _engine.Contrast, _engine.Temperature);
+
+        private void CopyMyCode()
+        {
+            var code = ProfileCode.Encode(CurrentLook());
+            _codeBox.Text = code;
+
+            // Another process holding the clipboard open makes SetText throw, and that was an
+            // unhandled exception on a button click - the crash dialog - for something as
+            // ordinary as a clipboard manager being busy. The code is in the box either way,
+            // so the user can still copy it by hand.
+            try
+            {
+                Clipboard.SetText(code);
+                SetShareStatus(code + "  —  copied, paste it anywhere", ok: true);
+            }
+            catch
+            {
+                SetShareStatus("Couldn't reach the clipboard — copy the code above.", ok: false);
+            }
+        }
+
+        private void ApplyCode()
+        {
+            if (!ProfileCode.TryDecode(_codeBox.Text, out var incoming))
+            {
+                // Never half-apply. A wrong character means we don't know what they meant,
+                // and guessing lands someone on a stranger's screen.
+                SetShareStatus("That code isn't right — check it and try again.", ok: false);
+                return;
+            }
+
+            // Driven through the sliders rather than straight at the engine, because the
+            // sliders are on this page. Setting the engine alone would change the screen and
+            // leave every control showing the old numbers - which is what made this feature
+            // safe to hide at the bottom of Settings and wrong to move here unchanged.
+            _applyingPreset = true;
+            try
+            {
+                _saturation.Slider.Value = incoming.Saturation;
+                _vibrance.Slider.Value = incoming.Vibrance;
+                _brightness.Slider.Value = incoming.Brightness;
+                _gamma.Slider.Value = incoming.Gamma;
+                _contrast.Slider.Value = incoming.Contrast;
+                _temperature.Slider.Value = incoming.Temperature;
+            }
+            finally { _applyingPreset = false; }
+
+            RefreshReadouts();
+            UpdateActiveChip();
+            _store.Save(_settings);
+
+            SetShareStatus("Applied — that's their exact look.", ok: true);
+        }
+
+        private void SetShareStatus(string text, bool ok)
+        {
+            _shareStatus.ForeColor = ok ? Theme.TextDim : Theme.Accent;
+            _shareStatus.Text = text;
         }
 
         private void UpdateActiveChip()

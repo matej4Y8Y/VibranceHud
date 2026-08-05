@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.Windows.Forms;
 using VibranceHud.Controls;
@@ -272,7 +272,7 @@ namespace VibranceHud.Pages
                 TextAlign = ContentAlignment.MiddleRight
             };
 
-            var chooseBtn = FlatButton("Choose image…", 18, 62, 150);
+            var chooseBtn = FlatButton("Choose imageâ€¦", 18, 62, 150);
             var clearBtn = FlatButton("Remove", 178, 62, 100);
 
             var dimCaption = UiHelpers.Caption("DIM", 18, 92, 120);
@@ -515,7 +515,7 @@ namespace VibranceHud.Pages
                     if (go != DialogResult.Yes) return;
 
                     testBtn.Enabled = false;
-                    testBtn.Text = "Measuring…";
+                    testBtn.Text = "Measuringâ€¦";
                     result.ForeColor = Theme.TextDim;
                     result.Text = "Measuring - leave the screen alone for a few seconds.";
 
@@ -561,116 +561,12 @@ namespace VibranceHud.Pages
             }
 
             // ---- Share ----
-            if (engine != null)
-            {
-                var share = Card(150);
-                share.Controls.Add(UiHelpers.Caption("SHARE", 18, 16, 200));
-                share.Controls.Add(new Label
-                {
-                    Text = "Send someone your exact colours, or paste theirs.",
-                    ForeColor = Theme.TextDim,
-                    BackColor = Color.Transparent,
-                    Location = new Point(18, 44),
-                    Size = new Size(width - 40, 20),
-                });
-
-                var codeBox = new TextBox
-                {
-                    Location = new Point(18, 72),
-                    Size = new Size(width - 210, 26),
-                    BorderStyle = BorderStyle.FixedSingle,
-                    BackColor = Theme.Background,
-                    ForeColor = Theme.Text,
-                    Font = new Font("Consolas", 10f),
-                    CharacterCasing = CharacterCasing.Upper,
-                    // An empty monospace box next to a button called Apply says nothing about
-                    // what belongs in it.
-                    PlaceholderText = "PX-XXXXXXXXX",
-                };
-                share.Controls.Add(codeBox);
-
-                var copy = new GlassButton
-                {
-                    Text = "Copy mine",
-                    Location = new Point(width - 184, 71),
-                    Size = new Size(86, 28),
-                };
-                share.Controls.Add(copy);
-
-                // Primary: the one action on this card that does something to your screen.
-                var apply = new GlassButton
-                {
-                    Text = "Apply",
-                    Kind = GlassButtonKind.Primary,
-                    Location = new Point(width - 92, 71),
-                    Size = new Size(74, 28),
-                };
-                share.Controls.Add(apply);
-
-                var shareStatus = new Label
-                {
-                    ForeColor = Theme.TextDim,
-                    BackColor = Color.Transparent,
-                    Location = new Point(18, 108),
-                    Size = new Size(width - 40, 20),
-                };
-                share.Controls.Add(shareStatus);
-
-                copy.Click += (s2, e2) =>
-                {
-                    var code = ProfileCode.Encode(new ProfileCode(
-                        engine.Vibrance, engine.Saturation, engine.Brightness, engine.Gamma,
-                        engine.Contrast, engine.Temperature));
-                    codeBox.Text = code;
-                    // Another process holding the clipboard open makes SetText throw. That
-                    // was an unhandled exception on a button click - i.e. the crash dialog -
-                    // for something as ordinary as a clipboard manager being busy. The code
-                    // is in the box either way, so the user can still copy it by hand.
-                    try
-                    {
-                        Clipboard.SetText(code);
-                        shareStatus.ForeColor = Theme.TextDim;
-                        shareStatus.Text = code + "  -  copied, paste it anywhere";
-                    }
-                    catch
-                    {
-                        shareStatus.ForeColor = Theme.Accent;
-                        shareStatus.Text = "Couldn't reach the clipboard - copy the code above.";
-                    }
-                };
-
-                apply.Click += (s2, e2) =>
-                {
-                    if (!ProfileCode.TryDecode(codeBox.Text, out var incoming))
-                    {
-                        // Never half-apply. A wrong character means we don't know what they
-                        // meant, and guessing lands someone on a stranger's screen.
-                        shareStatus.ForeColor = Theme.Accent;
-                        shareStatus.Text = "That code isn't right - check it and try again.";
-                        return;
-                    }
-
-                    engine.Vibrance = incoming.Vibrance;
-                    engine.Saturation = incoming.Saturation;
-                    engine.Brightness = incoming.Brightness;
-                    engine.Gamma = incoming.Gamma;
-                    engine.Contrast = incoming.Contrast;
-                    engine.Temperature = incoming.Temperature;
-
-                    _settings.VibrancePercent = incoming.Vibrance;
-                    _settings.SaturationPercent = incoming.Saturation;
-                    _settings.BrightnessPercent = incoming.Brightness;
-                    _settings.GammaPercent = incoming.Gamma;
-                    _settings.ContrastPercent = incoming.Contrast;
-                    _settings.Temperature = incoming.Temperature;
-                    _store.Save(_settings);
-
-                    shareStatus.ForeColor = Theme.TextDim;
-                    shareStatus.Text = "Applied.";
-                };
-
-                Controls.Add(share);
-            }
+            //
+            // Moved to the Display page, where the sliders it describes actually live.
+            // Three cards down a different tab is not where anyone looked for it, and a code
+            // passed between friends is how this app spreads - so being findable is the whole
+            // feature. Deliberately not duplicated here: two controls writing the same
+            // settings is how they drift apart.
 
             // ---- About ---- (last, so the version and the Discord link close the page)
             var about = Card(150);
