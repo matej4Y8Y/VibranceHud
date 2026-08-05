@@ -90,15 +90,30 @@ namespace VibranceHud
                 "Your vibrance is being applied by the graphics driver, after recording software "
                 + "has already read the screen. Turn this on to move it somewhere they can see it.",
 
-            // Says what has been observed on real machines, and gives the one instruction that
-            // actually changes the outcome. The previous wording here told everyone on this
-            // path that recording their colours was impossible on any PC - which was wrong,
-            // and was talking people out of a feature that works.
+            // Split by driver, because the two cases genuinely differ and the earlier single
+            // message was wrong for half of them.
+            //
+            // With an NVIDIA driver most of the colour is applied by the driver itself, and
+            // that reaches everything - Discord screen share included, confirmed on a GTX
+            // 1660. Without one, every bit of it is the software matrix, which OBS sees and
+            // Discord does not - confirmed on an RX 6800 with vibrance 192 / saturation 163.
+            //
+            // Telling an NVIDIA user their screen share won't show their colours is the same
+            // class of mistake as the message this replaced: discouraging somebody from a
+            // feature that already works for them.
+            CaptureState.DependsOnCaptureMethod when driverVibranceAvailable =>
+                "Recordings and screen share both show your colours — most of it comes from "
+                + "your NVIDIA driver, which every capture path can see.\n\n"
+                + "Saturation pushed past 100 is done in software, and that part reaches OBS "
+                + "but not Discord screen share.",
+
             CaptureState.DependsOnCaptureMethod =>
                 "OBS records your colours with its default Display Capture settings — confirmed "
-                + "on both NVIDIA and AMD. If they don't appear, open your Display Capture "
-                + "source and set Capture Method to \"Windows 10 (1903 and up)\".\n\n"
-                + "Discord screen share reads the screen a different way and won't show them.",
+                + "on AMD. If they don't appear, open your Display Capture source and set "
+                + "Capture Method to \"Windows 10 (1903 and up)\".\n\n"
+                + "Discord screen share reads the screen a different way and won't show them. "
+                + "Your card has no driver-level colour for PlexusX to use yet, which is what "
+                + "would fix that.",
 
             // Visible, but for two quite different reasons worth distinguishing.
             _ => driverVibranceAvailable

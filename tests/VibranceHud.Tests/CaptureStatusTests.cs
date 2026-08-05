@@ -106,7 +106,7 @@ namespace VibranceHud.Tests
         /// <summary>The one instruction that changes the outcome for someone whose colours
         /// aren't showing up. Without it the message is just bad news.</summary>
         [Fact]
-        public void The_fallback_tells_them_which_capture_method_to_use()
+        public void Someone_with_no_driver_is_told_which_capture_method_to_use()
         {
             var reason = CaptureStatus.Reason(CaptureState.DependsOnCaptureMethod, driverVibranceAvailable: false);
 
@@ -114,6 +114,24 @@ namespace VibranceHud.Tests
             Assert.Contains("1903", reason);
             // And is honest about the one place it genuinely doesn't work.
             Assert.Contains("Discord", reason);
+        }
+
+        /// <summary>
+        /// An NVIDIA user's colour is mostly applied by the driver, and that reaches every
+        /// capture path including Discord screen share - measured on a GTX 1660. Telling them
+        /// screen share won't work repeats the same mistake as the message this replaced:
+        /// talking somebody out of a feature that already works for them.
+        /// </summary>
+        [Fact]
+        public void Someone_with_a_driver_is_not_told_their_screen_share_is_broken()
+        {
+            var reason = CaptureStatus.Reason(CaptureState.DependsOnCaptureMethod, driverVibranceAvailable: true);
+
+            Assert.DoesNotContain("won't show them", reason);
+            Assert.Contains("screen share", reason);
+
+            // Still honest that the software part above the driver's ceiling is different.
+            Assert.Contains("software", reason);
         }
 
         [Fact]

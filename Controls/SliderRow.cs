@@ -115,6 +115,24 @@ namespace VibranceHud
             if (_format != null) ValueText = _format(Slider.Value);
         }
 
+        /// <summary>
+        /// Show or hide the whole row.
+        ///
+        /// All three pieces together, because they are separate controls on the card rather
+        /// than one container - hiding the slider alone would leave its caption and readout
+        /// floating over whatever moved up to fill the space.
+        /// </summary>
+        public bool Visible
+        {
+            get => Slider.Visible;
+            set
+            {
+                _caption.Visible = value;
+                _value.Visible = value;
+                Slider.Visible = value;
+            }
+        }
+
         /// <summary>The reading shown at the right of the caption row.</summary>
         public string ValueText
         {
