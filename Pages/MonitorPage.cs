@@ -39,6 +39,8 @@ namespace VibranceHud.Pages
         /// <summary>Holds the refresh-rate chips. Rebuilt on every resolution change, since
         /// which rates exist depends entirely on the mode that is live.</summary>
         private Panel? _rateRow;
+
+        private TextBox _customWidth = null!, _customHeight = null!;
         private Label _status = null!;
         private Label _ruleCaption = null!;
 
@@ -78,6 +80,7 @@ namespace VibranceHud.Pages
             y += 68;
 
             y = BuildNowCard(y);
+            y = BuildPvpCard(y);
             y = BuildHdrCard(y);
             y = BuildPerGameCard(y);
 
@@ -256,6 +259,169 @@ namespace VibranceHud.Pages
                 _rateRow.Controls.Add(chip);
                 x += 92;
             }
+        }
+
+        // ---- PvP presets + custom ------------------------------------------------------
+
+        /// <summary>
+        /// The three resolutions competitive players actually use, plus a box for anything
+        /// else.
+        ///
+        /// Each preset states its trade-off rather than being sold as a free upgrade. There
+        /// is no resolution that is best in every game - the 4:3 options buy wider-looking
+        /// player models and more frames by giving up horizontal field of view, and whether
+        /// that is a good deal depends on the game and the player.
+        /// </summary>
+        private int BuildPvpCard(int y)
+        {
+            var card = new CardPanel { Location = new Point(Pad, y), Size = new Size(CardW, 10) };
+            card.Controls.Add(UiHelpers.Caption("PVP PRESETS", Gutter, 16, 260));
+
+            int rowY = 42;
+            foreach (var preset in PvpResolutions.All)
+            {
+                var apply = new GlassButton
+                {
+                    Text = $"{preset.Width} x {preset.Height}",
+                    Kind = GlassButtonKind.Ghost,
+                    Location = new Point(Gutter, rowY),
+                    Size = new Size(150, 32),
+                };
+                var captured = preset;
+                apply.Click += (_, _) => ApplyPvp(captured);
+                card.Controls.Add(apply);
+
+                card.Controls.Add(new Label
+                {
+                    Text = $"{preset.Name}  ({preset.Aspect})",
+                    ForeColor = Theme.Text,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 9f, FontStyle.Bold),
+                    Location = new Point(Gutter + 164, rowY),
+                    AutoSize = true,
+                });
+
+                card.Controls.Add(new Label
+                {
+                    Text = preset.Why + "  " + preset.TradeOff,
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8f),
+                    Location = new Point(Gutter + 164, rowY + 18),
+                    Size = new Size(CardW - Gutter * 2 - 164, 30),
+                });
+
+                rowY += 62;
+            }
+
+            // Said once, under all three, because it is the single most common reason
+            // somebody decides these presets are broken.
+            card.Controls.Add(new Label
+            {
+                Text = PvpResolutions.StretchNote,
+                ForeColor = Color.FromArgb(240, 180, 90),
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8f),
+                Location = new Point(Gutter, rowY),
+                Size = new Size(CardW - Gutter * 2, 30),
+            });
+            rowY += 38;
+
+            // ---- custom ----
+            card.Controls.Add(UiHelpers.Caption("CUSTOM", Gutter, rowY, 200));
+            rowY += 24;
+
+            _customWidth = NumberBox(Gutter, rowY, "Width");
+            _customHeight = NumberBox(Gutter + 96, rowY, "Height");
+            card.Controls.Add(_customWidth);
+            card.Controls.Add(_customHeight);
+
+            var applyCustom = new GlassButton
+            {
+                Text = "Apply",
+                Kind = GlassButtonKind.Primary,
+                Location = new Point(Gutter + 192, rowY - 1),
+                Size = new Size(90, 30),
+            };
+            applyCustom.Click += (_, _) => ApplyCustom();
+            card.Controls.Add(applyCustom);
+
+            card.Controls.Add(new Label
+            {
+                Text = "Anything your monitor reports. If it refuses one, nothing changes.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8f),
+                Location = new Point(Gutter + 292, rowY + 6),
+                AutoSize = true,
+            });
+
+            card.Height = rowY + 48;
+            Controls.Add(card);
+            return y + card.Height + 20;
+        }
+
+        private static TextBox NumberBox(int x, int y, string placeholder) => new()
+        {
+            Location = new Point(x, y),
+            Size = new Size(86, 26),
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = Theme.Background,
+            ForeColor = Theme.Text,
+            Font = new Font("Consolas", 9.5f),
+            PlaceholderText = placeholder,
+            MaxLength = 5,
+        };
+
+        private void ApplyPvp(PvpResolution preset)
+        {
+            if (DisplayController.Apply(preset.Width, preset.Height))
+            {
+                SetStatus(preset.NeedsStretching
+                    ? $"Switched to {preset.Width} x {preset.Height}. If you see black bars, "
+                      + "turn on full-panel scaling in your graphics driver."
+                    : $"Switched to {preset.Width} x {preset.Height}.",
+                    Theme.TextDim);
+            }
+            else
+            {
+                SetStatus($"Your monitor doesn't offer {preset.Width} x {preset.Height} - nothing changed.",
+                    Theme.Accent);
+            }
+
+            SyncCurrent();
+        }
+
+        /// <summary>
+        /// Apply a typed resolution.
+        ///
+        /// Validated before it reaches the driver, and DisplayController refuses anything the
+        /// monitor never reported. Applying an unreported mode is how somebody ends up staring
+        /// at a black screen with no way back to change it.
+        /// </summary>
+        private void ApplyCustom()
+        {
+            if (!int.TryParse(_customWidth.Text.Trim(), out int w) ||
+                !int.TryParse(_customHeight.Text.Trim(), out int h) ||
+                w < 640 || h < 480 || w > 15360 || h > 8640)
+            {
+                SetStatus("Enter a width and height - something like 1440 and 1080.", Theme.Accent);
+                return;
+            }
+
+            if (!DisplayModes.IsSupported(DisplayController.SupportedModes(), w, h))
+            {
+                SetStatus($"Your monitor doesn't report {w} x {h}, so PlexusX won't try it.",
+                    Theme.Accent);
+                return;
+            }
+
+            if (DisplayController.Apply(w, h))
+                SetStatus($"Switched to {w} x {h}.", Theme.TextDim);
+            else
+                SetStatus($"Your monitor refused {w} x {h} - nothing changed.", Theme.Accent);
+
+            SyncCurrent();
         }
 
         // ---- HDR ---------------------------------------------------------------------

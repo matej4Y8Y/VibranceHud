@@ -357,7 +357,9 @@ namespace VibranceHud
 
             var elapsed = Math.Min((DateTime.UtcNow - _last).TotalSeconds, 0.1);
 
-            if (_userInteracting) { _last = DateTime.UtcNow; return; }
+            // Belt and braces alongside stopping the timer in WM_ENTERSIZEMOVE: a tick can
+            // already be queued when the drag starts.
+            if (_userInteracting || _movingOrSizing) { _last = DateTime.UtcNow; return; }
 
             var now = DateTime.UtcNow;
             _field.Update(elapsed);
@@ -646,10 +648,38 @@ namespace VibranceHud
         /// in the tray), so surface this window instead of leaving them thinking
         /// nothing happened. See <see cref="SingleInstance"/>.
         /// </summary>
+        private const int WM_ENTERSIZEMOVE = 0x0231;
+        private const int WM_EXITSIZEMOVE = 0x0232;
+
+        /// <summary>True while the user is dragging or resizing the window.</summary>
+        private bool _movingOrSizing;
+
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == SingleInstance.ShowWindowMessage && SingleInstance.ShowWindowMessage != 0)
                 ShowAndFocus();
+
+            // Stop animating while the window is being dragged or resized.
+            //
+            // The window is translucent by default, which makes it a LAYERED window, and
+            // Windows moves those far more expensively than an opaque one - every frame is
+            // composited rather than blitted. Running the particle field on top of that, which
+            // invalidates the title bar, the nav and the whole current page on every tick,
+            // is what made dragging feel like it was running at twenty frames a second.
+            //
+            // The field is decoration. Freezing it for the second somebody spends moving the
+            // window costs nothing and gives that whole frame budget back to the move itself.
+            if (m.Msg == WM_ENTERSIZEMOVE)
+            {
+                _movingOrSizing = true;
+                _timer.Stop();
+            }
+            else if (m.Msg == WM_EXITSIZEMOVE)
+            {
+                _movingOrSizing = false;
+                _last = DateTime.UtcNow;   // don't advance the field by the whole drag
+                _timer.Start();
+            }
 
             // Report a resize border to Windows. A borderless form gets none for free, which
             // is why this window could never be resized despite every page carrying Anchor
