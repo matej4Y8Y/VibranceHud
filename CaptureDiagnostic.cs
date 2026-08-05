@@ -167,6 +167,15 @@ namespace VibranceHud
             sb.AppendLine($"composited   : {(settings.KeepDesktopComposited ? "forced on" : "off")}");
             sb.AppendLine($"streaming    : {(settings.StreamingMode ? "on" : "off")}");
             sb.AppendLine($"vibrance/sat : {settings.VibrancePercent} / {settings.SaturationPercent}");
+
+            // What the machine was actually measured to do. Without these lines a report
+            // could not distinguish "the feature is broken" from "this PC won't run it",
+            // which is the confusion that cost us a release cycle over screen capture.
+            var caps = Capabilities.Machine.Current;
+            sb.AppendLine($"gamma ramp   : {caps.GammaRamp}");
+            sb.AppendLine($"hdr          : {(caps.HdrActive ? "ON" : "off")}");
+            sb.AppendLine($"monitors     : {caps.MonitorCount}{(caps.MixedDpi ? " (mixed scaling)" : "")}");
+            sb.AppendLine($"elevated     : {(caps.Elevated ? "yes" : "no")}");
             sb.AppendLine();
 
             if (!probe.Ran)

@@ -164,6 +164,15 @@ namespace VibranceHud
             _settings.VibrancePercent = _engine.Vibrance;
             _settings.SaturationPercent = _engine.Saturation;
 
+            // Measure the machine BEFORE applying the user's colours.
+            //
+            // The probe writes a test curve to the screen and reads it back, so it has to run
+            // while the screen is still neutral - doing it afterwards would flicker the user's
+            // own settings and then restore them. It also has to run before the window is
+            // built, so capability-dependent controls are styled correctly the first time
+            // rather than correcting themselves a moment later.
+            Capabilities.Machine.Measure(_engine.DriverAvailable, _settings.OverlayMode);
+
             // The advanced grade. Carries gamma with it, so this also covers the standalone
             // gamma setting - ResolvedTone takes it from GammaPercent so the two cannot drift.
             // A settings file written before advanced colour existed resolves to neutral,
