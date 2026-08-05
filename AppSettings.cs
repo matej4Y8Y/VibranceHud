@@ -126,6 +126,11 @@ namespace VibranceHud
         /// <summary>The user's named crosshairs, switched manually.</summary>
         public System.Collections.Generic.List<Crosshair.CrosshairConfig> SavedCrosshairs { get; set; } = new();
 
+        /// <summary>Gallery entries the user hearted, by id. They sort to the top of the grid,
+        /// so somebody who has found their two or three does not scroll past thirty every
+        /// time.</summary>
+        public System.Collections.Generic.List<string> FavouriteCrosshairs { get; set; } = new();
+
         // ---- NVIDIA driver tweaks (Rust) ----
 
         /// <summary>Ids of the NVIDIA driver tweaks currently applied to Rust's profile.</summary>

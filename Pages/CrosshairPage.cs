@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
+using VibranceHud.Controls;
 using VibranceHud.Crosshair;
 
 namespace VibranceHud.Pages
@@ -26,16 +27,35 @@ namespace VibranceHud.Pages
         private readonly Label _status;
         private readonly List<ChipButton> _shapes = new();
 
+        /// <summary>
+        /// Two rows of cells, scrollable.
+        ///
+        /// Deliberately not the whole catalogue on screen at once. The presets are a starting
+        /// point, not the feature - what people actually want from this page is control over
+        /// their own crosshair, and a wall of thirty thumbnails pushes every one of those
+        /// controls below the fold.
+        /// </summary>
+        private const int GalleryHeight = 190;
+        private const int CellW = 84, CellH = 82, CellGap = 8;
+
+        private Panel _galleryHost = null!;
+        private readonly List<CrosshairCell> _cells = new();
+
         // Held so a preset - or loading a saved crosshair - can drive them. Without this the
         // config changes and every readout keeps showing the old number, because each slider
         // captured its starting value when it was built.
         private FlatSlider _sizeSlider = null!, _thicknessSlider = null!, _gapSlider = null!;
+        private FlatSlider _dotSlider = null!, _circleSlider = null!;
+        private readonly List<ChipButton> _partChips = new();
 
         /// <summary>Suppresses the per-slider save while several are being set at once.</summary>
         private bool _applyingPreset;
         private readonly List<SwatchDot> _colourDots = new();
 
-        private const int BaseCardHeight = 630;
+        /// <summary>Tall enough for every row down to SAVED. A shorter card clips its own
+        /// last row regardless of the page's AutoScroll, because a child cannot render past
+        /// its immediate parent's bounds - and the gallery added roughly 300px.</summary>
+        private const int BaseCardHeight = 1110;
         private const int CardW = 620;
         private const int Gutter = 18;
         private const int ContentW = CardW - 2 * Gutter;
@@ -89,40 +109,43 @@ namespace VibranceHud.Pages
             };
             _card.Controls.Add(_status);
 
-            // ---- Presets ----
+            // ---- Gallery ----
             //
-            // Replaces the old four shape chips. Every shape is still reachable - the presets
-            // between them cover Cross, T, Dot and Circle - but each one also brings sensible
-            // dimensions, so picking a starting point is one click instead of a shape plus
-            // three sliders. Applying one deliberately keeps the user's colour.
-            _card.Controls.Add(UiHelpers.Caption("PRESETS", 18, 228, 200));
+            // Thirty ready-made crosshairs, each drawing its own live preview through the
+            // real render path so a cell can never show something the overlay would not.
+            // Hearted ones sort to the top, so somebody who has found their two or three
+            // does not scroll past thirty every time.
+            _card.Controls.Add(UiHelpers.Caption("GALLERY", 18, 228, 200));
 
-            const int ChipW = 140, ChipH = 34, ChipGapX = 8, ChipGapY = 8, PerRow = 4;
-            int presetTop = 250;
-
-            for (int i = 0; i < CrosshairPresets.All.Count; i++)
+            _galleryHost = new Panel
             {
-                var preset = CrosshairPresets.All[i];
-                var chip = new ChipButton
-                {
-                    Text = preset.Name,
-                    Location = new Point(
-                        18 + (i % PerRow) * (ChipW + ChipGapX),
-                        presetTop + (i / PerRow) * (ChipH + ChipGapY)),
-                    Size = new Size(ChipW, ChipH),
-                    Font = new Font(Theme.FontFamily, 9f),
-                };
-                chip.Click += (s, e) => ApplyPreset(preset);
-                _shapes.Add(chip);
-                _card.Controls.Add(chip);
-            }
+                Location = new Point(Gutter, 250),
+                Size = new Size(ContentW, GalleryHeight),
+                BackColor = Color.Transparent,
+                AutoScroll = true,
+            };
+            _card.Controls.Add(_galleryHost);
 
-            HighlightActivePreset();
+            BuildGallery();
+
+            // ---- Shape ----
+            //
+            // The parts of a crosshair, each on its own switch. This is what the composable
+            // model bought: arms, dot and circle are independent, so any combination is
+            // reachable directly rather than only by finding a preset that happens to have it.
+            int shapeY = 250 + GalleryHeight + 18;
+            _card.Controls.Add(UiHelpers.Caption("SHAPE", 18, shapeY, 200));
+
+            int px = Gutter;
+            AddPart(shapeY + 24, ref px, "Up", () => _current.ResolvedArmTop, v => _current.ArmTop = v);
+            AddPart(shapeY + 24, ref px, "Down", () => _current.ResolvedArmBottom, v => _current.ArmBottom = v);
+            AddPart(shapeY + 24, ref px, "Left", () => _current.ResolvedArmLeft, v => _current.ArmLeft = v);
+            AddPart(shapeY + 24, ref px, "Right", () => _current.ResolvedArmRight, v => _current.ArmRight = v);
+            AddPart(shapeY + 24, ref px, "Dot", () => _current.ResolvedCentreDot, v => _current.CentreDot = v);
+            AddPart(shapeY + 24, ref px, "Ring", () => _current.ResolvedShowCircle, v => _current.ShowCircle = v);
 
             // ---- Sliders ----
-            // Two rows of preset chips sit above, so everything below starts lower than it
-            // did when this was a single row of four.
-            int y = presetTop + 2 * ChipH + ChipGapY + 16;
+            int y = shapeY + 72;
             // Ranges are in tenths: 0.5-30.0 size, 0.5-10.0 thickness, 0-30.0 gap. Same
             // limits as before, ten times the resolution inside them.
             _sizeSlider = AddSlider(_card, "SIZE", y, 5, 300,
@@ -135,8 +158,24 @@ namespace VibranceHud.Pages
                 (int)Math.Round(_current.ResolvedGap * 10),
                 v => { _current.SetGapTenths(v); OnSliderMoved(); });
 
+            // The dot and the ring get their own sizes, so a thin cross can carry a fat dot
+            // or a wide ring - combinations the old single-thickness model could not express.
+            _dotSlider = AddSlider(_card, "DOT SIZE", y + 186, 5, 100,
+                (int)Math.Round(_current.ResolvedDotSize * 10),
+                v => { _current.DotSizeTenths = v; OnSliderMoved(); });
+
+            _circleSlider = AddSlider(_card, "RING SIZE", y + 248, 10, 400,
+                (int)Math.Round(_current.ResolvedCircleRadius * 10),
+                v => { _current.CircleRadiusTenths = v; OnSliderMoved(); });
+
+            // Opacity, in whole percent rather than tenths - nobody needs 43.7% opaque.
+            // A large share of real crosshairs are semi-transparent and there was no way to
+            // express that at all.
+            AddPercentSlider(_card, "OPACITY", y + 310, 10, 100, _current.Opacity,
+                v => { _current.Opacity = v; OnSliderMoved(); RefreshGalleryPreviews(); });
+
             // ---- Colour + options ----
-            _card.Controls.Add(UiHelpers.Caption("COLOUR", 18, y + 186, 200));
+            _card.Controls.Add(UiHelpers.Caption("COLOUR", 18, y + 372, 200));
             int cx = Gutter;
             foreach (var colour in new[]
             {
@@ -147,7 +186,7 @@ namespace VibranceHud.Pages
             {
                 var dot = new SwatchDot(colour)
                 {
-                    Location = new Point(cx, y + 208),
+                    Location = new Point(cx, y + 394),
                     Active = colour.ToArgb() == _current.ColourArgb,
                 };
                 var captured = colour;
@@ -164,7 +203,7 @@ namespace VibranceHud.Pages
                 cx += 44;
             }
 
-            var outline = new ToggleSwitch { Location = new Point(RightOf(44), y + 206), Checked = _current.Outline };
+            var outline = new ToggleSwitch { Location = new Point(RightOf(44), y + 392), Checked = _current.Outline };
             outline.CheckedChanged += (s, e) => { _current.Outline = outline.Checked; Push(); };
             // Pinned to its own switch rather than floating at a fixed x in the dead space
             // after the colour dots, which read as an unrelated stray word.
@@ -173,16 +212,19 @@ namespace VibranceHud.Pages
                 Text = "Outline",
                 ForeColor = Theme.Text,
                 BackColor = Color.Transparent,
-                Location = new Point(RightOf(44) - 12 - 100, y + 206),
+                // Level with the toggle it labels. These drifted apart while rows were being
+                // shifted down for the new sliders, and the label landed on the opacity
+                // track - caught by the card's overlap test rather than by eye.
+                Location = new Point(RightOf(44) - 12 - 100, y + 394),
                 Size = new Size(100, 22),
                 TextAlign = ContentAlignment.MiddleRight
             });
             _card.Controls.Add(outline);
 
             // ---- Saved configs ----
-            _card.Controls.Add(UiHelpers.Caption("SAVED", 18, y + 250, 200));
+            _card.Controls.Add(UiHelpers.Caption("SAVED", 18, y + 436, 200));
 
-            var saveBtn = Button("Save as…", 472, y + 272, 130);
+            var saveBtn = Button("Save as…", 472, y + 458, 130);
             saveBtn.Click += (s, e) => SaveCurrent();
             _card.Controls.Add(saveBtn);
 
@@ -193,7 +235,7 @@ namespace VibranceHud.Pages
             // the page's own scroll setting).
             _savedFlow = new FlowLayoutPanel
             {
-                Location = new Point(18, y + 272),
+                Location = new Point(18, y + 458),
                 Size = new Size(444, 36),
                 MaximumSize = new Size(444, 0),
                 AutoSize = true,
@@ -209,7 +251,7 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 8.5f),
-                Location = new Point(18, y + 272),
+                Location = new Point(18, y + 458),
                 Size = new Size(444, 36),
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -230,6 +272,86 @@ namespace VibranceHud.Pages
         /// - it just counts tenths - so the value shown is divided by ten and the callback
         /// receives tenths.
         /// </summary>
+        /// <summary>
+        /// One part of the crosshair, as a toggle chip.
+        ///
+        /// A chip rather than a switch: six switches in a row need six labels beside them and
+        /// would not fit the card, and the chip's own text is the label. Active means the part
+        /// is drawn.
+        /// </summary>
+        private void AddPart(int y, ref int x, string label, Func<bool> get, Action<bool> set)
+        {
+            var chip = new ChipButton
+            {
+                Text = label,
+                Location = new Point(x, y),
+                Size = new Size(88, 30),
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Active = get(),
+            };
+
+            chip.Click += (_, _) =>
+            {
+                set(!chip.Active);
+                chip.Active = get();
+                Push();
+                HighlightActivePreset();
+            };
+
+            _partChips.Add(chip);
+            _card.Controls.Add(chip);
+            x += 94;
+        }
+
+        /// <summary>Re-read every part chip from the config, after a preset or a saved
+        /// crosshair has changed what is on.</summary>
+        private void RefreshPartChips()
+        {
+            if (_partChips.Count < 6) return;
+
+            _partChips[0].Active = _current.ResolvedArmTop;
+            _partChips[1].Active = _current.ResolvedArmBottom;
+            _partChips[2].Active = _current.ResolvedArmLeft;
+            _partChips[3].Active = _current.ResolvedArmRight;
+            _partChips[4].Active = _current.ResolvedCentreDot;
+            _partChips[5].Active = _current.ResolvedShowCircle;
+        }
+
+        /// <summary>A slider that reads in whole percent. Opacity does not need tenths -
+        /// nobody is after 43.7% opaque.</summary>
+        private FlatSlider AddPercentSlider(Control parent, string label, int y,
+            int min, int max, int value, Action<int> onChange)
+        {
+            parent.Controls.Add(UiHelpers.Caption(label, 18, y, 200));
+
+            var readout = new Label
+            {
+                Text = $"{value}%",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(RightOf(42), y),
+                Size = new Size(42, 16),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+            parent.Controls.Add(readout);
+
+            var slider = new FlatSlider
+            {
+                Minimum = min,
+                Maximum = max,
+                Value = Math.Clamp(value, min, max),
+            };
+            slider.SetTrackBounds(Gutter, y + 20, ContentW);
+            slider.ValueChanged += (s, e) =>
+            {
+                readout.Text = $"{slider.Value}%";
+                onChange(slider.Value);
+            };
+            parent.Controls.Add(slider);
+            return slider;
+        }
+
         private FlatSlider AddSlider(Control parent, string label, int y, int minTenths, int maxTenths,
             int valueTenths, Action<int> onChangeTenths)
         {
@@ -273,6 +395,109 @@ namespace VibranceHud.Pages
         /// the config alone would change the crosshair and leave every readout showing the
         /// old numbers - the same trap the share-code button had on the Display page.
         /// </summary>
+        // ---- gallery ----------------------------------------------------------------------
+
+        /// <summary>
+        /// Fill the grid, favourites first.
+        ///
+        /// Rebuilt rather than reordered in place: the cells are laid out at absolute
+        /// positions, so moving one means repositioning all of them anyway, and thirty small
+        /// controls is cheap to recreate.
+        /// </summary>
+        private void BuildGallery()
+        {
+            _galleryHost.Controls.Clear();
+            _cells.Clear();
+
+            var favourites = _settings.FavouriteCrosshairs ?? new List<string>();
+
+            // Favourites first, then catalogue order. The original index is captured up front
+            // because IReadOnlyList has no IndexOf, and looking it up per item would be a
+            // scan inside a sort.
+            var ordered = CrosshairGallery.All
+                .Select((item, index) => (item, index))
+                .OrderByDescending(x => favourites.Contains(x.item.Id))
+                .ThenBy(x => x.index)
+                .Select(x => x.item)
+                .ToList();
+
+            int perRow = Math.Max(1, (ContentW - 16) / (CellW + CellGap));
+
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                var item = ordered[i];
+                var cell = new CrosshairCell(item)
+                {
+                    Location = new Point(
+                        (i % perRow) * (CellW + CellGap),
+                        (i / perRow) * (CellH + CellGap)),
+                    Size = new Size(CellW, CellH),
+                    PreviewStyle = _current,
+                    Favourite = favourites.Contains(item.Id),
+                };
+
+                var captured = item;
+                cell.Click += (_, _) => ApplyGalleryItem(captured);
+                cell.FavouriteToggled += (_, _) => ToggleFavourite(captured);
+
+                _cells.Add(cell);
+                _galleryHost.Controls.Add(cell);
+            }
+
+            HighlightActivePreset();
+        }
+
+        private void ApplyGalleryItem(CrosshairGallery.GalleryItem item)
+        {
+            CrosshairGallery.Apply(_current, item);
+
+            // Drive the sliders so their readouts follow. Guarded, because each fires
+            // ValueChanged and would otherwise apply and save three times for one click.
+            _applyingPreset = true;
+            try
+            {
+                _sizeSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedSize * 10),
+                    _sizeSlider.Minimum, _sizeSlider.Maximum);
+                _thicknessSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedThickness * 10),
+                    _thicknessSlider.Minimum, _thicknessSlider.Maximum);
+                _gapSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedGap * 10),
+                    _gapSlider.Minimum, _gapSlider.Maximum);
+            }
+            finally { _applyingPreset = false; }
+
+            // Re-apply afterwards: the sliders clamp to their track range, and writing them
+            // back would let a clamp silently rewrite the crosshair just picked.
+            CrosshairGallery.Apply(_current, item);
+
+            Push();
+            HighlightActivePreset();
+        }
+
+        /// <summary>Repaint every cell in the user's current colour and opacity, so the grid
+        /// always previews what they would actually get.</summary>
+        private void RefreshGalleryPreviews()
+        {
+            foreach (var cell in _cells)
+            {
+                cell.PreviewStyle = _current;
+                cell.Invalidate();
+            }
+        }
+
+        private void ToggleFavourite(CrosshairGallery.GalleryItem item)
+        {
+            _settings.FavouriteCrosshairs ??= new List<string>();
+
+            if (!_settings.FavouriteCrosshairs.Remove(item.Id))
+                _settings.FavouriteCrosshairs.Add(item.Id);
+
+            _store.Save(_settings);
+
+            // Rebuilt so the newly hearted one moves to the top immediately - leaving it in
+            // place until the next visit makes the heart look like it did nothing.
+            BuildGallery();
+        }
+
         private void ApplyPreset(CrosshairPreset preset)
         {
             CrosshairPresets.Apply(_current, preset);
@@ -308,11 +533,21 @@ namespace VibranceHud.Pages
 
         /// <summary>Mark whichever preset the current crosshair matches, or none once the
         /// user has moved a slider off all of them.</summary>
+        /// <summary>Mark whichever gallery entry the crosshair currently matches, or none once
+        /// the user has nudged a slider off all of them.</summary>
         private void HighlightActivePreset()
         {
-            var active = CrosshairPresets.Matching(_current);
-            foreach (var chip in _shapes)
-                chip.Active = active != null && chip.Text == active.Name;
+            var active = CrosshairGallery.Matching(_current);
+
+            foreach (var cell in _cells)
+            {
+                cell.Active = active != null && cell.Item.Id == active.Id;
+                // Keep every preview in the user's current colour and opacity.
+                cell.PreviewStyle = _current;
+                cell.Invalidate();
+            }
+
+            RefreshPartChips();
         }
 
         /// <summary>Push the edited config to the preview and the live overlay together, so
