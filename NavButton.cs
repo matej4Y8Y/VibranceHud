@@ -15,7 +15,8 @@ namespace VibranceHud
         private bool _active;
         private bool _hover;
 
-        /// <summary>0 = vibrance, 1 = games, 2 = settings, 3 = account, 4 = fps (lightning).</summary>
+        /// <summary>0 = vibrance, 1 = games, 2 = sliders (profile editor), 3 = account,
+        /// 4 = fps (lightning), 5 = crosshair, 6 = settings (gear), 7 = monitor.</summary>
         public int IconKind { get; init; }
 
         public bool Active
@@ -67,7 +68,8 @@ namespace VibranceHud
             DrawIcon(g, IconKind, new Rectangle(20, (Height - 18) / 2, 18, 18), color);
 
             var textColor = _active ? Theme.Text : Theme.TextDim;
-            using var labelFont = new Font(Theme.FontFamily, 9.5f, _active ? FontStyle.Bold : FontStyle.Regular);
+            // Cached, not allocated: this runs 30x a second per button while the plexus animates.
+            var labelFont = _active ? Design.Fonts.BodyBold : Design.Fonts.Body;
             TextRenderer.DrawText(g, Text, labelFont, new Rectangle(52, 0, Width - 56, Height), textColor,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
         }
@@ -98,6 +100,42 @@ namespace VibranceHud
                         g.DrawLine(pen, r.X, y, r.Right, y);
                         int kx = r.X + (i == 1 ? r.Width - 8 : 4);
                         g.FillEllipse(brush, kx, y - 2, 4, 4);
+                    }
+                    break;
+
+                case 5: // crosshair: ringed reticle with a centre dot
+                    var ring = new Rectangle(r.X + 2, r.Y + 2, r.Width - 4, r.Height - 4);
+                    g.DrawEllipse(pen, ring);
+                    g.DrawLine(pen, r.X + r.Width / 2, r.Y, r.X + r.Width / 2, r.Y + 4);
+                    g.DrawLine(pen, r.X + r.Width / 2, r.Bottom - 4, r.X + r.Width / 2, r.Bottom);
+                    g.DrawLine(pen, r.X, r.Y + r.Height / 2, r.X + 4, r.Y + r.Height / 2);
+                    g.DrawLine(pen, r.Right - 4, r.Y + r.Height / 2, r.Right, r.Y + r.Height / 2);
+                    g.FillEllipse(brush, r.X + r.Width / 2 - 1, r.Y + r.Height / 2 - 1, 3, 3);
+                    break;
+
+                case 8: // keybinds: a keycap with a legend on it
+                    using (var path = RoundedRect(new Rectangle(r.X, r.Y + 2, r.Width, r.Height - 4), 3))
+                        g.DrawPath(pen, path);
+                    g.DrawLine(pen, r.X + 4, r.Y + 6, r.Right - 4, r.Y + 6);
+                    g.FillRectangle(brush, r.X + 4, r.Y + 10, r.Width - 8, 2);
+                    break;
+
+                case 7: // monitor: screen on a stand
+                    var screen = new Rectangle(r.X, r.Y + 1, r.Width, r.Height - 7);
+                    using (var path = RoundedRect(screen, 2))
+                        g.DrawPath(pen, path);
+                    g.DrawLine(pen, r.X + r.Width / 2, screen.Bottom, r.X + r.Width / 2, r.Bottom - 1);
+                    g.DrawLine(pen, r.X + 4, r.Bottom - 1, r.Right - 4, r.Bottom - 1);
+                    break;
+
+                case 6: // settings: gear - hub plus six spokes
+                    float gcx = r.X + r.Width / 2f, gcy = r.Y + r.Height / 2f;
+                    g.DrawEllipse(pen, gcx - 4.5f, gcy - 4.5f, 9, 9);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        double a = Math.PI / 3 * i;
+                        float dx = (float)Math.Cos(a), dy = (float)Math.Sin(a);
+                        g.DrawLine(pen, gcx + dx * 5.5f, gcy + dy * 5.5f, gcx + dx * 8.5f, gcy + dy * 8.5f);
                     }
                     break;
 

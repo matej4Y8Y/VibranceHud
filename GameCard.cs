@@ -89,25 +89,23 @@ namespace VibranceHud
             using (var tilePath = Rounded(tile, 12))
             using (var tileFill = new SolidBrush(IsInstalled ? Theme.AccentDim : Theme.SurfaceHover))
                 g.FillPath(tileFill, tilePath);
-            using (var initFont = new Font(Theme.FontFamily, 20f, FontStyle.Bold))
-                TextRenderer.DrawText(g, SupportedGame.DisplayName.Substring(0, 1), initFont, tile,
-                    IsInstalled ? Theme.Text : Theme.TextDim,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            // Cached roles rather than three fonts built on every repaint.
+            TextRenderer.DrawText(g, SupportedGame.DisplayName.Substring(0, 1), Design.Fonts.Display, tile,
+                IsInstalled ? Theme.Text : Theme.TextDim,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
-            using (var nameFont = new Font(Theme.FontFamily, 12f, FontStyle.Bold))
-                TextRenderer.DrawText(g, SupportedGame.DisplayName, nameFont,
-                    new Rectangle(20, 84, Width - 40, 24), Theme.Text, TextFormatFlags.Left);
+            TextRenderer.DrawText(g, SupportedGame.DisplayName, Design.Fonts.Heading,
+                new Rectangle(20, 84, Width - 40, 24), Theme.Text, TextFormatFlags.Left);
 
             using (var dot = new SolidBrush(IsInstalled ? Color.FromArgb(80, 220, 130) : Theme.TextDim))
                 g.FillEllipse(dot, 20, 116, 8, 8);
-            using (var small = new Font(Theme.FontFamily, 8f))
-            {
-                TextRenderer.DrawText(g, IsInstalled ? "Installed" : "Not installed", small,
-                    new Rectangle(32, 111, 100, 16), Theme.TextDim, TextFormatFlags.Left);
-                if (IsInstalled)
-                    TextRenderer.DrawText(g, "Configure ›", small, new Rectangle(Width - 92, 111, 72, 16),
-                        Theme.Accent, TextFormatFlags.Right);
-            }
+
+            var small = Design.Fonts.Caption;
+            TextRenderer.DrawText(g, IsInstalled ? "Installed" : "Not installed", small,
+                new Rectangle(32, 111, 100, 16), Theme.TextDim, TextFormatFlags.Left);
+            if (IsInstalled)
+                TextRenderer.DrawText(g, "Configure ›", small, new Rectangle(Width - 92, 111, 72, 16),
+                    Theme.Accent, TextFormatFlags.Right);
         }
 
         private static GraphicsPath Rounded(Rectangle rect, int radius)
