@@ -610,6 +610,11 @@ namespace VibranceHud.Pages
             };
             about.Controls.Add(discordBtn);
             Controls.Add(about);
+
+            // Without this the page reports nothing to scroll, so everything past the
+            // window's height is unreachable - roughly 200px of this page, including the
+            // About card, on a default-sized window.
+            FitScrollToContent();
         }
 
         private static int Clamp(int pct) => Math.Clamp(pct, 50, 100);

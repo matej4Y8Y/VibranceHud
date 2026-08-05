@@ -44,6 +44,11 @@ namespace VibranceHud.Pages
             BuildCard(y, width, "ADVANCED",
                 "Real but situational - only helps on some PCs. Turn on one at a time and test.",
                 _service.All.Where(t => t.Tier == TweakTier.Advanced).ToList());
+
+            // Without this the page reports nothing to scroll, so the ADVANCED card was
+            // unreachable on a default-sized window - about 200px of tweaks nobody could
+            // get to.
+            FitScrollToContent();
         }
 
         private int BuildCard(int top, int width, string title, string subtitle, IReadOnlyList<ISystemTweak> tweaks)

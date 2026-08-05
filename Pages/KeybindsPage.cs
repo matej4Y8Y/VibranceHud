@@ -64,7 +64,9 @@ namespace VibranceHud.Pages
             {
                 ForeColor = Theme.TextDim,
                 Font = new Font(Theme.FontFamily, 9f),
-                Location = new Point(Pad, Pad + 30),
+                // 40, not 30: the title above is 18pt bold and measures 38px tall, so at 30
+                // the hint sat 8px inside it.
+                Location = new Point(Pad, Pad + 40),
                 AutoSize = true,
                 MaximumSize = new Size(760, 0),
                 BackColor = Color.Transparent,

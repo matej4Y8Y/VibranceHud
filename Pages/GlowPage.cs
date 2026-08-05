@@ -123,6 +123,28 @@ namespace VibranceHud.Pages
             ShowScrollBar(Handle, SB_BOTH, false);
         }
 
+        /// <summary>
+        /// Declare a scroll extent that actually covers the page's contents.
+        ///
+        /// AutoScroll on its own is not enough: without an explicit AutoScrollMinSize a page
+        /// laid out at absolute coordinates reports nothing to scroll, so everything below the
+        /// window's height is simply unreachable. Settings and FPS Tweaks both shipped that
+        /// way - roughly 200px of each was impossible to reach on a default-sized window, and
+        /// nobody noticed because you have to look for what is missing.
+        ///
+        /// Computed from where the children actually end rather than a hand-maintained
+        /// number, so adding a card cannot silently put it out of reach again.
+        /// </summary>
+        protected void FitScrollToContent(int bottomPadding = 40)
+        {
+            int lowest = 0;
+            foreach (Control child in Controls)
+                if (child.Visible) lowest = Math.Max(lowest, child.Bottom);
+
+            if (lowest <= 0) return;
+            AutoScrollMinSize = new Size(0, lowest + bottomPadding);
+        }
+
         // ---- centred content column ------------------------------------------------------
         //
         // Every page lays itself out with absolute coordinates against a fixed card width.

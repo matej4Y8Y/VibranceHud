@@ -73,7 +73,9 @@ namespace VibranceHud.Pages
                 Text = "Change resolution without leaving PlexusX.",
                 ForeColor = Theme.TextDim,
                 Font = new Font(Theme.FontFamily, 9f),
-                Location = new Point(Pad, y + 30),
+                // 40, not 30: the title above is 18pt bold and measures 38px tall, so at 30
+                // the subtitle sat 8px inside it.
+                Location = new Point(Pad, y + 40),
                 AutoSize = true,
                 BackColor = Color.Transparent,
             });
@@ -307,7 +309,9 @@ namespace VibranceHud.Pages
                     ForeColor = Theme.TextDim,
                     BackColor = Color.Transparent,
                     Font = new Font(Theme.FontFamily, 8f),
-                    Location = new Point(Gutter + 164, rowY + 18),
+                    // 22, not 18: the bold name above measures 21px, so at 18 the two rows
+                    // overlapped by three pixels.
+                    Location = new Point(Gutter + 164, rowY + 22),
                     Size = new Size(CardW - Gutter * 2 - 164, 30),
                 });
 
