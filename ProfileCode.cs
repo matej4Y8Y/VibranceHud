@@ -15,9 +15,18 @@ namespace VibranceHud
     /// compactness: the alphabet has no characters anyone confuses, and a mistyped code is
     /// rejected rather than quietly applying a stranger's screen.
     /// </summary>
-    public readonly record struct ProfileCode(int Vibrance, int Saturation, int Brightness, int Gamma)
+    public readonly record struct ProfileCode(
+        int Vibrance, int Saturation, int Brightness, int Gamma,
+        int Contrast = 100, int Temperature = 0)
     {
         private const string Prefix = "PX-";
+
+        /// <summary>Body length of a code written before contrast and temperature existed:
+        /// four values plus a check character.</summary>
+        private const int LegacyLength = 9;
+
+        /// <summary>Body length now: six values plus a check character.</summary>
+        private const int CurrentLength = 13;
 
         /// <summary>
         /// 32 characters, chosen so nothing in it can be misread: no O or 0, no I, L or 1.
@@ -32,6 +41,10 @@ namespace VibranceHud
             Math.Clamp(v, VibranceEngine.MinBrightness, VibranceEngine.MaxBrightness);
         private static int ClampGamma(int v) =>
             Math.Clamp(v, VibranceEngine.MinGamma, VibranceEngine.MaxGamma);
+        private static int ClampContrast(int v) =>
+            Math.Clamp(v, VibranceEngine.MinContrast, VibranceEngine.MaxContrast);
+        private static int ClampTemperature(int v) =>
+            Math.Clamp(v, VibranceEngine.MinTemperature, VibranceEngine.MaxTemperature);
 
         public static string Encode(ProfileCode profile)
         {
@@ -46,6 +59,10 @@ namespace VibranceHud
                 ClampSaturation(profile.Saturation),
                 ClampBrightness(profile.Brightness) - VibranceEngine.MinBrightness,
                 ClampGamma(profile.Gamma) - VibranceEngine.MinGamma,
+                ClampContrast(profile.Contrast) - VibranceEngine.MinContrast,
+                // Temperature is the only signed control, so it is offset past its own
+                // minimum to keep every field a plain non-negative number.
+                ClampTemperature(profile.Temperature) - VibranceEngine.MinTemperature,
             };
 
             var body = new StringBuilder();
@@ -68,7 +85,13 @@ namespace VibranceHud
             if (!cleaned.StartsWith(Prefix, StringComparison.Ordinal)) return false;
 
             var body = cleaned.Substring(Prefix.Length);
-            if (body.Length != 9) return false;                    // 4 bytes + 1 check character
+
+            // Length tells the two generations apart. Codes shared before contrast and
+            // temperature existed are still out there in Discord history and on streams, and
+            // they have to keep working - they simply carry neutral values for the two fields
+            // they never knew about.
+            bool legacy = body.Length == LegacyLength;
+            if (!legacy && body.Length != CurrentLength) return false;
 
             var digits = new int[body.Length];
             for (int i = 0; i < body.Length; i++)
@@ -77,18 +100,21 @@ namespace VibranceHud
                 if (digits[i] < 0) return false;                   // not one of our characters
             }
 
-            int[] payload = new int[4];
-            for (int i = 0; i < payload.Length; i++)
+            int fields = legacy ? 4 : 6;
+            int[] payload = new int[fields];
+            for (int i = 0; i < fields; i++)
                 payload[i] = digits[i * 2] * 32 + digits[i * 2 + 1];
 
-            if (digits[8] != Checksum(body.Substring(0, 8)))
+            if (digits[fields * 2] != Checksum(body.Substring(0, fields * 2)))
                 return false;                                      // a typo, or somebody guessing
 
             profile = new ProfileCode(
                 ClampVibrance(payload[0]),
                 ClampSaturation(payload[1]),
                 ClampBrightness(payload[2] + VibranceEngine.MinBrightness),
-                ClampGamma(payload[3] + VibranceEngine.MinGamma));
+                ClampGamma(payload[3] + VibranceEngine.MinGamma),
+                legacy ? 100 : ClampContrast(payload[4] + VibranceEngine.MinContrast),
+                legacy ? 0 : ClampTemperature(payload[5] + VibranceEngine.MinTemperature));
             return true;
         }
 

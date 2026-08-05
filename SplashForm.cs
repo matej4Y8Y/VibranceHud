@@ -13,6 +13,8 @@ namespace VibranceHud
     /// </summary>
     public sealed class SplashForm : Form
     {
+        private const int CornerRadius = 18;
+
         private readonly ParticleField _field = new(45);
         private readonly System.Windows.Forms.Timer _timer;
         private DateTime _last = DateTime.UtcNow;
@@ -36,6 +38,7 @@ namespace VibranceHud
             Icon = AppIcon.Value;
 
             _field.Resize(ClientSize.Width, ClientSize.Height);
+            ApplyRoundedRegion();
 
             _timer = new System.Windows.Forms.Timer { Interval = 33 };
             _timer.Tick += (s, e) =>
@@ -58,6 +61,17 @@ namespace VibranceHud
             Invalidate();
         }
 
+        /// <summary>Cut the window to the same rounded rectangle the card is painted with, so
+        /// the corners are real transparency. The card's rim used to curve inward while the
+        /// window stayed square, which showed as four hard corners of raw backdrop - the very
+        /// first thing anyone sees when they launch PlexusX.</summary>
+        private void ApplyRoundedRegion()
+        {
+            using var path = Glass.RoundedPath(
+                new RectangleF(0, 0, ClientSize.Width, ClientSize.Height), CornerRadius);
+            Region = new Region(path);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             var g = e.Graphics;
@@ -68,7 +82,7 @@ namespace VibranceHud
             _field.Paint(g, 0, 0);
 
             var card = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
-            Glass.PaintPanel(g, card, 18, fillAlpha: 170);
+            Glass.PaintPanel(g, card, CornerRadius, fillAlpha: 170);
 
             // Mark
             int size = 56;

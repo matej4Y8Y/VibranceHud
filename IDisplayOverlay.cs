@@ -29,5 +29,16 @@ namespace VibranceHud
         /// <summary>Short, user-facing label for the last failure (empty when
         /// DX11 succeeded).</summary>
         string LastFailureMessage { get; }
+
+        /// <summary>
+        /// The raw HRESULT behind <see cref="LastFailure"/>, or 0 when there wasn't one.
+        ///
+        /// Only the categorised kind used to be kept, so every uncategorised failure landed
+        /// on <see cref="DxInitFailureKind.Unknown"/> with the code discarded - while the
+        /// hint shown to the user asked them to report that exact code. Nobody could:
+        /// the app had already thrown it away. Defaulted so existing implementations and
+        /// test fakes don't have to care.
+        /// </summary>
+        int LastFailureCode => 0;
     }
 }

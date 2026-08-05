@@ -13,7 +13,17 @@ namespace VibranceHud
     /// </summary>
     public sealed class FlatSlider : Control
     {
-        private const int Pad = 12;       // horizontal padding so the thumb never clips
+        /// <summary>
+        /// Horizontal padding inside the control so the thumb never clips at either end.
+        ///
+        /// Public because it changes where callers should put the slider: the visible track
+        /// runs from <c>Left + EdgeInset</c> to <c>Right - EdgeInset</c>, so a slider dropped
+        /// at a card's text gutter draws its track 12px inside the captions and readouts
+        /// above it. Place sliders with <see cref="SetTrackBounds"/> instead of guessing.
+        /// </summary>
+        public const int EdgeInset = 12;
+
+        private const int Pad = EdgeInset;
         private const int ThumbRadius = 8;
         private const int TrackHeight = 4;
 
@@ -37,6 +47,58 @@ namespace VibranceHud
             BackColor = Color.Transparent;
             Height = 32;
             Cursor = Cursors.Hand;
+
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
+            AccessibleRole = AccessibleRole.Slider;
+        }
+
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+        /// <summary>
+        /// Keyboard control of the value.
+        ///
+        /// Arrows nudge by one, Page keys by ten, Home and End go to the limits. Without this
+        /// a slider could be focused and not actually operated, which is worse than not being
+        /// reachable at all - the focus ring promises something the control cannot do.
+        /// </summary>
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            int step = e.KeyCode switch
+            {
+                Keys.Left or Keys.Down => -1,
+                Keys.Right or Keys.Up => 1,
+                Keys.PageDown => -10,
+                Keys.PageUp => 10,
+                _ => 0,
+            };
+
+            if (step != 0)
+            {
+                Value = Math.Clamp(Value + step, Minimum, Maximum);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyCode == Keys.Home) { Value = Minimum; e.Handled = true; }
+            else if (e.KeyCode == Keys.End) { Value = Maximum; e.Handled = true; }
+        }
+
+        internal void TestPressKey(Keys key) => OnKeyDown(new KeyEventArgs(key));
+
+        /// <summary>Announce the value, not just "slider". A screen reader that says a slider
+        /// exists without saying where it is set has told the user nothing useful.</summary>
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new SliderAccessibleObject(this);
+
+        private sealed class SliderAccessibleObject : ControlAccessibleObject
+        {
+            private readonly FlatSlider _owner;
+            public SliderAccessibleObject(FlatSlider owner) : base(owner) { _owner = owner; }
+            public override string? Value => _owner.Value.ToString();
         }
 
         public int Minimum
@@ -63,6 +125,13 @@ namespace VibranceHud
                 ValueChanged?.Invoke(this, EventArgs.Empty);
             }
         }
+
+        /// <summary>Position the slider so its visible TRACK spans exactly
+        /// <paramref name="x"/>..<paramref name="x"/>+<paramref name="width"/>, i.e. so it
+        /// lines up with the caption and value text of the row it belongs to. The control
+        /// itself is grown by <see cref="EdgeInset"/> on each side to hold the thumb.</summary>
+        public void SetTrackBounds(int x, int y, int width, int height = 32) =>
+            SetBounds(x - EdgeInset, y, width + 2 * EdgeInset, height);
 
         private int XFromValue(int value)
         {
@@ -109,9 +178,17 @@ namespace VibranceHud
             using (var back = new SolidBrush(Theme.Border))
                 FillRounded(g, back, trackRect, TrackHeight / 2f);
 
-            var fillRect = new Rectangle(trackRect.X, trackRect.Y, Math.Max(thumbX - Pad, 1), TrackHeight);
-            using (var fill = new SolidBrush(Theme.Accent))
+            // At the minimum there is nothing filled yet. Drawing a 1px-wide pill here used
+            // to spill a small accent blob ~3px past the left end of the track, because the
+            // right-hand arc of the rounded path lands left of the rect's own origin once
+            // the rect is narrower than the corner diameter.
+            int fillW = thumbX - Pad;
+            if (fillW >= TrackHeight)
+            {
+                var fillRect = new Rectangle(trackRect.X, trackRect.Y, fillW, TrackHeight);
+                using var fill = new SolidBrush(Theme.Accent);
                 FillRounded(g, fill, fillRect, TrackHeight / 2f);
+            }
 
             // Notch marker (e.g. at 100 = driver max).
             if (Notch is int notch && notch > _minimum && notch < _maximum)
@@ -127,6 +204,11 @@ namespace VibranceHud
                 g.FillEllipse(brush, thumb);
             using (var outline = new Pen(Theme.Background, 2.5f))
                 g.DrawEllipse(outline, thumb);
+
+            // Around the thumb rather than the whole control: the track spans the full width
+            // and a ring along all of it would read as the row being selected, not focused.
+            if (Focused)
+                UiHelpers.DrawFocusRing(g, Rectangle.Inflate(thumb, 4, 4), (ThumbRadius + 4));
         }
 
         private static void FillRounded(Graphics g, Brush brush, Rectangle rect, float radius)

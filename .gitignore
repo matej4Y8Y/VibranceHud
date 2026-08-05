@@ -4,6 +4,7 @@ obj/
 publish/
 Releases/
 installer/
+artifacts/
 
 # Shareable packages (built on demand, not source)
 *.zip

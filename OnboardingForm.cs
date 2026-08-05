@@ -144,10 +144,10 @@ namespace VibranceHud
             }
 
             // ---- Nav ----
-            _primary = Pages.SettingsPage.FlatButton("Get started  ›", cx - 90, 464, 180);
-            _primary.BackColor = Theme.AccentDim;
-            _primary.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
-            _primary.Height = 40;
+            // The footer sits inside the glass card, which ends 24px short of the window
+            // (see OnPaint). The button + skip link used to run past that edge, so the last
+            // thing on the first screen anyone ever sees was text hanging off the card.
+            _primary = Pages.SettingsPage.PrimaryButton("Get started  ›", cx - 90, 440, 180, height: 40);
             _primary.Click += (s, e) => Advance();
             Controls.Add(_primary);
 
@@ -162,8 +162,13 @@ namespace VibranceHud
                 LinkColor = Theme.TextDim,
                 ActiveLinkColor = Theme.Accent,
                 LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(cx - 80, 510),
-                AutoSize = true,
+                // Centred properly. AutoSize anchors the left edge, so the old
+                // "cx - 80" left this sitting visibly off-axis from the button above it -
+                // a fixed centred box is the only way to line the two up.
+                Location = new Point(cx - 150, 492),
+                Size = new Size(300, 20),
+                TextAlign = ContentAlignment.MiddleCenter,
+                AutoSize = false,
                 BackColor = Color.Transparent,
             };
             _skip.Click += (s, e) =>
@@ -184,13 +189,15 @@ namespace VibranceHud
                 LinkColor = Theme.TextDim,
                 ActiveLinkColor = Theme.Accent,
                 LinkBehavior = LinkBehavior.NeverUnderline,
-                Location = new Point(30, 476),
+                Location = new Point(46, 452),
                 AutoSize = true,
                 BackColor = Color.Transparent,
                 Visible = false
             };
             _back.Click += (s, e) => ShowStep(_step - 1);
             Controls.Add(_back);
+
+            WindowDrag.Enable(this, this);
 
             _timer = new System.Windows.Forms.Timer { Interval = 33 };
             _timer.Tick += OnTick;
@@ -275,8 +282,7 @@ namespace VibranceHud
             // The one users actually reported: invisible on a dark theme after switching.
             _startupLabel.ForeColor = Theme.Text;
 
-            _primary.BackColor = Theme.AccentDim;
-            _primary.ForeColor = Theme.Text;
+            Pages.SettingsPage.RestylePrimary(_primary);
 
             foreach (var link in new[] { _back, _skip })
             {
@@ -311,10 +317,13 @@ namespace VibranceHud
                 // monitor. Without this line, the first time they check a stream
                 // and don't see the boost they blame PlexusX - because nothing
                 // on the Welcome screen hinted the fallback was in play.
+                // Worded the same way the Settings page is: this is a limitation of the app
+                // on every PC, not a fault found on theirs. "Fallback" on the very first
+                // screen reads as "your machine came up short", which isn't what happened.
                 bool dx11 = _settings.OverlayMode == OverlayMode.Dx;
                 var statusText = dx11
-                    ? "Display engine: DX11 - saturation visible in OBS / Discord"
-                    : "Display engine: Fallback - saturation on monitor only, NOT in OBS Game Capture";
+                    ? "Your colours will show on screen and in recordings."
+                    : "Your colours show on your screen, but not in recordings yet.";
                 var statusColor = dx11 ? Theme.TextDim : Theme.Accent;
                 DrawCentered(g, statusText, SubFont, statusColor, 302);
             }

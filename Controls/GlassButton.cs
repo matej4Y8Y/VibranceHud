@@ -37,9 +37,37 @@ namespace VibranceHud
             Cursor = Cursors.Hand;
             Height = 34;
             Font = new Font(Theme.FontFamily, 9.5f, FontStyle.Bold);
+
+            // Reachable and announced. Only three controls in the app did this before, so
+            // tabbing through PlexusX was invisible and a screen reader saw nothing at all.
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
+            AccessibleRole = AccessibleRole.PushButton;
         }
 
         public GlassButtonKind Kind { get; init; } = GlassButtonKind.Ghost;
+
+        /// <summary>Keep the accessible name in step with the label. Control.AccessibleName
+        /// is not virtual, so it is mirrored here rather than overridden.</summary>
+        protected override void OnTextChanged(EventArgs e)
+        {
+            base.OnTextChanged(e);
+            AccessibleName = Text;
+        }
+
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode is not (Keys.Space or Keys.Enter)) return;
+            e.Handled = true;
+            OnClick(EventArgs.Empty);
+        }
+
+        /// <summary>Test seam: OnKeyDown is protected and a unit test has no message loop.</summary>
+        internal void TestPressKey(Keys key) => OnKeyDown(new KeyEventArgs(key));
 
         protected override void OnMouseEnter(EventArgs e)
         {
@@ -60,6 +88,9 @@ namespace VibranceHud
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left) return;
+            // Clicking focuses, so the keyboard carries on from where the mouse left off
+            // rather than jumping back to the top of the page.
+            Focus();
             _pressed = true;
             Invalidate();
         }
@@ -86,7 +117,7 @@ namespace VibranceHud
                 // nudge reads as a rendering glitch at this size.
                 int alpha = _pressed ? 175 : _hover ? 235 : 210;
                 Glass.PaintAccent(g, rect, radius, Theme.Accent, alpha);
-                textColor = Theme.IsLight ? Color.White : Theme.Background;
+                textColor = Theme.OnAccent;
             }
             else
             {
@@ -96,6 +127,8 @@ namespace VibranceHud
 
             TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width, Height), textColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+            if (Focused) UiHelpers.DrawFocusRing(g, ClientRectangle, radius);
         }
     }
 }

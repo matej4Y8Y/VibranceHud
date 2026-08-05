@@ -93,18 +93,49 @@ namespace VibranceHud
 
         public void ApplyMatrix(float[] matrix)
         {
-            // matrix is 25 floats, row-major. Pack the first four rows into 5 * float4.
-            // Each shader row uses .xyz for the RGB coefficients and .w for the translation
-            // column (index 4 of that source row).
+            _ctx.UpdateSubresource(PackForShader(matrix), _matrixBuffer);
+        }
+
+        /// <summary>
+        /// Repack a 25-float row-major colour matrix into the three float4 rows
+        /// saturation.hlsl actually consumes.
+        ///
+        /// SaturationMatrix/ColorAdjust document and use the row-vector convention:
+        /// <c>newColor = oldColor * M</c>, where M's ROW is the input channel and COLUMN is
+        /// the output channel - the same layout Windows' own MAGCOLOREFFECT expects, which is
+        /// why the Magnification path (the one actually shipping today) has always produced
+        /// the right picture.
+        ///
+        /// The shader does the opposite: for each output channel it takes the dot product of
+        /// one float4 against <c>(r, g, b, 1)</c> - i.e. <c>newColor = M * oldColor</c>, where
+        /// a ROW of the packed data is one OUTPUT channel's coefficients. Packing straight
+        /// rows-to-rows (the previous implementation) fed row-major data into a
+        /// column-major consumer: correct only when the upper 3x3 block happens to be
+        /// symmetric, which real saturation/vibrance values never are - Rec. 709's luma
+        /// weights differ per channel, so the cross-terms differ depending on which side of
+        /// the diagonal they're on. The visible result would have been channels blending
+        /// into each other on the wrong axis, not simply "no effect".
+        ///
+        /// Never exercised in production: the DX11 path this shader belongs to has been
+        /// switched off since it was written (see DxDevice's AlphaMode note), so this bug has
+        /// never shipped. Fixed now so it isn't waiting for whoever revives that path.
+        ///
+        /// Pure and internal so it's testable without a Direct3D device.
+        /// </summary>
+        internal static float[] PackForShader(float[] matrix)
+        {
             var data = new float[20];
-            for (int i = 0; i < 5; i++)
+            for (int outCol = 0; outCol < 3; outCol++)
             {
-                data[i * 4 + 0] = matrix[i * 5 + 0];
-                data[i * 4 + 1] = matrix[i * 5 + 1];
-                data[i * 4 + 2] = matrix[i * 5 + 2];
-                data[i * 4 + 3] = matrix[i * 5 + 4]; // the translation column
+                data[outCol * 4 + 0] = matrix[0 * 5 + outCol];   // R's contribution
+                data[outCol * 4 + 1] = matrix[1 * 5 + outCol];   // G's contribution
+                data[outCol * 4 + 2] = matrix[2 * 5 + outCol];   // B's contribution
+                data[outCol * 4 + 3] = matrix[4 * 5 + outCol];   // the translation row
             }
-            _ctx.UpdateSubresource(data, _matrixBuffer);
+            // Rows 3 (output slot for alpha, which the shader passes through untouched
+            // instead of reading from here) and 4 are never read by saturation.hlsl; left
+            // zeroed rather than packed with anything that could look meaningful.
+            return data;
         }
 
         public void Bind(ShaderResourceView capturedFrame)

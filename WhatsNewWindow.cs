@@ -10,6 +10,8 @@ namespace VibranceHud
     /// </summary>
     public sealed class WhatsNewWindow : Form
     {
+        private const int CornerRadius = 16;
+
         private static readonly Font TitleFont = new(Theme.FontFamily, 15f, FontStyle.Bold);
 
         public WhatsNewWindow(Version version, string notes)
@@ -67,36 +69,35 @@ namespace VibranceHud
             body.GotFocus += (s, e) => body.Select(0, 0);
             Controls.Add(body);
 
-            var ok = SettingsPageButton("OK", ClientSize.Width - 148, ClientSize.Height - 58, 120);
-            ok.BackColor = Theme.AccentDim;
-            ok.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
+            var ok = Pages.SettingsPage.PrimaryButton(
+                "OK", ClientSize.Width - 148, ClientSize.Height - 58, 120, height: 34);
             ok.Click += (s, e) => Close();
             Controls.Add(ok);
             AcceptButton = ok;
+            // Escape closes it too. It's a one-button notice; making the keyboard's own
+            // "dismiss this" key do nothing is the kind of small wrongness people feel
+            // without being able to name it.
+            CancelButton = ok;
+
+            ApplyRoundedRegion();
+            WindowDrag.Enable(this, this);
         }
 
-        private static Button SettingsPageButton(string text, int x, int y, int width)
+        /// <summary>Cut the window to the same rounded rectangle the glass card is painted
+        /// with. Without this the card's rim curves inward while the window itself stays
+        /// square, leaving four hard corners of backdrop sitting outside the frame.</summary>
+        private void ApplyRoundedRegion()
         {
-            var b = new Button
-            {
-                Text = text,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.SurfaceHover,
-                ForeColor = Theme.Text,
-                Size = new Size(width, 34),
-                Location = new Point(x, y),
-                Cursor = Cursors.Hand,
-                TabStop = false
-            };
-            b.FlatAppearance.BorderColor = Theme.Border;
-            b.FlatAppearance.BorderSize = 1;
-            return b;
+            using var path = Glass.RoundedPath(
+                new RectangleF(0, 0, ClientSize.Width, ClientSize.Height), CornerRadius);
+            Region = new Region(path);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            Glass.PaintPanel(e.Graphics, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 16, fillAlpha: 180);
+            Glass.PaintPanel(e.Graphics, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1),
+                CornerRadius, fillAlpha: 180);
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)

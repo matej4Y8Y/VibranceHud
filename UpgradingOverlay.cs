@@ -36,6 +36,7 @@ namespace VibranceHud
         // Settings page shows "Fallback" with nothing actionable next to it.
         private readonly DxInitFailureKind _fallbackFailure;
         private readonly string _fallbackFailureMessage;
+        private readonly int _fallbackFailureCode;
 
         private ISaturationOverlay _active;
 
@@ -49,13 +50,17 @@ namespace VibranceHud
         /// <param name="fallbackFailure">Why the DX11 attempt failed, so the Settings page
         /// can show an actionable reason while we're on the fallback.</param>
         /// <param name="fallbackFailureMessage">Short user-facing label for that failure.</param>
+        /// <param name="fallbackFailureCode">Raw HRESULT behind that failure, so an
+        /// uncategorised one is still reportable.</param>
         public UpgradingOverlay(ISaturationOverlay initial, Func<ISaturationOverlay?> tryCreatePreferred,
-            DxInitFailureKind fallbackFailure = DxInitFailureKind.None, string fallbackFailureMessage = "")
+            DxInitFailureKind fallbackFailure = DxInitFailureKind.None, string fallbackFailureMessage = "",
+            int fallbackFailureCode = 0)
         {
             _active = initial ?? throw new ArgumentNullException(nameof(initial));
             _tryCreatePreferred = tryCreatePreferred ?? throw new ArgumentNullException(nameof(tryCreatePreferred));
             _fallbackFailure = fallbackFailure;
             _fallbackFailureMessage = fallbackFailureMessage ?? "";
+            _fallbackFailureCode = fallbackFailureCode;
         }
 
         public OverlayMode ActiveMode => (_active as IDisplayOverlay)?.ActiveMode ?? OverlayMode.Dx;
@@ -84,6 +89,16 @@ namespace VibranceHud
                 if (ActiveMode == OverlayMode.Dx) return "";
                 var own = (_active as IDisplayOverlay)?.LastFailureMessage ?? "";
                 return !string.IsNullOrEmpty(own) ? own : _fallbackFailureMessage;
+            }
+        }
+
+        public int LastFailureCode
+        {
+            get
+            {
+                if (ActiveMode == OverlayMode.Dx) return 0;
+                var own = (_active as IDisplayOverlay)?.LastFailureCode ?? 0;
+                return own != 0 ? own : _fallbackFailureCode;
             }
         }
 

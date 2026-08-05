@@ -67,6 +67,36 @@ namespace VibranceHud
         /// succeeded.</summary>
         public string LastFailureMessage { get; private set; } = "";
 
+        /// <summary>
+        /// The raw HRESULT behind <see cref="LastFailure"/>, 0 when there wasn't one.
+        ///
+        /// Every code the mapper doesn't recognise collapses to
+        /// <see cref="DxInitFailureKind.Unknown"/>, and the hint that kind produces asks the
+        /// user to "report the code" - which was impossible, because only the kind was kept
+        /// and the code was dropped on the floor right here. Unknown is by definition the
+        /// case we most need the number for.
+        /// </summary>
+        public int LastFailureCode { get; private set; }
+
+        /// <summary>Categorise a failure and keep the HRESULT that caused it.</summary>
+        private void RecordFailure(SharpDXException ex)
+        {
+            var (kind, short_, _) = DxInitFailureMapper.Map(ex);
+            LastFailure = kind;
+            LastFailureMessage = short_;
+            LastFailureCode = ex?.HResult ?? 0;
+        }
+
+        /// <summary>Non-SharpDX failure. SharpDX often wraps the real COM error one level
+        /// down, so prefer the inner HRESULT when there is one.</summary>
+        private void RecordFailure(Exception ex)
+        {
+            var (kind, short_, _) = DxInitFailureMapper.MapGeneric(ex);
+            LastFailure = kind;
+            LastFailureMessage = short_;
+            LastFailureCode = (ex?.InnerException as SharpDXException)?.HResult ?? ex?.HResult ?? 0;
+        }
+
         // --- Win32 overlay window plumbing -------------------------------------------------
         private const int WS_POPUP = unchecked((int)0x80000000);
         private const int WS_VISIBLE = 0x10000000;
@@ -160,9 +190,7 @@ namespace VibranceHud
                             // Categorise the failure so the Settings page can show
                             // an actionable reason. Don't bail - other adapters
                             // might work (e.g. integrated + discrete GPU).
-                            var (kind, short_, hint) = DxInitFailureMapper.Map(sdex);
-                            LastFailure = kind;
-                            LastFailureMessage = short_;
+                            RecordFailure(sdex);
                             continue;
                         }
                         catch (Exception ex)
@@ -170,9 +198,7 @@ namespace VibranceHud
                             // Non-SharpDX failure (rare; e.g. ArgumentException
                             // from a bad adapter description). Drill one level
                             // for an inner SharpDXException before giving up.
-                            var (kind, short_, hint) = DxInitFailureMapper.MapGeneric(ex);
-                            LastFailure = kind;
-                            LastFailureMessage = short_;
+                            RecordFailure(ex);
                             continue;
                         }
 
@@ -183,15 +209,11 @@ namespace VibranceHud
                         }
                         catch (SharpDXException sdex)
                         {
-                            var (kind, short_, hint) = DxInitFailureMapper.Map(sdex);
-                            LastFailure = kind;
-                            LastFailureMessage = short_;
+                            RecordFailure(sdex);
                         }
                         catch (Exception ex)
                         {
-                            var (kind, short_, hint) = DxInitFailureMapper.MapGeneric(ex);
-                            LastFailure = kind;
-                            LastFailureMessage = short_;
+                            RecordFailure(ex);
                         }
 
                         if (Targets.Count > before) _devices.Add(device);
@@ -225,16 +247,12 @@ namespace VibranceHud
             {
                 // Top-level init failure (most often the Factory2 constructor
                 // itself throws when the OS has no D3D runtime at all).
-                var (kind, short_, hint) = DxInitFailureMapper.Map(sdex);
-                LastFailure = kind;
-                LastFailureMessage = short_;
+                RecordFailure(sdex);
                 Dispose();
             }
             catch (Exception ex)
             {
-                var (kind, short_, hint) = DxInitFailureMapper.MapGeneric(ex);
-                LastFailure = kind;
-                LastFailureMessage = short_;
+                RecordFailure(ex);
                 Dispose();
             }
         }

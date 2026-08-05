@@ -63,7 +63,7 @@ namespace VibranceHud
                 Location = new Point(30, ClientSize.Height - 62),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Theme.AccentDim,
-                ForeColor = Theme.Text,
+                ForeColor = Theme.OnAccentDim,
                 Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold),
                 Cursor = Cursors.Hand,
             };

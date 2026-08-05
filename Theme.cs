@@ -33,6 +33,20 @@ namespace VibranceHud
         public static Color Accent { get; private set; }
         public static Color AccentDim { get; private set; }
 
+        /// <summary>
+        /// Foreground for text sitting on a full-strength <see cref="Accent"/> fill.
+        ///
+        /// Never use <see cref="Text"/> for this. The light theme's accent IS near-black and
+        /// so is its text, so a label drawn in Text on an accent button is invisible - and
+        /// light is the default theme, so that was the first thing most people saw.
+        /// </summary>
+        public static Color OnAccent => IsLight ? Color.White : Background;
+
+        /// <summary>Foreground for text on the muted <see cref="AccentDim"/> fill. Dim accents
+        /// stay dark on the coloured themes, so those want the normal light text; only the
+        /// light theme needs the inversion.</summary>
+        public static Color OnAccentDim => IsLight ? Color.White : Text;
+
         // Plexus background colors.
         public static Color PlexusNodeA { get; private set; }
         public static Color PlexusNodeB { get; private set; }

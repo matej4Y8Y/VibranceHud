@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
@@ -7,33 +8,29 @@ using VibranceHud.Pages;
 namespace VibranceHud
 {
     /// <summary>
-    /// The compact quick-adjust popup opened by the global Ctrl+Alt+V hotkey - a small,
-    /// always-on-top window with the four visual sliders. Same category as a Discord
-    /// overlay: no code injection, no game-process access, just a normal top-level window.
+    /// The compact quick-adjust popup opened by the global hotkey: every display control the
+    /// main window has, in a window you can read in one glance.
     ///
-    /// Visually it's a miniature of the main Vibrance page: its own particle field under a
-    /// rounded matte-glass card (same <see cref="Glass.PaintPanel"/> surface, same rounded
-    /// region trick as <see cref="SplashForm"/>), with the captions drawn by
-    /// <c>TextRenderer</c> in OnPaint rather than as Labels - transparent Labels would
-    /// freeze the patch of plexus behind them, so the page paints its own text.
+    /// Same category as a Discord overlay - no code injection, no game-process access, just a
+    /// normal top-level window. It is a miniature of the Display page: its own particle field
+    /// under a rounded matte-glass card, with the captions drawn by TextRenderer in OnPaint
+    /// rather than as Labels, because a transparent Label here freezes the patch of plexus
+    /// behind it. That is safe in this window specifically - it never scrolls, so painted text
+    /// and positioned controls share one coordinate space.
     ///
-    /// Slider drags write straight to the shared <see cref="IVibranceEngine"/>, exactly like
-    /// the full Vibrance page, so the effect is visible immediately. Deliberately depends on
-    /// nothing from the auto-apply path (<c>ProfileApplyEngine</c>, <c>GameProfileStore</c>,
-    /// <c>ProfileEngineCoordinator</c>) - a quick manual tweak here must never register as,
-    /// or get silently clobbered by, a game's auto-applied profile.
+    /// Presets are deliberately the plain text pills rather than the Display page's
+    /// photo-backed cards. This window exists to be finished with in three seconds; a
+    /// thumbnail strip would make it something you browse.
     ///
-    /// As of the v0.9.x alt-tab fix, every slider drag also autosaves to AppSettings via a
-    /// short debounce (250ms) and flags <see cref="AppSettings.ManualOverrideActive"/> so
-    /// the auto-apply coordinator knows to skip re-clobbering the user's last-tweaked
-    /// values on the next launch of the same game. The Save button is kept for symmetry
-    /// with older screenshots but is now equivalent to "flush now and close".
+    /// Slider drags write straight to the shared engine, so the effect is visible immediately,
+    /// and autosave (250ms debounce) plus <see cref="AppSettings.ManualOverrideActive"/> mean
+    /// a quick tweak survives a restart and is not clobbered by a game profile on next launch.
     /// </summary>
     public sealed class VibrancePopup : Form
     {
         private const int CornerRadius = 16;
-        private const int RowStride = 56;   // caption + slider per row
-        private const int Pad = 24;   // named Pad, not Margin: Form.Margin already exists
+        private const int Pad = 22;
+        private const int ColGap = 16;
         private const int AutosaveDebounceMs = 250;
 
         private readonly IVibranceEngine _engine;
@@ -41,25 +38,31 @@ namespace VibranceHud
         private readonly SettingsStore _store;
         private readonly DebouncedAction _autosaveDebounce;
 
-        // Its own field (the popup is a standalone top-level window, so it can't share
-        // MainWindow's). Fewer nodes than the main window - the surface is much smaller.
+        // Its own field - the popup is a standalone top-level window, so it can't share
+        // MainWindow's. Fewer nodes because the surface is much smaller.
         private readonly ParticleField _field = new(28);
         private readonly System.Windows.Forms.Timer _timer;
         private DateTime _last = DateTime.UtcNow;
+        private readonly bool _built;
 
-        // OnPaint runs ~30x/sec, so fonts are built once - never inside the paint path.
         private static readonly Font TitleFont = new(Theme.FontFamily, 12f, FontStyle.Bold);
         private static readonly Font CaptionFont = new(Theme.FontFamily, 8f, FontStyle.Bold);
-        private static readonly Font ValueFont = new(Theme.FontFamily, 8.5f);
+        private static readonly Font ValueFont = new(Theme.FontFamily, 9f, FontStyle.Bold);
 
-        internal FlatSlider VibranceSlider { get; }
-        internal FlatSlider SaturationSlider { get; }
-        internal FlatSlider BrightnessSlider { get; }
-        internal FlatSlider GammaSlider { get; }
+        internal TwoColorSlider VibranceSlider { get; }
+        internal TwoColorSlider SaturationSlider { get; }
+        internal TwoColorSlider BrightnessSlider { get; }
+        internal TwoColorSlider GammaSlider { get; }
+        internal TwoColorSlider ContrastSlider { get; }
+        internal TwoColorSlider TemperatureSlider { get; }
 
-        // Caption text + the y of each row, so OnPaint can draw the labels the constructor
-        // laid out without re-deriving the layout.
-        private readonly (string Caption, int Y, Func<string> Value)[] _rows;
+        private readonly List<ChipButton> _presetChips = new();
+        private readonly List<DisplayPreset> _presets = new();
+        private bool _applyingPreset;
+
+        /// <summary>Caption, its column, and how to render the current value - so OnPaint
+        /// never re-derives the layout the constructor already decided.</summary>
+        private readonly List<(string Caption, Rectangle Row, Func<string> Value)> _rows = new();
 
         public VibrancePopup(IVibranceEngine engine, AppSettings settings, SettingsStore store)
         {
@@ -72,141 +75,224 @@ namespace VibranceHud
             StartPosition = FormStartPosition.CenterScreen;
             ShowInTaskbar = false;
             TopMost = true;
-            ClientSize = new Size(360, 364);
+            ClientSize = new Size(420, 404);
             DoubleBuffered = true;
+            Icon = AppIcon.Value;
 
-            // Reduce paint flicker during slider drags. The popup repaints on every
-            // ValueChanged (the value readout in OnPaint) and continuously from the
-            // animation tick, so without AllPaintingInWmPaint + OptimizedDoubleBuffer
-            // each repaint flashes. ResizeRedraw keeps the rounded region in sync on
-            // DPI / maximize changes; UserPaint is what makes OnPaint run at all when
-            // there are no child-controls invalidating the form.
-            SetStyle(
-                ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.UserPaint |
-                ControlStyles.ResizeRedraw,
-                true);
+            SetStyle(ControlStyles.OptimizedDoubleBuffer
+                   | ControlStyles.AllPaintingInWmPaint
+                   | ControlStyles.UserPaint
+                   | ControlStyles.ResizeRedraw, true);
 
-            // Drive per-message-tick repaints: every message that goes through the
-            // pump (mouse move during a drag, timer tick, focus change) leaves the
-            // queue idle, so this fires after each one and gets the value readout
-            // drawn in OnPaint to the screen within the same frame as the slider
-            // chip itself. Without this, repaints only happened on the 33ms particle
-            // timer, which made the chip feel a frame or two behind the cursor.
+            // Repaint once per message-pump idle so the readout drawn in OnPaint lands in the
+            // same frame as the thumb, instead of waiting for the 33ms particle tick.
             Shown += (s, e) => Application.Idle += OnIdleRepaint;
             FormClosed += (s, e) => Application.Idle -= OnIdleRepaint;
 
-            Icon = AppIcon.Value;
+            int contentW = ClientSize.Width - 2 * Pad;
+            int colW = (contentW - ColGap) / 2;
+            int rightX = Pad + colW + ColGap;
 
-            int y = 56;
-            int vibY = y;
-            VibranceSlider = AddSliderRow(0, VibranceEngine.MaxVibrance, _engine.Vibrance, ref y,
-                v => _engine.Vibrance = v, VibranceEngine.DriverVibranceCeiling);
-            VibranceSlider.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            VibranceSlider.MouseUp += (s, e) => _engine.EndDrag();
-            int satY = y;
-            SaturationSlider = AddSliderRow(0, VibranceEngine.MaxSaturation, _engine.Saturation, ref y,
-                v => _engine.Saturation = v, 100);
-            SaturationSlider.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            SaturationSlider.MouseUp += (s, e) => _engine.EndDrag();
-            int brightY = y;
-            BrightnessSlider = AddSliderRow(VibranceEngine.MinBrightness, VibranceEngine.MaxBrightness, _engine.Brightness, ref y,
-                v => _engine.Brightness = v, 100);
-            BrightnessSlider.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            BrightnessSlider.MouseUp += (s, e) => _engine.EndDrag();
-            int gammaY = y;
-            GammaSlider = AddSliderRow(VibranceEngine.MinGamma, VibranceEngine.MaxGamma, _engine.Gamma, ref y,
-                v => _engine.Gamma = v, 100);
-            GammaSlider.MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _engine.BeginDrag(); };
-            GammaSlider.MouseUp += (s, e) => _engine.EndDrag();
-
-            // Value readouts mirror the main page's formatting: percentages everywhere,
-            // gamma as a 0.00 multiplier.
-            _rows = new (string, int, Func<string>)[]
+            // ---- presets: plain pills, kept small on purpose ----
+            int chipW = (contentW - 3 * 8) / 4;
+            for (int i = 0; i < DisplayPresets.All.Count; i++)
             {
-                ("VIBRANCE",   vibY,    () => $"{VibranceSlider.Value}%"),
-                ("SATURATION", satY,    () => $"{SaturationSlider.Value}%"),
-                ("BRIGHTNESS", brightY, () => $"{BrightnessSlider.Value}%"),
-                ("GAMMA",      gammaY,  () => $"{GammaSlider.Value / 100f:0.00}"),
-            };
+                var preset = DisplayPresets.All[i];
+                var chip = new ChipButton
+                {
+                    Text = preset.Name,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Bounds = new Rectangle(Pad + i * (chipW + 8), 58, chipW, 28),
+                };
+                chip.Click += (s, e) => ApplyPreset(preset);
+                _presets.Add(preset);
+                _presetChips.Add(chip);
+                Controls.Add(chip);
+            }
 
-            var saveBtn = SettingsPage.FlatButton("Save", Pad, y + 12, 152);
-            saveBtn.BackColor = Theme.AccentDim;   // primary action gets the accent pop
+            // ---- the two headline controls, full width ----
+            VibranceSlider = AddRow("VIBRANCE", Pad, 98, contentW,
+                0, VibranceEngine.MaxVibrance, VibranceEngine.DriverVibranceCeiling,
+                _engine.Vibrance, v => _engine.Vibrance = v,
+                SliderPalette.Accent(), () => $"{VibranceSlider!.Value}%");
+
+            SaturationSlider = AddRow("SATURATION", Pad, 158, contentW,
+                0, VibranceEngine.MaxSaturation, 100,
+                _engine.Saturation, v => _engine.Saturation = v,
+                SliderPalette.Accent(), () => $"{SaturationSlider!.Value}%");
+
+            // ---- fine tune, two columns ----
+            BrightnessSlider = AddRow("BRIGHTNESS", Pad, 218, colW,
+                VibranceEngine.MinBrightness, VibranceEngine.MaxBrightness, 100,
+                _engine.Brightness, v => _engine.Brightness = v,
+                SliderPalette.Luminance, () => $"{BrightnessSlider!.Value}%");
+
+            GammaSlider = AddRow("GAMMA", rightX, 218, colW,
+                VibranceEngine.MinGamma, VibranceEngine.MaxGamma, 100,
+                _engine.Gamma, v => _engine.Gamma = v,
+                SliderPalette.Luminance, () => $"{GammaSlider!.Value / 100f:0.00}");
+
+            ContrastSlider = AddRow("CONTRAST", Pad, 278, colW,
+                VibranceEngine.MinContrast, VibranceEngine.MaxContrast, 100,
+                _engine.Contrast, v => _engine.Contrast = v,
+                SliderPalette.Contrast, () => $"{ContrastSlider!.Value}%");
+
+            TemperatureSlider = AddRow("TEMPERATURE", rightX, 278, colW,
+                VibranceEngine.MinTemperature, VibranceEngine.MaxTemperature, 0,
+                _engine.Temperature, v => _engine.Temperature = v,
+                SliderPalette.Temperature, () => VibrancePage.TemperatureText(TemperatureSlider!.Value));
+
+            var saveBtn = Pages.SettingsPage.PrimaryButton("Save", Pad, 348, colW, height: 34);
             saveBtn.Click += (s, e) => Save();
             Controls.Add(saveBtn);
 
-            var closeBtn = SettingsPage.FlatButton("Close", Pad + 160, y + 12, 152);
+            var closeBtn = Pages.SettingsPage.FlatButton("Close", rightX, 348, colW);
+            closeBtn.Height = 34;
             closeBtn.Click += (s, e) => Close();
             Controls.Add(closeBtn);
 
             _field.Resize(ClientSize.Width, ClientSize.Height);
             ApplyRoundedRegion();
+            // Borderless and always on top: without this it is stuck wherever it opened,
+            // covering whatever happened to be in the middle of the screen.
+            WindowDrag.Enable(this, this);
+            RestorePosition();
+            UpdateActiveChip();
 
             _timer = new System.Windows.Forms.Timer { Interval = 33 };
             _timer.Tick += OnAnimationTick;
             _timer.Start();
+
+            _built = true;
         }
 
-        /// <summary>Cuts the window to a rounded rectangle so the glass card's corners are
-        /// real transparency, not dark pixels sitting outside the rim.</summary>
+        /// <summary>Build one caption + value + slider row and register it for painting.</summary>
+        private TwoColorSlider AddRow(string caption, int x, int y, int width,
+            int min, int max, int? notch, int value, Action<int> apply,
+            SliderPalette palette, Func<string> readout)
+        {
+            var slider = new TwoColorSlider
+            {
+                Minimum = min,
+                Maximum = max,
+                Notch = notch,
+                Value = value,
+                Palette = palette,
+            };
+            slider.SetTrackBounds(x, y + 20, width);
+
+            slider.ValueChanged += (s, e) =>
+            {
+                apply(slider.Value);
+                // Repaint just this row's readout, not the whole window and its particle field.
+                Invalidate(new Rectangle(x, y, width, 18));
+                if (!_applyingPreset) UpdateActiveChip();
+                _autosaveDebounce.Trigger();
+                // Tell the coordinator the user has overridden whatever a game profile applied,
+                // so the next launch of that game doesn't clobber this.
+                _settings.ManualOverrideActive = true;
+            };
+            slider.DragBegin += (s, e) => _engine.BeginDrag();
+            slider.DragEnd += (s, e) => _engine.EndDrag();
+
+            Controls.Add(slider);
+            _rows.Add((caption, new Rectangle(x, y, width, 18), readout));
+            return slider;
+        }
+
+        private void ApplyPreset(DisplayPreset preset)
+        {
+            // Tone only - saturation and vibrance are the user's own taste, same rule the
+            // Display page follows.
+            _applyingPreset = true;
+            try
+            {
+                BrightnessSlider.Value = preset.Brightness;
+                GammaSlider.Value = preset.Gamma;
+                ContrastSlider.Value = preset.Contrast;
+                TemperatureSlider.Value = preset.Temperature;
+            }
+            finally { _applyingPreset = false; }
+
+            UpdateActiveChip();
+            Save();
+            Invalidate();
+        }
+
+        private void UpdateActiveChip()
+        {
+            for (int i = 0; i < _presetChips.Count; i++)
+                _presetChips[i].Active = _presets[i].Matches(
+                    BrightnessSlider.Value, GammaSlider.Value,
+                    ContrastSlider.Value, TemperatureSlider.Value);
+        }
+
+        /// <summary>Cuts the window to a rounded rectangle so the card's corners are real
+        /// transparency, not dark pixels sitting outside the rim.</summary>
         private void ApplyRoundedRegion()
         {
-            using var path = Glass.RoundedPath(new RectangleF(0, 0, ClientSize.Width, ClientSize.Height), CornerRadius);
+            using var path = Glass.RoundedPath(
+                new RectangleF(0, 0, ClientSize.Width, ClientSize.Height), CornerRadius);
             Region = new Region(path);
+        }
+
+        /// <summary>Reopen where the user last left it, unless that spot is no longer on any
+        /// screen - a second monitor that has since been unplugged would otherwise strand it
+        /// somewhere unreachable.</summary>
+        private void RestorePosition()
+        {
+            if (_settings.PopupX == int.MinValue || _settings.PopupY == int.MinValue) return;
+
+            var wanted = new Rectangle(_settings.PopupX, _settings.PopupY, Width, Height);
+            bool reachable = false;
+            foreach (var screen in Screen.AllScreens)
+            {
+                var hit = Rectangle.Intersect(screen.WorkingArea, wanted);
+                if (hit.Width >= 120 && hit.Height >= 60) { reachable = true; break; }
+            }
+            if (!reachable) return;
+
+            StartPosition = FormStartPosition.Manual;
+            Location = wanted.Location;
+        }
+
+        protected override void OnMove(EventArgs e)
+        {
+            base.OnMove(e);
+            // _built guards the placement moves that happen while the constructor runs - the
+            // debounce flushes through Save(), which reads sliders that don't exist yet.
+            if (!_built || WindowState != FormWindowState.Normal) return;
+            _settings.PopupX = Left;
+            _settings.PopupY = Top;
+            _autosaveDebounce.Trigger();
         }
 
         private void OnAnimationTick(object? sender, EventArgs e)
         {
-            // Only burn frames while the popup is actually on screen.
             if (!Visible || WindowState == FormWindowState.Minimized) { _last = DateTime.UtcNow; return; }
 
             var now = DateTime.UtcNow;
             _field.Update(Math.Min((now - _last).TotalSeconds, 0.1));
             _last = now;
 
-            // invalidateChildren: true so the transparent sliders re-sample the moving
-            // plexus instead of freezing the patch behind them.
+            // invalidateChildren: true so the transparent sliders re-sample the moving plexus
+            // instead of freezing the patch behind them.
             Invalidate(true);
         }
 
-        /// <summary>Fired once per message-pump idle, so a slider drag or focus change
-        /// repaints the value readout in the same frame the chip moves, without waiting
-        /// for the 33ms particle timer to fire.</summary>
         private void OnIdleRepaint(object? sender, EventArgs e) => Invalidate();
 
-        private FlatSlider AddSliderRow(int min, int max, int value, ref int y, Action<int> onChange, int? notch = null)
+        /// <summary>
+        /// Click away and it goes. This is a hotkey popup - it is summoned over whatever the
+        /// user is actually doing, so leaving it floating there once their attention has moved
+        /// on makes it clutter rather than a shortcut. Hidden rather than closed so the next
+        /// press of the hotkey is instant.
+        /// </summary>
+        protected override void OnDeactivate(EventArgs e)
         {
-            var slider = new FlatSlider
-            {
-                Minimum = min,
-                Maximum = max,
-                Value = value,
-                Notch = notch,
-                Location = new Point(20, y + 20),
-                Width = 320,
-            };
-            slider.ValueChanged += (s, e) =>
-            {
-                onChange(slider.Value);
-                Invalidate();   // repaint the value readout drawn in OnPaint
-                // Autosave so the slider tweaks survive a restart / re-launch of the
-                // same game. Before this, the Save button was the only path - closing
-                // the popup without clicking Save left the settings file stale, so any
-                // future auto-apply loaded the old snapshot and "the values went away".
-                // 250ms debounce so a continuous drag still costs us one disk write,
-                // not hundreds.
-                _autosaveDebounce.Trigger();
-                // Mark that the user has manually overridden whatever a game profile
-                // may have applied. The coordinator checks this on the next launch of
-                // the same game and skips re-clobbering the user's last-tweaked values
-                // until they opt back into the saved profile.
-                _settings.ManualOverrideActive = true;
-            };
-            Controls.Add(slider);
-
-            y += RowStride;
-            return slider;
+            base.OnDeactivate(e);
+            Save();
+            Hide();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -214,31 +300,28 @@ namespace VibranceHud
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Backdrop: theme base, the user's background image (if set), then the plexus -
-            // the same stack GlowPage paints behind every page in the main window.
             using (var back = new SolidBrush(Theme.Background))
                 g.FillRectangle(back, ClientRectangle);
             Theming.AppBackground.Paint(g, 0, 0);
             _field.Paint(g, 0, 0);
 
-            // The whole popup is the frosted card, matching the main page's glass surface.
-            Glass.PaintPanel(g, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), CornerRadius, fillAlpha: 170);
+            Glass.PaintPanel(g, new RectangleF(0.5f, 0.5f, Width - 1, Height - 1),
+                CornerRadius, fillAlpha: 170);
 
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             TextRenderer.DrawText(g, "Quick vibrance", TitleFont,
                 new Rectangle(Pad, 14, Width - 2 * Pad, 24), Theme.Text, TextFormatFlags.Left);
 
-            // Thin accent rule under the title - the purple/pink cue from the main page.
             using (var rule = new SolidBrush(Color.FromArgb(190, Theme.Accent)))
-                g.FillRectangle(rule, Pad, 40, 44, 2);
+                g.FillRectangle(rule, Pad, 42, 44, 2);
 
-            foreach (var (caption, rowY, value) in _rows)
+            foreach (var (caption, row, value) in _rows)
             {
                 TextRenderer.DrawText(g, UiHelpers.Spaced(caption), CaptionFont,
-                    new Rectangle(Pad, rowY, 200, 16), Theme.TextDim, TextFormatFlags.Left);
+                    row, Theme.TextDim, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
                 TextRenderer.DrawText(g, value(), ValueFont,
-                    new Rectangle(Width - Pad - 60, rowY, 60, 16), Theme.TextDim, TextFormatFlags.Right);
+                    row, Theme.Text, TextFormatFlags.Right | TextFormatFlags.VerticalCenter);
             }
 
             base.OnPaint(e);
@@ -246,32 +329,28 @@ namespace VibranceHud
 
         protected override void OnPaintBackground(PaintEventArgs e)
         {
-            // Everything is painted in OnPaint; suppressing the default background erase
-            // keeps the animated field flicker-free.
+            // Everything is painted in OnPaint; suppressing the default erase keeps the
+            // animated field flicker-free.
         }
 
-        /// <summary>Persists the four sliders' current values to AppSettings. Slider drags
-        /// already updated the live engine and triggered the autosave debounce; this is
-        /// the synchronous flush, called from the Save button and from FormClosing so
-        /// the last drag is never lost on shutdown. Internal (not private) so tests can
-        /// trigger it without simulating a click.</summary>
+        /// <summary>Persist the current values. Drags already updated the live engine and
+        /// triggered the debounce; this is the synchronous flush, so the last movement is
+        /// never lost on shutdown.</summary>
         internal void Save()
         {
             _settings.VibrancePercent = VibranceSlider.Value;
             _settings.SaturationPercent = SaturationSlider.Value;
             _settings.BrightnessPercent = BrightnessSlider.Value;
             _settings.GammaPercent = GammaSlider.Value;
+            _settings.ContrastPercent = ContrastSlider.Value;
+            _settings.Temperature = TemperatureSlider.Value;
             _store.Save(_settings);
         }
 
-        /// <summary>Force-flush any pending debounced autosave before the form goes away,
-        /// so a drag that fired 50ms before the user clicked Close still lands on disk.
-        /// Also flags the manual override so the coordinator skips re-applying the saved
-        /// game profile next launch.</summary>
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // The debounce timer may not have fired yet on a drag-then-immediately-close
-            // sequence. Trigger() schedules a delayed call; we want it now.
+            // The debounce may not have fired on a drag-then-immediately-close, and we want
+            // it now rather than in 250ms on a form that is going away.
             Save();
             base.OnFormClosing(e);
         }
@@ -280,9 +359,8 @@ namespace VibranceHud
         {
             if (disposing)
             {
-                // Stop before Dispose - a queued WM_TIMER is still dispatched, and this
-                // popup is created and destroyed repeatedly via the global hotkey, so it's
-                // the most likely place to catch a tick mid-teardown.
+                // Stop before Dispose - a queued WM_TIMER is still dispatched, and this popup
+                // is created and destroyed repeatedly by the global hotkey.
                 _timer?.Stop();
                 _timer?.Dispose();
                 _autosaveDebounce.Dispose();

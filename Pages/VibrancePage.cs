@@ -241,6 +241,20 @@ namespace VibranceHud.Pages
 
             _shareStatus = CardLabel("");
 
+            // What each control actually does. Every slider on this page had a one-word
+            // caption and nothing else - "Gamma" tells somebody who already knows what gamma
+            // is precisely nothing they did not know, and everybody else nothing at all.
+            Explain(_saturation, "How strong every colour is. Push it too far and detail turns to blocks.");
+            Explain(_vibrance, "Boosts dull colours and mostly leaves skin tones alone. Subtler than saturation.");
+            Explain(_brightness, "Lifts or lowers the whole picture. Bright areas clip to white if you push it.");
+            Explain(_gamma, "Midtones only — brightens shadows without washing out the highlights.");
+            Explain(_contrast, "Distance between the darkest and lightest parts.");
+            Explain(_temperature, "Warm pushes toward orange, cool toward blue. Neutral is untouched.");
+            _presetTips.SetToolTip(_codeBox, "A code looks like PX-5C563R3P3M564. Paste one and press Apply.");
+            _presetTips.SetToolTip(_copyCode, "Puts your exact look on the clipboard as a short code.");
+            _presetTips.SetToolTip(_applyCode, "Switch to the look in the box. A wrong code changes nothing.");
+            _presetTips.SetToolTip(_resetFine, "Put brightness, gamma, contrast and temperature back to neutral.");
+
             RefreshReadouts();
             UpdateActiveChip();
 
@@ -263,6 +277,14 @@ namespace VibranceHud.Pages
             };
             Controls.Add(l);
             return l;
+        }
+
+        /// <summary>Attach the same explanation to a row's slider and its caption, so hovering
+        /// anywhere on the row shows it rather than only the thin track.</summary>
+        private void Explain(SliderRow row, string text)
+        {
+            _presetTips.SetToolTip(row.Slider, text);
+            row.SetToolTip(_presetTips, text);
         }
 
         private Label SectionLabel(string text)

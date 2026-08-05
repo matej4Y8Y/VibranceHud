@@ -34,6 +34,11 @@ namespace VibranceHud
         public DxInitFailureKind LastFailure { get; private set; } = DxInitFailureKind.None;
         public string LastFailureMessage { get; private set; } = "";
 
+        /// <summary>Raw HRESULT behind <see cref="LastFailure"/>; 0 when there wasn't one.
+        /// Carried out of the device before it's disposed, for the same reason as the two
+        /// above.</summary>
+        public int LastFailureCode { get; private set; }
+
         private static readonly float[] Identity = new float[]
         {
             1f, 0f, 0f, 0f, 0f,
@@ -92,6 +97,7 @@ namespace VibranceHud
                 IsAvailable = false;
                 LastFailure = _device.LastFailure;
                 LastFailureMessage = _device.LastFailureMessage;
+                LastFailureCode = _device.LastFailureCode;
                 _device.Dispose();
                 _device = null!;
                 return;

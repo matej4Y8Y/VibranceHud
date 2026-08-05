@@ -102,6 +102,7 @@ namespace VibranceHud
             Opacity = Math.Clamp(settings.OpacityPercent, 50, 100) / 100.0;
             Font = Design.Fonts.Label;
             DoubleBuffered = true;
+            KeyPreview = true;
 
             // Come back where we were left. Validated against the monitors that exist right
             // now, so unplugging the screen the window was on brings it home rather than
@@ -711,6 +712,62 @@ namespace VibranceHud
         {
             if (count <= 0) return 0;
             return ((current + (forward ? 1 : -1)) % count + count) % count;
+        }
+
+        /// <summary>
+        /// Shell-level shortcuts.
+        ///
+        /// ProcessCmdKey rather than KeyDown: these have to win over whatever child control
+        /// has focus, and Ctrl+Tab in particular never reaches the normal key path.
+        /// </summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.Escape:
+                    // Hides rather than exits, matching the close glyph. The app lives in the
+                    // tray, so Escape closing it outright would be a surprise.
+                    SaveWindowBounds();
+                    Hide();
+                    return true;
+
+                case Keys.Control | Keys.Tab:
+                    StepNav(forward: true);
+                    return true;
+
+                case Keys.Control | Keys.Shift | Keys.Tab:
+                    StepNav(forward: false);
+                    return true;
+            }
+
+            // Ctrl+1..9 jumps straight to a tab, the same as every browser and chat app.
+            // Counted over the VISIBLE rows, so the numbering matches what is on screen
+            // rather than including tabs that are hidden.
+            if ((keyData & Keys.Control) == Keys.Control)
+            {
+                int digit = (keyData & Keys.KeyCode) - Keys.D1;
+                if (digit >= 0 && digit < 9)
+                {
+                    var visible = VisibleNavButtons();
+                    if (digit < visible.Count) { visible[digit].PerformClick(); return true; }
+                }
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private List<NavButton> VisibleNavButtons() =>
+            NavOrder.Where(b => b.Visible).ToList();
+
+        private void StepNav(bool forward)
+        {
+            var visible = VisibleNavButtons();
+            if (visible.Count == 0) return;
+
+            int current = visible.FindIndex(b => b.Active);
+            if (current < 0) current = 0;
+
+            visible[NextNavIndex(current, visible.Count, forward)].PerformClick();
         }
 
         private void ToggleMaximize() =>

@@ -34,7 +34,34 @@ namespace VibranceHud
             BackColor = Color.Transparent;
             Cursor = Cursors.Hand;
             Height = 32;
+
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
+            AccessibleRole = AccessibleRole.PushButton;
         }
+
+        /// <summary>Keep the accessible name in step with the label. Control.AccessibleName
+        /// is not virtual, so it is mirrored here rather than overridden.</summary>
+        protected override void OnTextChanged(EventArgs e)
+        {
+            base.OnTextChanged(e);
+            AccessibleName = Text;
+        }
+
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+
+        protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); Focus(); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode is not (Keys.Space or Keys.Enter)) return;
+            e.Handled = true;
+            OnClick(EventArgs.Empty);
+        }
+
+        internal void TestPressKey(Keys key) => OnKeyDown(new KeyEventArgs(key));
 
         protected override void OnMouseEnter(EventArgs e)
         {
@@ -64,6 +91,8 @@ namespace VibranceHud
             var textColor = _active ? Theme.Background : Theme.Accent;
             TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width, Height), textColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+            if (Focused) UiHelpers.DrawFocusRing(g, ClientRectangle, radius);
         }
     }
 }

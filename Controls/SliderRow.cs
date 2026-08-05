@@ -158,6 +158,18 @@ namespace VibranceHud
             Slider.SetTrackBounds(x, y + captionH + CaptionGap, width);
         }
 
+        /// <summary>
+        /// Explain the row on hover.
+        ///
+        /// Applied to the caption and the readout as well as the track, because the track is
+        /// a few pixels tall and a tooltip nobody can land on is not a tooltip.
+        /// </summary>
+        public void SetToolTip(ToolTip tips, string text)
+        {
+            tips.SetToolTip(_caption, text);
+            tips.SetToolTip(_value, text);
+        }
+
         /// <summary>Re-read theme colours. Labels are stock controls: they keep whatever they
         /// were built with until told otherwise, so a theme switch has to come through here.</summary>
         public void Restyle()

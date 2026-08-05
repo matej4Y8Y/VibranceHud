@@ -65,13 +65,13 @@ namespace VibranceHud
 
         private static readonly Font ComboFont = new(Theme.FontFamily, 11f, FontStyle.Bold);
         private static readonly Font ButtonFont = new(Theme.FontFamily, 8.5f, FontStyle.Bold);
-        private static readonly Font HintFont = new(Theme.FontFamily, 8f, FontStyle.Italic);
 
         private Rectangle _setBtnRect;
 
         private uint _modifierMask;
         private uint _virtualKey;
         private bool _capturing;
+        private bool _hoverSet;
         private string _captureError = "";
 
         // Set when RegisterHotKey refused the combo the user just picked (another app owns
@@ -309,6 +309,28 @@ namespace VibranceHud
             }
         }
 
+        // The Set pill is the only clickable part of this control, and it used to give no
+        // sign of that: no hand cursor, no hover. Every other button in PlexusX answers the
+        // pointer, so a dead-looking one reads as broken.
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            bool over = _setBtnRect.Contains(e.Location);
+            Cursor = over ? Cursors.Hand : Cursors.Default;
+            if (over == _hoverSet) return;
+            _hoverSet = over;
+            Invalidate(Rectangle.Inflate(_setBtnRect, 2, 2));
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            Cursor = Cursors.Default;
+            if (!_hoverSet) return;
+            _hoverSet = false;
+            Invalidate(Rectangle.Inflate(_setBtnRect, 2, 2));
+        }
+
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
@@ -458,15 +480,16 @@ namespace VibranceHud
             _setBtnRect.Height = ButtonHeight;
             PaintPillButton(g, _setBtnRect,
                 _capturing ? "Cancel" : "Set",
-                accent: _capturing ? Theme.Accent : Theme.Border);
+                accent: _capturing ? Theme.Accent : Theme.Border,
+                hover: _hoverSet);
         }
 
-        private static void PaintPillButton(Graphics g, Rectangle rect, string text, Color accent)
+        private static void PaintPillButton(Graphics g, Rectangle rect, string text, Color accent, bool hover)
         {
             using var path = Glass.RoundedPath(new RectangleF(rect.X, rect.Y, rect.Width, rect.Height), rect.Height / 2f);
-            using (var fill = new SolidBrush(Color.FromArgb(160, accent)))
+            using (var fill = new SolidBrush(Color.FromArgb(hover ? 210 : 160, accent)))
                 g.FillPath(fill, path);
-            using (var pen = new Pen(Color.FromArgb(180, accent), 1f))
+            using (var pen = new Pen(Color.FromArgb(hover ? 230 : 180, accent), 1f))
                 g.DrawPath(pen, path);
 
             TextRenderer.DrawText(g, text, ButtonFont, rect, Theme.Text,

@@ -37,10 +37,38 @@ namespace VibranceHud
             Height = 46;
             Cursor = Cursors.Hand;
             BackColor = Color.Transparent;
+
+            TabStop = true;
+            SetStyle(ControlStyles.Selectable, true);
+            AccessibleRole = AccessibleRole.PageTab;
         }
+
+        /// <summary>Keep the accessible name in step with the label. Control.AccessibleName
+        /// is not virtual, so it is mirrored here rather than overridden.</summary>
+        protected override void OnTextChanged(EventArgs e)
+        {
+            base.OnTextChanged(e);
+            AccessibleName = Text;
+        }
+
+        /// <summary>Raise Click without a mouse, for the shell's Ctrl+Tab and Ctrl+1..9.</summary>
+        public void PerformClick() => OnClick(EventArgs.Empty);
 
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); _hover = true; Invalidate(); }
         protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); _hover = false; Invalidate(); }
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+        protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); Focus(); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode is not (Keys.Space or Keys.Enter)) return;
+            e.Handled = true;
+            OnClick(EventArgs.Empty);
+        }
+
+        internal void TestPressKey(Keys key) => OnKeyDown(new KeyEventArgs(key));
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -72,6 +100,8 @@ namespace VibranceHud
             var labelFont = _active ? Design.Fonts.BodyBold : Design.Fonts.Body;
             TextRenderer.DrawText(g, Text, labelFont, new Rectangle(52, 0, Width - 56, Height), textColor,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
+
+            if (Focused) UiHelpers.DrawFocusRing(g, ClientRectangle, 0f);
         }
 
         private static void DrawIcon(Graphics g, int kind, Rectangle r, Color color)

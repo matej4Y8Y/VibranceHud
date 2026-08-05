@@ -20,19 +20,24 @@ namespace VibranceHud
         private readonly GameProcessWatcher _watcher;
         private readonly ProfileApplyEngine _engine;
         private readonly GameProfileApplyGate _gate;
+        private readonly AppSettings? _settings;
 
         /// <summary>Convenience passthrough to <see cref="GameProcessWatcher.IsRunning"/>;
         /// used by the editor card's status dot and the tray icon's state-aware text.</summary>
         public bool IsRunning => _watcher.IsRunning;
 
+        /// <param name="settings">Needed for the per-game resolution rules. Optional so the
+        /// existing tests, which are about profiles, keep constructing this without one.</param>
         public ProfileEngineCoordinator(
             GameProcessWatcher watcher,
             ProfileApplyEngine engine,
-            GameProfileApplyGate gate)
+            GameProfileApplyGate gate,
+            AppSettings? settings = null)
         {
             _watcher = watcher ?? throw new ArgumentNullException(nameof(watcher));
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
             _gate = gate ?? throw new ArgumentNullException(nameof(gate));
+            _settings = settings;
 
             _watcher.OnGameLaunched += OnLaunched;
             _watcher.OnGameClosed += OnClosed;
@@ -46,6 +51,14 @@ namespace VibranceHud
 
         private void OnLaunched(string gameId)
         {
+            // Resolution first, and NOT behind the profile gate.
+            //
+            // These are two independent features that happen to share a trigger. Somebody who
+            // has never opened the Profile Editor - which is most people - still expects their
+            // launch resolution to work, and it used to be skipped entirely because the
+            // profile lookup above returned null and bailed out before reaching it.
+            ApplyMonitorRule(gameId);
+
             // Gate first: per-game opt-out (always approved today, but the seam exists).
             if (!_gate.ShouldAutoApply(gameId)) return;
 
@@ -54,6 +67,32 @@ namespace VibranceHud
 
             _engine.SetCurrent(profile);
             _engine.ApplyAsync(gameId).GetAwaiter().GetResult();
+        }
+
+        /// <summary>
+        /// Switch the desktop for a game that has a resolution rule, and arrange to switch it
+        /// back when the game exits.
+        ///
+        /// Best-effort throughout: a monitor that refuses the mode, or a game whose process
+        /// never appears, must leave the user exactly where they were rather than stranded on
+        /// a resolution they did not choose.
+        /// </summary>
+        private void ApplyMonitorRule(string gameId)
+        {
+            if (_settings == null) return;
+
+            var rule = MonitorRules.For(_settings.MonitorRules, gameId);
+            if (rule == null) return;
+
+            if (DisplayController.Current() is not { } original) return;
+            if (original.Width == rule.Width && original.Height == rule.Height) return;
+
+            if (!DisplayController.Apply(rule.Width, rule.Height)) return;
+
+            var game = Games.SupportedGames.ById(gameId);
+            if (game != null)
+                DisplayController.RestoreWhenGameExits(game.ProcessName, original,
+                    TimeSpan.FromMinutes(5));
         }
 
         private void OnClosed(string gameId)
