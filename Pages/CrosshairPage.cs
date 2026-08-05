@@ -25,6 +25,14 @@ namespace VibranceHud.Pages
         private readonly ToggleSwitch _enabled;
         private readonly Label _status;
         private readonly List<ChipButton> _shapes = new();
+
+        // Held so a preset - or loading a saved crosshair - can drive them. Without this the
+        // config changes and every readout keeps showing the old number, because each slider
+        // captured its starting value when it was built.
+        private FlatSlider _sizeSlider = null!, _thicknessSlider = null!, _gapSlider = null!;
+
+        /// <summary>Suppresses the per-slider save while several are being set at once.</summary>
+        private bool _applyingPreset;
         private readonly List<SwatchDot> _colourDots = new();
 
         private const int BaseCardHeight = 630;
@@ -79,37 +87,51 @@ namespace VibranceHud.Pages
             };
             _card.Controls.Add(_status);
 
-            // ---- Shape ----
-            _card.Controls.Add(UiHelpers.Caption("SHAPE", 18, 228, 200));
-            int sx = 18;
-            foreach (var shape in new[] { CrosshairShape.Cross, CrosshairShape.Dot,
-                                          CrosshairShape.Circle, CrosshairShape.T })
+            // ---- Presets ----
+            //
+            // Replaces the old four shape chips. Every shape is still reachable - the presets
+            // between them cover Cross, T, Dot and Circle - but each one also brings sensible
+            // dimensions, so picking a starting point is one click instead of a shape plus
+            // three sliders. Applying one deliberately keeps the user's colour.
+            _card.Controls.Add(UiHelpers.Caption("PRESETS", 18, 228, 200));
+
+            const int ChipW = 140, ChipH = 34, ChipGapX = 8, ChipGapY = 8, PerRow = 4;
+            int presetTop = 250;
+
+            for (int i = 0; i < CrosshairPresets.All.Count; i++)
             {
+                var preset = CrosshairPresets.All[i];
                 var chip = new ChipButton
                 {
-                    Text = shape.ToString(),
-                    Location = new Point(sx, 250),
-                    Size = new Size(140, 34),
+                    Text = preset.Name,
+                    Location = new Point(
+                        18 + (i % PerRow) * (ChipW + ChipGapX),
+                        presetTop + (i / PerRow) * (ChipH + ChipGapY)),
+                    Size = new Size(ChipW, ChipH),
                     Font = new Font(Theme.FontFamily, 9f),
-                    Active = _current.Shape == shape
                 };
-                var captured = shape;
-                chip.Click += (s, e) =>
-                {
-                    _current.Shape = captured;
-                    foreach (var c in _shapes) c.Active = c.Text == captured.ToString();
-                    Push();
-                };
+                chip.Click += (s, e) => ApplyPreset(preset);
                 _shapes.Add(chip);
                 _card.Controls.Add(chip);
-                sx += 148;
             }
 
+            HighlightActivePreset();
+
             // ---- Sliders ----
-            int y = 300;
-            AddSlider(_card, "SIZE", y, 1, 30, _current.Size, v => { _current.Size = v; Push(); });
-            AddSlider(_card, "THICKNESS", y + 62, 1, 10, _current.Thickness, v => { _current.Thickness = v; Push(); });
-            AddSlider(_card, "GAP", y + 124, 0, 30, _current.Gap, v => { _current.Gap = v; Push(); });
+            // Two rows of preset chips sit above, so everything below starts lower than it
+            // did when this was a single row of four.
+            int y = presetTop + 2 * ChipH + ChipGapY + 16;
+            // Ranges are in tenths: 0.5-30.0 size, 0.5-10.0 thickness, 0-30.0 gap. Same
+            // limits as before, ten times the resolution inside them.
+            _sizeSlider = AddSlider(_card, "SIZE", y, 5, 300,
+                (int)Math.Round(_current.ResolvedSize * 10),
+                v => { _current.SetSizeTenths(v); OnSliderMoved(); });
+            _thicknessSlider = AddSlider(_card, "THICKNESS", y + 62, 5, 100,
+                (int)Math.Round(_current.ResolvedThickness * 10),
+                v => { _current.SetThicknessTenths(v); OnSliderMoved(); });
+            _gapSlider = AddSlider(_card, "GAP", y + 124, 0, 300,
+                (int)Math.Round(_current.ResolvedGap * 10),
+                v => { _current.SetGapTenths(v); OnSliderMoved(); });
 
             // ---- Colour + options ----
             _card.Controls.Add(UiHelpers.Caption("COLOUR", 18, y + 186, 200));
@@ -197,13 +219,25 @@ namespace VibranceHud.Pages
             Push();
         }
 
-        private void AddSlider(Control parent, string label, int y, int min, int max,
-            int value, Action<int> onChange)
+        /// <summary>
+        /// One crosshair slider, working in TENTHS of a pixel.
+        ///
+        /// Whole pixels were too coarse to aim with: at the sizes people actually use, one
+        /// step of thickness is the difference between a usable crosshair and an unusable
+        /// one, and there was nothing between 2 and 3. The slider is still an integer control
+        /// - it just counts tenths - so the value shown is divided by ten and the callback
+        /// receives tenths.
+        /// </summary>
+        private FlatSlider AddSlider(Control parent, string label, int y, int minTenths, int maxTenths,
+            int valueTenths, Action<int> onChangeTenths)
         {
             parent.Controls.Add(UiHelpers.Caption(label, 18, y, 200));
+
+            static string Format(int tenths) => (tenths / 10f).ToString("0.0");
+
             var readout = new Label
             {
-                Text = value.ToString(),
+                Text = Format(valueTenths),
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 8.5f),
@@ -215,13 +249,68 @@ namespace VibranceHud.Pages
 
             var slider = new FlatSlider
             {
-                Minimum = min,
-                Maximum = max,
-                Value = Math.Clamp(value, min, max)
+                Minimum = minTenths,
+                Maximum = maxTenths,
+                Value = Math.Clamp(valueTenths, minTenths, maxTenths)
             };
             slider.SetTrackBounds(Gutter, y + 20, ContentW);
-            slider.ValueChanged += (s, e) => { readout.Text = slider.Value.ToString(); onChange(slider.Value); };
+            slider.ValueChanged += (s, e) =>
+            {
+                readout.Text = Format(slider.Value);
+                onChangeTenths(slider.Value);
+            };
             parent.Controls.Add(slider);
+            return slider;
+        }
+
+        /// <summary>
+        /// Apply a preset, then rebuild the page so the sliders show what it set.
+        ///
+        /// The whole card is rebuilt rather than each slider being poked individually: the
+        /// sliders were created with their starting values captured in closures, so setting
+        /// the config alone would change the crosshair and leave every readout showing the
+        /// old numbers - the same trap the share-code button had on the Display page.
+        /// </summary>
+        private void ApplyPreset(CrosshairPreset preset)
+        {
+            CrosshairPresets.Apply(_current, preset);
+
+            // Drive the sliders so their readouts follow. Guarded, because each one fires
+            // ValueChanged and would otherwise apply and save three times for one click.
+            _applyingPreset = true;
+            try
+            {
+                _sizeSlider.Value = Math.Clamp(preset.SizeTenths, _sizeSlider.Minimum, _sizeSlider.Maximum);
+                _thicknessSlider.Value = Math.Clamp(preset.ThicknessTenths, _thicknessSlider.Minimum, _thicknessSlider.Maximum);
+                _gapSlider.Value = Math.Clamp(preset.GapTenths, _gapSlider.Minimum, _gapSlider.Maximum);
+            }
+            finally { _applyingPreset = false; }
+
+            // Re-apply the preset's own values afterwards: the sliders clamp to their track
+            // range, and writing them back would otherwise let a clamp silently rewrite the
+            // preset the user just picked.
+            CrosshairPresets.Apply(_current, preset);
+
+            Push();
+            HighlightActivePreset();
+        }
+
+        /// <summary>A slider the user moved. Applies immediately, and drops the preset
+        /// highlight once the crosshair no longer matches one.</summary>
+        private void OnSliderMoved()
+        {
+            if (_applyingPreset) return;
+            Push();
+            HighlightActivePreset();
+        }
+
+        /// <summary>Mark whichever preset the current crosshair matches, or none once the
+        /// user has moved a slider off all of them.</summary>
+        private void HighlightActivePreset()
+        {
+            var active = CrosshairPresets.Matching(_current);
+            foreach (var chip in _shapes)
+                chip.Active = active != null && chip.Text == active.Name;
         }
 
         /// <summary>Push the edited config to the preview and the live overlay together, so
@@ -294,7 +383,21 @@ namespace VibranceHud.Pages
             var found = _settings.SavedCrosshairs.FirstOrDefault(c => c.Name == name);
             if (found == null) return;
             _current = found.Clone();
-            foreach (var c in _shapes) c.Active = c.Text == _current.Shape.ToString();
+
+            // Move the sliders to the loaded crosshair, not just the config behind them.
+            _applyingPreset = true;
+            try
+            {
+                _sizeSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedSize * 10),
+                    _sizeSlider.Minimum, _sizeSlider.Maximum);
+                _thicknessSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedThickness * 10),
+                    _thicknessSlider.Minimum, _thicknessSlider.Maximum);
+                _gapSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedGap * 10),
+                    _gapSlider.Minimum, _gapSlider.Maximum);
+            }
+            finally { _applyingPreset = false; }
+
+            HighlightActivePreset();
             SyncColourDots();
             Push();
             RefreshSavedList();

@@ -20,9 +20,11 @@ namespace VibranceHud.Crosshair
     {
         public static CrosshairShapes Build(CrosshairConfig c)
         {
-            float t = Math.Max(1, c.Thickness);
-            float size = Math.Max(1, c.Size);
-            float gap = Math.Max(0, c.Gap);
+            // Resolved, not the legacy whole-pixel fields: these carry tenths of a pixel, so
+            // a crosshair set to 3.4 thick draws at 3.4 rather than snapping to 3.
+            float t = Math.Max(0.5f, c.ResolvedThickness);
+            float size = Math.Max(0.5f, c.ResolvedSize);
+            float gap = Math.Max(0, c.ResolvedGap);
             float half = t / 2f;   // everything is centred on the origin, so arms straddle it
 
             var bars = new List<RectangleF>();

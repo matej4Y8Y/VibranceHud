@@ -31,7 +31,7 @@ namespace VibranceHud.Crosshair
 
             if (shapes.Circle is { } c)
             {
-                float t = Math.Max(1, config.Thickness);
+                float t = Math.Max(0.5f, config.ResolvedThickness);
                 if (config.Outline)
                     using (var haloPen = new Pen(halo.Color, t + 2f))
                         g.DrawEllipse(haloPen, c);
