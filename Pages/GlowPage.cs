@@ -87,6 +87,11 @@ namespace VibranceHud.Pages
             if (m.Msg is WM_HSCROLL or WM_VSCROLL) Invalidate(true);
         }
 
+        // Pages used to fade up from the background when swapped in - a ~200ms scrim over the
+        // whole page. Taken out on request: switching tabs should feel instant, and a fade
+        // that plays every time you touch the nav reads as the app being slow rather than as
+        // polish. Tabs now appear immediately, which is also what every other Windows app does.
+
         protected override void OnPaint(PaintEventArgs e)
         {
             using (var back = new SolidBrush(Theme.Background))

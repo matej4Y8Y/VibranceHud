@@ -363,11 +363,6 @@ namespace VibranceHud
 
             var elapsed = Math.Min((DateTime.UtcNow - _last).TotalSeconds, 0.1);
 
-            // The page's fade-in runs even while the user is holding a slider or the window
-            // is otherwise "interacting" - it is a one-shot transition, and freezing it
-            // half-faded would look like the app had hung.
-            if (_currentPage is GlowPage fading) fading.TickIntro(elapsed);
-
             if (_userInteracting) { _last = DateTime.UtcNow; return; }
 
             var now = DateTime.UtcNow;
@@ -548,7 +543,7 @@ namespace VibranceHud
             // Only rebuild the Game tab if it is what the user is looking at; otherwise it
             // rebuilds itself next time they open it.
             if (ReferenceEquals(_currentPage, _profileEditorPage))
-                _profileEditorPage.BeginIntro();
+                _profileEditorPage.Invalidate(true);
             else if (_navGames.Active)
                 ShowGames();
         }
@@ -606,10 +601,6 @@ namespace VibranceHud
             _contentHost.Controls.Add(page);
             _contentHost.ResumeLayout();
             _currentPage = page;
-
-            // Fade the incoming page up from the background so a change of tab - or of game -
-            // reads as the app moving somewhere rather than the window flickering.
-            if (page is GlowPage arriving) arriving.BeginIntro();
 
             if (old != null && old != page &&
                 old != _vibrancePage && old != _settingsPage && old != _accountPage &&
