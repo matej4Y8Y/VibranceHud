@@ -74,11 +74,46 @@ namespace VibranceHud.Pages
             Invalidate(true);
         }
 
+        /// <summary>
+        /// Scroll the wheel ourselves.
+        ///
+        /// ScrollableControl only acts on the wheel when its scrollbar is actually visible -
+        /// it checks VScroll first. Hiding the native bars therefore killed wheel scrolling
+        /// outright, which is far worse than the ugly bar it was hiding.
+        ///
+        /// Worth stating why the test missed it: it moved AutoScrollPosition directly, which
+        /// works whether or not a bar is showing. It never went through the wheel path, so it
+        /// passed on a page nobody could actually scroll. Setting a property is not the same
+        /// as using the control.
+        /// </summary>
         protected override void OnMouseWheel(MouseEventArgs e)
         {
-            base.OnMouseWheel(e);
+            int extent = AutoScrollMinSize.Height - ClientSize.Height;
+
+            if (AutoScroll && extent > 0)
+            {
+                // Three lines per notch, matching Windows' own default.
+                int lines = SystemInformation.MouseWheelScrollLines;
+                if (lines <= 0) lines = 3;
+
+                int step = e.Delta * lines * 6 / 120;
+                int target = Math.Clamp(-AutoScrollPosition.Y - step, 0, extent);
+
+                AutoScrollPosition = new Point(-AutoScrollPosition.X, target);
+
+                if (e is HandledMouseEventArgs handled) handled.Handled = true;
+            }
+            else
+            {
+                base.OnMouseWheel(e);
+            }
+
             Invalidate(true);
         }
+
+        /// <summary>Test seam: OnMouseWheel is protected and a unit test has no message loop.</summary>
+        internal void TestScrollWheel(int delta) =>
+            OnMouseWheel(new MouseEventArgs(MouseButtons.None, 0, 0, 0, delta));
 
         protected override void WndProc(ref Message m)
         {
