@@ -1,3 +1,4 @@
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 
@@ -10,9 +11,34 @@ namespace VibranceHud
     /// </summary>
     public static class Glass
     {
+        /// <summary>
+        /// A rounded rectangle, safe for any radius.
+        ///
+        /// AddArc throws ArgumentException - surfaced to the user as "Parameter is not valid"
+        /// - when the arc's diameter is zero, and it produces a corrupt path when the radius
+        /// is larger than the rectangle it is rounding. Both were reachable: a square-cornered
+        /// caller passing 0 crashed the app on paint, and because it threw from inside OnPaint
+        /// the control was left unpainted, so the crash arrived alongside a blank white box
+        /// where the control should have been.
+        ///
+        /// A zero radius is a legitimate request for square corners, and a radius larger than
+        /// the box is a legitimate request for a pill.
+        /// </summary>
         public static GraphicsPath RoundedPath(RectangleF rect, float radius)
         {
             var path = new GraphicsPath();
+
+            if (rect.Width <= 0 || rect.Height <= 0) return path;
+
+            // Never wider than the box can take, and never negative.
+            radius = Math.Max(0f, Math.Min(radius, Math.Min(rect.Width, rect.Height) / 2f));
+
+            if (radius <= 0.01f)
+            {
+                path.AddRectangle(rect);
+                return path;
+            }
+
             float d = radius * 2;
             path.AddArc(rect.X, rect.Y, d, d, 180, 90);
             path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);

@@ -112,10 +112,27 @@ namespace VibranceHud
             if (Focused) UiHelpers.DrawFocusRing(g, ClientRectangle, Height / 2f);
         }
 
+        /// <summary>
+        /// A pill, safe at any size.
+        ///
+        /// AddArc throws ArgumentException - "Parameter is not valid" to the user - on a
+        /// zero-diameter arc, and layout can hand a control a 1px box while a page is
+        /// mid-resize. Thrown from OnPaint that takes the whole app down, which is exactly
+        /// what happened with the focus ring; this is the same fault in a second place, found
+        /// by the paint tests written after it.
+        /// </summary>
         private static GraphicsPath PillPath(Rectangle rect)
         {
             var path = new GraphicsPath();
-            int d = rect.Height;
+            if (rect.Width <= 0 || rect.Height <= 0) return path;
+
+            int d = Math.Min(rect.Height, rect.Width);
+            if (d <= 1)
+            {
+                path.AddRectangle(rect);
+                return path;
+            }
+
             path.AddArc(rect.X, rect.Y, d, d, 90, 180);
             path.AddArc(rect.Right - d, rect.Y, d, d, 270, 180);
             path.CloseFigure();
