@@ -152,7 +152,11 @@ namespace VibranceHud.Pages
                 palette: SliderPalette.Luminance, format: v => $"{v}%");
             _gamma = Row("Gamma", VibranceEngine.MinGamma, VibranceEngine.MaxGamma, 100, _engine.Gamma,
                 v => { _engine.Gamma = v; _settings.GammaPercent = v; },
-                palette: SliderPalette.Luminance, format: v => $"{v / 100f:0.00}");
+                // Invariant, so the decimal point stays a point. The app is English
+                // throughout, but the format picked up the machine's locale - on a Czech
+                // Windows the one number on the page with a decimal read "1,00".
+                palette: SliderPalette.Luminance,
+                format: v => (v / 100f).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
             _contrast = Row("Contrast", VibranceEngine.MinContrast, VibranceEngine.MaxContrast,
                 100, _engine.Contrast,
                 v => { _engine.Contrast = v; _settings.ContrastPercent = v; },

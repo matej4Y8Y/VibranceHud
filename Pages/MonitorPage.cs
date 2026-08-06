@@ -303,33 +303,52 @@ namespace VibranceHud.Pages
                     AutoSize = true,
                 });
 
+                // Measured, not guessed. At a hard 30px this clipped its own third line, so
+                // every preset's trade-off - the entire reason the row exists - stopped
+                // mid-sentence ("you lose horizontal field of view, so mor").
+                string why = preset.Why + "  " + preset.TradeOff;
+                var whyFont = new Font(Theme.FontFamily, 8f);
+                int whyW = CardW - Gutter * 2 - 164;
+                // Plus slack: MeasureText and Label do not lay text out identically, and the
+                // couple of pixels between them is exactly enough to slice the descenders off
+                // the last wrapped line.
+                int whyH = TextRenderer.MeasureText(
+                    why, whyFont, new Size(whyW, int.MaxValue), TextFormatFlags.WordBreak).Height + 6;
+
                 card.Controls.Add(new Label
                 {
-                    Text = preset.Why + "  " + preset.TradeOff,
+                    Text = why,
                     ForeColor = Theme.TextDim,
                     BackColor = Color.Transparent,
-                    Font = new Font(Theme.FontFamily, 8f),
+                    Font = whyFont,
                     // 22, not 18: the bold name above measures 21px, so at 18 the two rows
                     // overlapped by three pixels.
                     Location = new Point(Gutter + 164, rowY + 22),
-                    Size = new Size(CardW - Gutter * 2 - 164, 30),
+                    Size = new Size(whyW, whyH),
                 });
 
-                rowY += 62;
+                // Grows with the text rather than assuming two lines fit in 62px.
+                rowY += Math.Max(62, 22 + whyH + 14);
             }
 
             // Said once, under all three, because it is the single most common reason
             // somebody decides these presets are broken.
+            var noteFont = new Font(Theme.FontFamily, 8f);
+            int noteW = CardW - Gutter * 2;
+            int noteH = TextRenderer.MeasureText(
+                PvpResolutions.StretchNote, noteFont,
+                new Size(noteW, int.MaxValue), TextFormatFlags.WordBreak).Height + 6;
+
             card.Controls.Add(new Label
             {
                 Text = PvpResolutions.StretchNote,
                 ForeColor = Color.FromArgb(240, 180, 90),
                 BackColor = Color.Transparent,
-                Font = new Font(Theme.FontFamily, 8f),
+                Font = noteFont,
                 Location = new Point(Gutter, rowY),
-                Size = new Size(CardW - Gutter * 2, 30),
+                Size = new Size(noteW, noteH),
             });
-            rowY += 38;
+            rowY += noteH + 12;
 
             // ---- custom ----
             card.Controls.Add(UiHelpers.Caption("CUSTOM", Gutter, rowY, 200));

@@ -141,6 +141,11 @@ namespace VibranceHud
         /// the picker itself so the two never disagree.</summary>
         public static string GetDisplay(uint modifierMask, uint virtualKey)
         {
+            // No key means nothing is bound, and the modifiers on their own are not a
+            // shortcut. "Ctrl+Shift+(none)" reads as a control that has broken rather than
+            // one that is simply unset, which is what it actually is.
+            if (virtualKey == 0) return "Not set";
+
             var parts = new System.Collections.Generic.List<string>(4);
             if ((modifierMask & HotkeyModifiers.Control) != 0) parts.Add("Ctrl");
             if ((modifierMask & HotkeyModifiers.Alt) != 0) parts.Add("Alt");
