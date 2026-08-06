@@ -40,7 +40,7 @@ namespace VibranceHud.Pages
         /// which rates exist depends entirely on the mode that is live.</summary>
         private Panel? _rateRow;
 
-        private TextBox _customWidth = null!, _customHeight = null!;
+        private GlassTextBox _customWidth = null!, _customHeight = null!;
         private Label _status = null!;
         private Label _ruleCaption = null!;
 
@@ -365,17 +365,18 @@ namespace VibranceHud.Pages
             return y + card.Height + 20;
         }
 
-        private static TextBox NumberBox(int x, int y, string placeholder) => new()
+        private static GlassTextBox NumberBox(int x, int y, string placeholder)
         {
-            Location = new Point(x, y),
-            Size = new Size(86, 26),
-            BorderStyle = BorderStyle.FixedSingle,
-            BackColor = Theme.Background,
-            ForeColor = Theme.Text,
-            Font = new Font("Consolas", 9.5f),
-            PlaceholderText = placeholder,
-            MaxLength = 5,
-        };
+            var box = new GlassTextBox
+            {
+                Location = new Point(x, y),
+                Size = new Size(86, 30),
+                PlaceholderText = placeholder,
+                MaxLength = 5,
+            };
+            box.Inner.Font = new Font("Consolas", 9.5f);
+            return box;
+        }
 
         private void ApplyPvp(PvpResolution preset)
         {

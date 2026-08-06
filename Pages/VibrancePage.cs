@@ -64,7 +64,7 @@ namespace VibranceHud.Pages
 
         // ---- share ----
         private readonly Label _shareLabel, _shareHint, _shareStatus;
-        private readonly TextBox _codeBox;
+        private readonly GlassTextBox _codeBox;
         private readonly GlassButton _copyCode, _applyCode;
         private readonly List<PresetChip> _chips = new();
         private readonly List<DisplayPreset> _presets = new();
@@ -206,17 +206,14 @@ namespace VibranceHud.Pages
             _shareLabel = SectionLabel("SHARE");
             _shareHint = CardLabel("Paste a friend's code to get their exact look, or copy yours to send.");
 
-            _codeBox = new TextBox
+            _codeBox = new GlassTextBox
             {
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Theme.Background,
-                ForeColor = Theme.Text,
-                Font = new Font("Consolas", 10f),
                 CharacterCasing = CharacterCasing.Upper,
                 // An empty monospace box next to a button called Apply says nothing about
                 // what belongs in it.
                 PlaceholderText = "PX-XXXXXXXXX",
             };
+            _codeBox.Inner.Font = new Font("Consolas", 10f);
             _card.Controls.Add(_codeBox);
 
             _copyCode = new GlassButton { Text = "Copy my code", Kind = GlassButtonKind.Ghost };

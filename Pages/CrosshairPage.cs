@@ -944,14 +944,11 @@ namespace VibranceHud.Pages
                     ForeColor = Theme.Text,
                     Font = new Font(Theme.FontFamily, 9.5f)
                 };
-                var box = new TextBox
+                var box = new GlassTextBox
                 {
                     Text = initial,
                     Location = new Point(18, 20),
-                    Width = 308,
-                    BackColor = Theme.Surface,
-                    ForeColor = Theme.Text,
-                    BorderStyle = BorderStyle.FixedSingle
+                    Size = new Size(308, 30),
                 };
                 var ok = SettingsPage.PrimaryButton("Save", 230, 62, 96, height: 30);
                 var cancel = SettingsPage.FlatButton("Cancel", 126, 62, 96);

@@ -135,16 +135,12 @@ namespace VibranceHud.Pages
                 Location = new Point(18, 36),
                 AutoSize = true
             });
-            var box = new TextBox
+            var box = new GlassTextBox
             {
                 Text = Cs2LaunchOptions.Recommended,
                 ReadOnly = true,
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Theme.SurfaceHover,
-                ForeColor = Theme.Text,
-                Font = new Font(Theme.FontFamily, 9.5f),
-                Location = new Point(18, 62),
-                Size = new Size(CardW - 180, 26)
+                Location = new Point(18, 60),
+                Size = new Size(CardW - 180, 30)
             };
             lo.Controls.Add(box);
             var copy = SettingsPage.FlatButton("Copy", CardW - 150, 61, 130);

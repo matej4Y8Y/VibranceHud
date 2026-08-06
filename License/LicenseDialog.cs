@@ -16,11 +16,11 @@ namespace VibranceHud.License
     public sealed class LicenseDialog : Form
     {
         private readonly LicenseService _service;
-        private readonly TextBox _keyBox;
+        private readonly GlassTextBox _keyBox;
         private readonly Label _statusLabel;
-        private readonly Button _activateBtn;
-        private readonly Button _getKeyBtn;
-        private readonly Button _closeBtn;
+        private readonly GlassButton _activateBtn;
+        private readonly GlassButton _getKeyBtn;
+        private readonly GlassButton _closeBtn;
 
         public LicenseDialog(LicenseService service)
         {
@@ -61,15 +61,12 @@ namespace VibranceHud.License
                 Location = new Point(24, 90),
             };
 
-            _keyBox = new TextBox
+            _keyBox = new GlassTextBox
             {
                 Location = new Point(24, 114),
-                Size = new Size(512, 28),
-                Font = new Font("Consolas", 11f),
-                BackColor = Theme.Surface,
-                ForeColor = Theme.Text,
-                BorderStyle = BorderStyle.FixedSingle,
+                Size = new Size(512, 32),
             };
+            _keyBox.Inner.Font = new Font("Consolas", 11f);
             _keyBox.TextChanged += (s, e) => _activateBtn.Enabled = _keyBox.Text.Trim().Length > 0;
 
             _statusLabel = new Label
@@ -80,29 +77,22 @@ namespace VibranceHud.License
                 Location = new Point(24, 156),
             };
 
-            _activateBtn = new Button
+            _activateBtn = new GlassButton
             {
                 Text = "Activate",
+                Kind = GlassButtonKind.Primary,
                 Size = new Size(120, 32),
                 Location = new Point(24, 196),
-                BackColor = Theme.Accent,
-                ForeColor = Theme.Background,
-                FlatStyle = FlatStyle.Flat,
                 Enabled = false,
             };
-            _activateBtn.FlatAppearance.BorderSize = 0;
             _activateBtn.Click += ActivateBtn_Click;
 
-            _getKeyBtn = new Button
+            _getKeyBtn = new GlassButton
             {
                 Text = "Get a key",
                 Size = new Size(120, 32),
                 Location = new Point(160, 196),
-                BackColor = Theme.Surface,
-                ForeColor = Theme.Text,
-                FlatStyle = FlatStyle.Flat,
             };
-            _getKeyBtn.FlatAppearance.BorderColor = Theme.Border;
             _getKeyBtn.Click += (s, e) =>
             {
                 // Discord, not the source repo. Keys are handed out by the developer, so a
@@ -119,16 +109,12 @@ namespace VibranceHud.License
                 catch { /* no browser / blocked - the dialog still explains what's needed */ }
             };
 
-            _closeBtn = new Button
+            _closeBtn = new GlassButton
             {
                 Text = "Close application",
                 Size = new Size(140, 32),
                 Location = new Point(396, 196),
-                BackColor = Theme.Surface,
-                ForeColor = Theme.TextDim,
-                FlatStyle = FlatStyle.Flat,
             };
-            _closeBtn.FlatAppearance.BorderColor = Theme.Border;
             _closeBtn.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
             Controls.AddRange(new Control[]
@@ -137,7 +123,14 @@ namespace VibranceHud.License
                 _activateBtn, _getKeyBtn, _closeBtn,
             });
 
-            AcceptButton = _activateBtn;
+            // Enter by hand. GlassButton is an owner-drawn Control, not an IButtonControl, so
+            // AcceptButton cannot see it - assigning it would silently do nothing and pressing
+            // Enter after pasting a key would appear to be ignored.
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter && _activateBtn.Enabled) ActivateBtn_Click(this, EventArgs.Empty);
+            };
         }
 
         private string StatusTextForInitial()

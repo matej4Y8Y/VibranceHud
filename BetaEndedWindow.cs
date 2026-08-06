@@ -56,18 +56,13 @@ namespace VibranceHud
                 BackColor = Color.Transparent,
             });
 
-            var get = new Button
+            var get = new GlassButton
             {
                 Text = "Get the new version",
+                Kind = GlassButtonKind.Primary,
                 Size = new Size(180, 36),
                 Location = new Point(30, ClientSize.Height - 62),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.AccentDim,
-                ForeColor = Theme.OnAccentDim,
-                Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold),
-                Cursor = Cursors.Hand,
             };
-            get.FlatAppearance.BorderColor = Theme.Border;
             get.Click += (s, e) =>
             {
                 try
@@ -82,22 +77,25 @@ namespace VibranceHud
             };
             Controls.Add(get);
 
-            var close = new Button
+            var close = new GlassButton
             {
                 Text = "Close",
                 Size = new Size(120, 36),
                 Location = new Point(ClientSize.Width - 150, ClientSize.Height - 62),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.Surface,
-                ForeColor = Theme.TextDim,
-                Cursor = Cursors.Hand,
             };
-            close.FlatAppearance.BorderColor = Theme.Border;
             close.Click += (s, e) => Close();
             Controls.Add(close);
 
-            AcceptButton = get;
-            CancelButton = close;
+            // Enter and Escape by hand. GlassButton is an owner-drawn Control, not an
+            // IButtonControl, so AcceptButton/CancelButton cannot reach it - assigning them
+            // compiles away to nothing and both keys would do nothing on a window whose
+            // entire job is to be dismissed.
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape) Close();
+                else if (e.KeyCode == Keys.Enter) get.PerformClick();
+            };
         }
     }
 }

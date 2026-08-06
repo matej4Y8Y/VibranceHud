@@ -70,6 +70,46 @@ namespace VibranceHud
             set => _inner.Text = value;
         }
 
+        // Passed straight through, so a caller can still write one object initialiser instead
+        // of a constructor followed by four lines of Inner.Whatever.
+
+        public string PlaceholderText
+        {
+            get => _inner.PlaceholderText;
+            set => _inner.PlaceholderText = value;
+        }
+
+        public bool ReadOnly
+        {
+            get => _inner.ReadOnly;
+            set => _inner.ReadOnly = value;
+        }
+
+        public int MaxLength
+        {
+            get => _inner.MaxLength;
+            set => _inner.MaxLength = value;
+        }
+
+        public CharacterCasing CharacterCasing
+        {
+            get => _inner.CharacterCasing;
+            set => _inner.CharacterCasing = value;
+        }
+
+        /// <summary>Multiline fields fill the container instead of sitting on one centred
+        /// line, and get a scrollbar rather than silently hiding the overflow.</summary>
+        public bool Multiline
+        {
+            get => _inner.Multiline;
+            set
+            {
+                _inner.Multiline = value;
+                if (value) _inner.ScrollBars = ScrollBars.Vertical;
+                PerformLayout();
+            }
+        }
+
         /// <summary>Focus goes to the box that can actually take text, not to the wrapper -
         /// otherwise tabbing into the field leaves the caret nowhere.</summary>
         protected override void OnGotFocus(EventArgs e)
@@ -86,11 +126,20 @@ namespace VibranceHud
             // size assignment does it - so this cannot assume the field is there yet.
             if (_inner is null) return;
 
+            int w = Math.Max(1, Width - SideInset * 2);
+
+            if (_inner.Multiline)
+            {
+                // Fills, minus the rim. PreferredHeight is a single line's worth and would
+                // crop a multiline field to its first row.
+                _inner.SetBounds(SideInset, 6, w, Math.Max(1, Height - 12));
+                return;
+            }
+
             // Centred on its own line height rather than filling the control: a TextBox is as
             // tall as its font and stretching it just leaves dead space above the text.
             int h = Math.Min(_inner.PreferredHeight, Math.Max(1, Height - 6));
-            _inner.SetBounds(SideInset, Math.Max(0, (Height - h) / 2),
-                             Math.Max(1, Width - SideInset * 2), h);
+            _inner.SetBounds(SideInset, Math.Max(0, (Height - h) / 2), w, h);
         }
 
         protected override void OnPaint(PaintEventArgs e)

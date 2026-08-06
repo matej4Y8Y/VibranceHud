@@ -69,6 +69,14 @@ namespace VibranceHud
         /// <summary>Test seam: OnKeyDown is protected and a unit test has no message loop.</summary>
         internal void TestPressKey(Keys key) => OnKeyDown(new KeyEventArgs(key));
 
+        /// <summary>Click without a mouse. Control has no public PerformClick - that belongs
+        /// to Button - so forms that answer Enter themselves need this to reach the handler.
+        /// Ignored while disabled, or Enter would fire a button nobody can press.</summary>
+        public void PerformClick()
+        {
+            if (Enabled) OnClick(EventArgs.Empty);
+        }
+
         /// <summary>
         /// Keep the cursor honest.
         ///
