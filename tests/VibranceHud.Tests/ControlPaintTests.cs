@@ -38,6 +38,9 @@ namespace VibranceHud.Tests
             yield return new object[] { "CardPanel", () => (Control)new CardPanel { Size = new Size(400, 200) } };
             yield return new object[] { "SwatchButton", () => (Control)new SwatchButton(ThemeCatalog.ByName("Violet")) { Size = new Size(40, 40) } };
             yield return new object[] { "KeyboardView", () => (Control)new KeyboardView { Size = new Size(600, 300) } };
+            yield return new object[] { "ColourWheel", () => (Control)new ColourWheel { Size = new Size(196, 130) } };
+            // Mid-brightness as well: the shaded path over the wheel only runs below full value.
+            yield return new object[] { "ColourWheel-dim", () => (Control)new ColourWheel { Size = new Size(196, 130), Colour = Color.FromArgb(255, 60, 20, 90) } };
         }
 
         [Theory]

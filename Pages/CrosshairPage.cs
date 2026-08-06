@@ -51,11 +51,16 @@ namespace VibranceHud.Pages
         /// <summary>Suppresses the per-slider save while several are being set at once.</summary>
         private bool _applyingPreset;
         private readonly List<SwatchDot> _colourDots = new();
+        private ColourWheel _wheel = null!;
+        private TextBox _hexBox = null!;
+
+        /// <summary>Guards the swatch/wheel/hex round trip - see <see cref="ApplyColour"/>.</summary>
+        private bool _syncingColour;
 
         /// <summary>Tall enough for every row down to SAVED. A shorter card clips its own
         /// last row regardless of the page's AutoScroll, because a child cannot render past
         /// its immediate parent's bounds - and the gallery added roughly 300px.</summary>
-        private const int BaseCardHeight = 1110;
+        private const int BaseCardHeight = 1260;
         private const int CardW = 620;
         private const int Gutter = 18;
         private const int ContentW = CardW - 2 * Gutter;
@@ -187,21 +192,63 @@ namespace VibranceHud.Pages
                 var dot = new SwatchDot(colour)
                 {
                     Location = new Point(cx, y + 394),
-                    Active = colour.ToArgb() == _current.ColourArgb,
+                    Active = (colour.ToArgb() & 0x00FFFFFF) == (_current.ColourArgb & 0x00FFFFFF),
                 };
                 var captured = colour;
-                dot.Click += (s, e) =>
-                {
-                    _current.ColourArgb = captured.ToArgb();
-                    // Nothing used to mark the chosen colour, so clicking a dot changed the
-                    // crosshair and left the row looking exactly as it did before.
-                    foreach (var d in _colourDots) d.Active = ReferenceEquals(d, dot);
-                    Push();
-                };
+                dot.Click += (s, e) => ApplyColour(captured, null);
                 _colourDots.Add(dot);
                 _card.Controls.Add(dot);
                 cx += 44;
             }
+
+            // Any colour, not just the six. The swatches are shortcuts to the ones people
+            // reach for; the wheel is there so nobody is stuck with somebody else's palette.
+            _wheel = new ColourWheel
+            {
+                Location = new Point(Gutter, y + 428),
+                Size = new Size(196, 130),
+                Colour = Color.FromArgb(_current.ColourArgb),
+            };
+            _wheel.ColourChanged += (_, _) => ApplyColour(_wheel.Colour, _wheel);
+            _card.Controls.Add(_wheel);
+
+            // Hex, because a colour worth having is worth being able to send. It reads out
+            // live while the wheel is dragged, and takes anything hex-shaped coming back.
+            _card.Controls.Add(UiHelpers.Caption("HEX", 252, y + 432, 120));
+
+            _hexBox = new TextBox
+            {
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Theme.Background,
+                ForeColor = Theme.Text,
+                // Same monospace as the share-code box on Vibrance: a colour is a code here
+                // too, and proportional digits make two hex values hard to compare by eye.
+                Font = new Font("Consolas", 10f),
+                CharacterCasing = CharacterCasing.Upper,
+                MaxLength = 7,
+                Location = new Point(252, y + 456),
+                Size = new Size(110, 26),
+                Text = ColourWheel.ToHex(Color.FromArgb(_current.ColourArgb)),
+            };
+            _hexBox.TextChanged += (s, e) =>
+            {
+                // Half-typed values are ignored rather than rejected. The box is empty for a
+                // moment every time somebody selects all and pastes, and flashing an error
+                // there would make the field feel broken.
+                if (ColourWheel.TryParseHex(_hexBox.Text, out var typed))
+                    ApplyColour(typed, _hexBox);
+            };
+            _card.Controls.Add(_hexBox);
+
+            _card.Controls.Add(new Label
+            {
+                Text = "Paste a colour to match a friend's crosshair.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Location = new Point(252, y + 490),
+                Size = new Size(330, 34),
+            });
 
             var outline = new ToggleSwitch { Location = new Point(RightOf(44), y + 392), Checked = _current.Outline };
             outline.CheckedChanged += (s, e) => { _current.Outline = outline.Checked; Push(); };
@@ -222,9 +269,9 @@ namespace VibranceHud.Pages
             _card.Controls.Add(outline);
 
             // ---- Saved configs ----
-            _card.Controls.Add(UiHelpers.Caption("SAVED", 18, y + 436, 200));
+            _card.Controls.Add(UiHelpers.Caption("SAVED", 18, y + 574, 200));
 
-            var saveBtn = Button("Save as…", 472, y + 458, 130);
+            var saveBtn = Button("Save as…", 472, y + 596, 130);
             saveBtn.Click += (s, e) => SaveCurrent();
             _card.Controls.Add(saveBtn);
 
@@ -235,7 +282,7 @@ namespace VibranceHud.Pages
             // the page's own scroll setting).
             _savedFlow = new FlowLayoutPanel
             {
-                Location = new Point(18, y + 458),
+                Location = new Point(18, y + 596),
                 Size = new Size(444, 36),
                 MaximumSize = new Size(444, 0),
                 AutoSize = true,
@@ -251,7 +298,7 @@ namespace VibranceHud.Pages
                 ForeColor = Theme.TextDim,
                 BackColor = Color.Transparent,
                 Font = new Font(Theme.FontFamily, 8.5f),
-                Location = new Point(18, y + 458),
+                Location = new Point(18, y + 596),
                 Size = new Size(444, 36),
                 TextAlign = ContentAlignment.MiddleLeft
             };
@@ -471,6 +518,41 @@ namespace VibranceHud.Pages
 
             Push();
             HighlightActivePreset();
+        }
+
+        /// <summary>
+        /// The one place that answers "the colour is now this".
+        ///
+        /// Three controls can set it - the six swatches, the wheel and the hex box - and each
+        /// one has to move the other two without setting them off in turn. <paramref name="source"/>
+        /// is whichever control the change came from, so it is left alone; the guard flag
+        /// catches the rest, because assigning to a TextBox raises TextChanged whether or not
+        /// a person typed it.
+        ///
+        /// Only the RGB is taken. Alpha stays where it is, since opacity is its own slider and
+        /// picking a colour must not quietly change how transparent the crosshair is.
+        /// </summary>
+        private void ApplyColour(Color colour, Control? source)
+        {
+            if (_syncingColour) return;
+            _syncingColour = true;
+            try
+            {
+                _current.ColourArgb = (_current.ColourArgb & unchecked((int)0xFF000000))
+                                    | (colour.ToArgb() & 0x00FFFFFF);
+
+                // Light a swatch whenever the colour lands on one, wherever it came from -
+                // compared on RGB alone, or a semi-transparent crosshair could never match.
+                foreach (var d in _colourDots)
+                    d.Active = (d.Colour.ToArgb() & 0x00FFFFFF) == (_current.ColourArgb & 0x00FFFFFF);
+
+                if (!ReferenceEquals(source, _wheel)) _wheel.Colour = colour;
+                if (!ReferenceEquals(source, _hexBox)) _hexBox.Text = ColourWheel.ToHex(colour);
+
+                Push();
+                RefreshGalleryPreviews();
+            }
+            finally { _syncingColour = false; }
         }
 
         /// <summary>Repaint every cell in the user's current colour and opacity, so the grid
