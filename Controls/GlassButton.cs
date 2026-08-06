@@ -69,6 +69,22 @@ namespace VibranceHud
         /// <summary>Test seam: OnKeyDown is protected and a unit test has no message loop.</summary>
         internal void TestPressKey(Keys key) => OnKeyDown(new KeyEventArgs(key));
 
+        /// <summary>
+        /// Keep the cursor honest.
+        ///
+        /// A disabled button still offering a hand cursor reads as "click this and nothing
+        /// happens" rather than as unavailable, and the hover state has to be dropped or the
+        /// button keeps whatever it was showing at the moment it was switched off.
+        /// </summary>
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            _hover = false;
+            _pressed = false;
+            Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e)
         {
             base.OnMouseEnter(e);
@@ -111,7 +127,16 @@ namespace VibranceHud
             float radius = (Height - 1) / 2f;   // full pill
 
             Color textColor;
-            if (Kind == GlassButtonKind.Primary)
+            if (!Enabled)
+            {
+                // Faded glass in the same shape, rather than a different treatment: the button
+                // has to stay recognisably itself so that it coming back is not a surprise.
+                // Without this a disabled GlassButton painted exactly like a live one - it
+                // simply stopped responding, which reads as the app having frozen.
+                Glass.PaintPanel(g, rect, radius, fillAlpha: 70);
+                textColor = Theme.TextDim;
+            }
+            else if (Kind == GlassButtonKind.Primary)
             {
                 // Pressed dims the accent rather than moving the label - a 1px text
                 // nudge reads as a rendering glitch at this size.

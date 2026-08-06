@@ -22,7 +22,7 @@ namespace VibranceHud
         private readonly AppSettings _settings;
         private readonly SettingsStore _store;
 
-        private readonly Button _primary;
+        private readonly GlassButton _primary;
         private readonly LinkLabel _back;
         private readonly LinkLabel _skip;
         private readonly List<SwatchButton> _swatches = new();

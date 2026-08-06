@@ -73,11 +73,18 @@ namespace VibranceHud
                 "OK", ClientSize.Width - 148, ClientSize.Height - 58, 120, height: 34);
             ok.Click += (s, e) => Close();
             Controls.Add(ok);
-            AcceptButton = ok;
-            // Escape closes it too. It's a one-button notice; making the keyboard's own
-            // "dismiss this" key do nothing is the kind of small wrongness people feel
-            // without being able to name it.
-            CancelButton = ok;
+            // Enter and Escape by hand. GlassButton is an owner-drawn Control, not an
+            // IButtonControl, so AcceptButton/CancelButton cannot see it - assigning them
+            // would silently do nothing and the window would swallow both keys.
+            //
+            // Escape closes it as well as Enter. It's a one-button notice; making the
+            // keyboard's own "dismiss this" key do nothing is the kind of small wrongness
+            // people feel without being able to name it.
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode is Keys.Enter or Keys.Escape) Close();
+            };
 
             ApplyRoundedRegion();
             WindowDrag.Enable(this, this);

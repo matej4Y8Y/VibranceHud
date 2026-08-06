@@ -274,7 +274,7 @@ namespace VibranceHud.Pages
                 TextAlign = ContentAlignment.MiddleRight
             };
 
-            var chooseBtn = FlatButton("Choose imageâ€¦", 18, 62, 150);
+            var chooseBtn = FlatButton("Choose image…", 18, 62, 150);
             var clearBtn = FlatButton("Remove", 178, 62, 100);
 
             var dimCaption = UiHelpers.Caption("DIM", 18, 92, 120);
@@ -517,7 +517,7 @@ namespace VibranceHud.Pages
                     if (go != DialogResult.Yes) return;
 
                     testBtn.Enabled = false;
-                    testBtn.Text = "Measuringâ€¦";
+                    testBtn.Text = "Measuring…";
                     result.ForeColor = Theme.TextDim;
                     result.Text = "Measuring - leave the screen alone for a few seconds.";
 
@@ -620,25 +620,26 @@ namespace VibranceHud.Pages
         private static int Clamp(int pct) => Math.Clamp(pct, 50, 100);
 
 
-        internal static Button FlatButton(string text, int x, int y, int width)
-        {
-            var b = new Button
+        /// <summary>
+        /// The app's secondary button.
+        ///
+        /// This used to hand back a stock <see cref="Button"/> with <c>FlatStyle.Flat</c>, and
+        /// forty call sites across every page took it - which is why so much of PlexusX was a
+        /// grid of square grey rectangles sitting next to rounded glass cards. A flat Button
+        /// cannot round its corners and draws the system focus rectangle, so it reads as a
+        /// piece of another application no matter which colours it is given.
+        ///
+        /// <see cref="GlassButton"/> was written to replace it and then never adopted here.
+        /// Returning one fixes every caller at once.
+        /// </summary>
+        internal static GlassButton FlatButton(string text, int x, int y, int width) =>
+            new()
             {
                 Text = text,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Theme.SurfaceHover,
-                ForeColor = Theme.Text,
-                Font = new Font(Theme.FontFamily, 9f),
+                Kind = GlassButtonKind.Ghost,
                 Size = new Size(width, 32),
                 Location = new Point(x, y),
-                Cursor = Cursors.Hand,
-                TabStop = false
             };
-            b.FlatAppearance.BorderColor = Theme.Border;
-            b.FlatAppearance.BorderSize = 1;
-            b.FlatAppearance.MouseOverBackColor = Theme.Border;
-            return b;
-        }
 
         /// <summary>
         /// The accent-filled version of <see cref="FlatButton"/>, for the one action a page
@@ -649,33 +650,23 @@ namespace VibranceHud.Pages
         /// <c>Theme.Text</c>, which on the light theme is near-black text on a near-black
         /// fill. <see cref="Theme.OnAccentDim"/> is the readable pairing.
         /// </summary>
-        internal static Button PrimaryButton(string text, int x, int y, int width, int height = 32)
-        {
-            var b = FlatButton(text, x, y, width);
-            b.Font = new Font(Theme.FontFamily, 10f, FontStyle.Bold);
-            b.Height = height;
-            RestylePrimary(b);
-            return b;
-        }
+        internal static GlassButton PrimaryButton(string text, int x, int y, int width, int height = 32) =>
+            new()
+            {
+                Text = text,
+                Kind = GlassButtonKind.Primary,
+                Size = new Size(width, height),
+                Location = new Point(x, y),
+            };
 
-        /// <summary>Re-read the accent colours onto a primary button. A stock
-        /// <see cref="Button"/> keeps whatever colours it was built with, so anything that
-        /// switches theme while a button is alive (the onboarding theme picker) has to call
-        /// this or the button keeps painting the old palette.</summary>
-        internal static void RestylePrimary(Button b)
-        {
-            b.BackColor = Theme.AccentDim;
-            b.ForeColor = Theme.OnAccentDim;
-            b.FlatAppearance.BorderColor = Theme.Border;
-            // Hover lifts the fill towards the full accent rather than jumping to it - the
-            // full accent is near-black on the light theme and near-white on the dark ones,
-            // so either way it would collide with the label colour on hover.
-            b.FlatAppearance.MouseOverBackColor = Blend(Theme.AccentDim, Theme.Accent, 0.35f);
-        }
-
-        private static Color Blend(Color from, Color to, float amount) => Color.FromArgb(
-            (int)(from.R + (to.R - from.R) * amount),
-            (int)(from.G + (to.G - from.G) * amount),
-            (int)(from.B + (to.B - from.B) * amount));
+        /// <summary>
+        /// Kept as a no-op so the onboarding theme picker still reads correctly.
+        ///
+        /// This existed because a stock Button caches the colours it was built with, so
+        /// switching theme while one was alive left it painting the old palette. A GlassButton
+        /// reads Theme at paint time, so it can never go stale and there is nothing to re-apply
+        /// - an Invalidate is all a theme change needs.
+        /// </summary>
+        internal static void RestylePrimary(GlassButton b) => b.Invalidate();
     }
 }

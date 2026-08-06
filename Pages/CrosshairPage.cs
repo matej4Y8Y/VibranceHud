@@ -52,7 +52,7 @@ namespace VibranceHud.Pages
         private bool _applyingPreset;
         private readonly List<SwatchDot> _colourDots = new();
         private ColourWheel _wheel = null!;
-        private TextBox _hexBox = null!;
+        private GlassTextBox _hexBox = null!;
 
         /// <summary>Guards the swatch/wheel/hex round trip - see <see cref="ApplyColour"/>.</summary>
         private bool _syncingColour;
@@ -216,20 +216,17 @@ namespace VibranceHud.Pages
             // live while the wheel is dragged, and takes anything hex-shaped coming back.
             _card.Controls.Add(UiHelpers.Caption("HEX", 252, y + 432, 120));
 
-            _hexBox = new TextBox
+            _hexBox = new GlassTextBox
             {
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Theme.Background,
-                ForeColor = Theme.Text,
-                // Same monospace as the share-code box on Vibrance: a colour is a code here
-                // too, and proportional digits make two hex values hard to compare by eye.
-                Font = new Font("Consolas", 10f),
-                CharacterCasing = CharacterCasing.Upper,
-                MaxLength = 7,
                 Location = new Point(252, y + 456),
-                Size = new Size(110, 26),
-                Text = ColourWheel.ToHex(Color.FromArgb(_current.ColourArgb)),
+                Size = new Size(110, 30),
             };
+            // Same monospace as the share-code box on Vibrance: a colour is a code here too,
+            // and proportional digits make two hex values hard to compare by eye.
+            _hexBox.Inner.Font = new Font("Consolas", 10f);
+            _hexBox.Inner.CharacterCasing = CharacterCasing.Upper;
+            _hexBox.Inner.MaxLength = 7;
+            _hexBox.Text = ColourWheel.ToHex(Color.FromArgb(_current.ColourArgb));
             _hexBox.TextChanged += (s, e) =>
             {
                 // Half-typed values are ignored rather than rejected. The box is empty for a
@@ -752,7 +749,7 @@ namespace VibranceHud.Pages
             foreach (var d in _colourDots) d.Active = d.Colour.ToArgb() == _current.ColourArgb;
         }
 
-        private static Button Button(string text, int x, int y, int w)
+        private static GlassButton Button(string text, int x, int y, int w)
         {
             // Same styling as the rest of the app's secondary buttons, hover included -
             // this one used to skip MouseOverBackColor and flash the Windows default blue.
@@ -957,18 +954,30 @@ namespace VibranceHud.Pages
                     BorderStyle = BorderStyle.FixedSingle
                 };
                 var ok = SettingsPage.PrimaryButton("Save", 230, 62, 96, height: 30);
-                ok.DialogResult = DialogResult.OK;
-                // There was no way out of this dialog except the title bar's X - Escape did
-                // nothing, because a FixedDialog without a CancelButton swallows it.
                 var cancel = SettingsPage.FlatButton("Cancel", 126, 62, 96);
                 cancel.Height = 30;
-                cancel.DialogResult = DialogResult.Cancel;
+
+                // Closed by hand rather than through the buttons' own DialogResult:
+                // GlassButton is an owner-drawn Control, not an IButtonControl, so neither
+                // DialogResult nor AcceptButton/CancelButton can reach it. Assigning them
+                // compiles away to nothing and the dialog becomes unclosable.
+                void Finish(DialogResult r) { form.DialogResult = r; form.Close(); }
+
+                ok.Click += (s, e) => Finish(DialogResult.OK);
+                cancel.Click += (s, e) => Finish(DialogResult.Cancel);
+
+                // There was no way out of this dialog except the title bar's X - Escape did
+                // nothing, because a FixedDialog without a CancelButton swallows it.
+                form.KeyPreview = true;
+                form.KeyDown += (s, e) =>
+                {
+                    if (e.KeyCode == Keys.Enter) Finish(DialogResult.OK);
+                    else if (e.KeyCode == Keys.Escape) Finish(DialogResult.Cancel);
+                };
 
                 form.Controls.Add(box);
                 form.Controls.Add(ok);
                 form.Controls.Add(cancel);
-                form.AcceptButton = ok;
-                form.CancelButton = cancel;
                 return form.ShowDialog() == DialogResult.OK ? box.Text : "";
             }
         }
