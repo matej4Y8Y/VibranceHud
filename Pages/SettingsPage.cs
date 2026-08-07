@@ -29,7 +29,7 @@ namespace VibranceHud.Pages
         public SettingsPage(AppSettings settings, SettingsStore store,
             Action<int> onOpacityChanged, Action<string> onThemeChanged,
             Theming.CustomThemeService? custom = null, Action? onBackgroundChanged = null,
-            IVibranceEngine? engine = null)
+            IVibranceEngine? engine = null, Audio.AudioEdgeService? audio = null)
         {
             _settings = settings;
             _store = store;
@@ -391,6 +391,86 @@ namespace VibranceHud.Pages
             };
             appearance.Controls.Add(opacitySlider);
             Controls.Add(appearance);
+
+            // ---- Loud footsteps ----
+            //
+            // Lived on the Rust page until that page went. It is not a monitor feature, so it
+            // does not get a tab of its own - but it works, and it is the one thing in the app
+            // that is about hearing rather than seeing, so Settings is where it belongs.
+            //
+            // "Loud footsteps" rather than "Audio Edge": it is a peak limiter, which nobody
+            // searches for, and what people actually want is to hear the quiet things without
+            // a gunshot taking their ears off.
+            if (audio != null)
+            {
+                // 148, not 132: the ceiling slider sits at y=104 and is 32 tall, so a 132px
+                // card cut 4px off its own bottom row. Caught by the clipping audit.
+                var audioCard = Card(148);
+                audioCard.Controls.Add(UiHelpers.Caption("LOUD FOOTSTEPS", 18, 16, 260));
+                audioCard.Controls.Add(new Label
+                {
+                    Text = "Pulls loud sounds down so quiet ones stay audible. "
+                         + "Footsteps and gunshots end up closer together.",
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Location = new Point(18, 38),
+                    Size = new Size(width - 90, 32),
+                });
+
+                var audioToggle = new ToggleSwitch
+                {
+                    Location = new Point(width - 66, 16),
+                    Checked = _settings.AudioEdgeEnabled,
+                };
+                audioCard.Controls.Add(audioToggle);
+
+                var ceilingCaption = UiHelpers.Caption("CEILING", 18, 80, 120);
+                audioCard.Controls.Add(ceilingCaption);
+
+                var ceilingValue = new Label
+                {
+                    Text = $"{_settings.AudioEdgeThresholdPercent}%",
+                    ForeColor = Theme.TextDim,
+                    BackColor = Color.Transparent,
+                    Font = new Font(Theme.FontFamily, 8.5f),
+                    Location = new Point(width - 60, 80),
+                    Size = new Size(42, 16),
+                    TextAlign = ContentAlignment.MiddleRight,
+                };
+                audioCard.Controls.Add(ceilingValue);
+
+                var ceilingSlider = new FlatSlider
+                {
+                    Minimum = 5,
+                    Maximum = 100,
+                    Value = Math.Clamp(_settings.AudioEdgeThresholdPercent, 5, 100),
+                };
+                ceilingSlider.SetTrackBounds(Gutter, 104, width - 2 * Gutter);
+                ceilingSlider.ValueChanged += (s, e) =>
+                {
+                    _settings.AudioEdgeThresholdPercent = ceilingSlider.Value;
+                    ceilingValue.Text = $"{ceilingSlider.Value}%";
+                    // Live-adjustable while running, so a drag is audible immediately.
+                    audio.Threshold = ceilingSlider.Value / 100f;
+                    _store.Save(_settings);
+                };
+                audioCard.Controls.Add(ceilingSlider);
+
+                audioToggle.CheckedChanged += (s, e) =>
+                {
+                    _settings.AudioEdgeEnabled = audioToggle.Checked;
+                    if (audioToggle.Checked)
+                    {
+                        audio.Threshold = ceilingSlider.Value / 100f;
+                        audio.Start();
+                    }
+                    else audio.Stop();
+                    _store.Save(_settings);
+                };
+
+                Controls.Add(audioCard);
+            }
 
             var updates = Card(92);
             updates.Controls.Add(UiHelpers.Caption("UPDATES", 18, 16, 200));

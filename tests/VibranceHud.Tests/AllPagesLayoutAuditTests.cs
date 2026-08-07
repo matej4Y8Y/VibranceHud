@@ -213,7 +213,9 @@ namespace VibranceHud.Tests
                     new VibranceEngine(new Controller(), new Overlay(), new Gamma()), settings, store),
                 "Monitor" => new MonitorPage(settings, store, selection),
                 "Crosshair" => new CrosshairPage(settings, store, new CrosshairService()),
-                "Settings" => new SettingsPage(settings, store, _ => { }, _ => { }),
+                // Audio passed so the "Loud footsteps" card is built and therefore audited.
+                "Settings" => new SettingsPage(settings, store, _ => { }, _ => { },
+                    audio: new Audio.AudioEdgeService(new SilentOutput())),
                 "Account" => new AccountPage(new LicenseService(_temp.Path)),
                 _ => new AccountPage(new LicenseService(_temp.Path)),
             };
@@ -240,6 +242,13 @@ namespace VibranceHud.Tests
 
         private static string Describe(Control c) =>
             (string.IsNullOrWhiteSpace(c.Text) ? c.GetType().Name : Trim(c.Text)) + " " + c.Bounds;
+
+        /// <summary>Never peaks, so the limiter never moves anything during a layout audit.</summary>
+        private sealed class SilentOutput : Audio.IAudioOutput
+        {
+            public float Peak => 0f;
+            public float Volume { get; set; } = 1f;
+        }
 
         private sealed class Controller : IVibranceController
         {

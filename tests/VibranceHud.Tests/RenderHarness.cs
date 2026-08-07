@@ -113,7 +113,11 @@ namespace VibranceHud.Tests
                     new VibranceEngine(new StubController(), new StubOverlay(), new StubGamma()), settings, store),
                 "Monitor" => new MonitorPage(settings, store, selection),
                 "Crosshair" => new CrosshairPage(settings, store, new CrosshairService()),
-                "Settings" => new SettingsPage(settings, store, _ => { }, _ => { }),
+                // Audio is passed so the "Loud footsteps" card is actually built - without it
+                // that whole section is skipped and neither the render nor the layout audits
+                // would ever see it.
+                "Settings" => new SettingsPage(settings, store, _ => { }, _ => { },
+                    audio: new Audio.AudioEdgeService(new SilentOutput())),
                 "Account" => new AccountPage(new LicenseService(scratch)),
                 _ => throw new ArgumentException("unknown page: " + name, nameof(name)),
             };
@@ -154,6 +158,13 @@ namespace VibranceHud.Tests
         {
             public void Apply(float[] matrix) { }
             public void Clear() { }
+        }
+
+        /// <summary>Never peaks, so the limiter never actually moves anything.</summary>
+        private sealed class SilentOutput : Audio.IAudioOutput
+        {
+            public float Peak => 0f;
+            public float Volume { get; set; } = 1f;
         }
 
         private sealed class StubGamma : IGammaRamp

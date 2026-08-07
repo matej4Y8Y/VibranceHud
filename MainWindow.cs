@@ -153,7 +153,7 @@ namespace VibranceHud
             _vibrancePage.HotkeyChanged += (mask, vk) => onHotkeyChanged?.Invoke(mask, vk) ?? true;
             _vibrancePage.MainHotkeyChanged += (mask, vk, en) => onMainHotkeyChanged?.Invoke(mask, vk, en);
             _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged,
-                custom, onBackgroundChanged: RefreshBackdrop, engine: _engine);
+                custom, onBackgroundChanged: RefreshBackdrop, engine: _engine, audio: _audio);
             _accountPage = new AccountPage(_license);
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
