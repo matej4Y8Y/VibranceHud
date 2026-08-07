@@ -130,7 +130,11 @@ namespace VibranceHud
             GammaSlider = AddRow("GAMMA", rightX, 218, colW,
                 VibranceEngine.MinGamma, VibranceEngine.MaxGamma, 100,
                 _engine.Gamma, v => _engine.Gamma = v,
-                SliderPalette.Luminance, () => $"{GammaSlider!.Value / 100f:0.00}");
+                // Invariant: a composite format string takes the machine's locale, so this
+                // read "1,00" on a Czech Windows - the only decimal in an English interface.
+                SliderPalette.Luminance,
+                () => (GammaSlider!.Value / 100f).ToString(
+                    "0.00", System.Globalization.CultureInfo.InvariantCulture));
 
             ContrastSlider = AddRow("CONTRAST", Pad, 278, colW,
                 VibranceEngine.MinContrast, VibranceEngine.MaxContrast, 100,

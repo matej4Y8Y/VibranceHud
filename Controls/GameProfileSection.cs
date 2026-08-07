@@ -158,7 +158,11 @@ namespace VibranceHud
             if (p.Saturation != 100) parts.Add($"saturation {p.Saturation}");
             if (p.Vibrance != 100) parts.Add($"vibrance {p.Vibrance}");
             if (p.Brightness != 100) parts.Add($"brightness {p.Brightness}");
-            if (p.Gamma != 100) parts.Add($"gamma {p.Gamma / 100f:0.00}");
+            // Invariant: this summary line is English prose, so the decimal has to be a point
+            // regardless of the machine's locale.
+            if (p.Gamma != 100)
+                parts.Add("gamma " + (p.Gamma / 100f).ToString(
+                    "0.00", System.Globalization.CultureInfo.InvariantCulture));
             if (p.ResolvedContrast != 100) parts.Add($"contrast {p.ResolvedContrast}");
 
             if (p.ResolvedTemperature != 0)

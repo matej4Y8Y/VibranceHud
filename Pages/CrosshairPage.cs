@@ -401,7 +401,11 @@ namespace VibranceHud.Pages
         {
             parent.Controls.Add(UiHelpers.Caption(label, 18, y, 200));
 
-            static string Format(int tenths) => (tenths / 10f).ToString("0.0");
+            // Invariant, not the machine's locale. Every crosshair readout on this page is a
+            // tenth - size, gap, thickness, ring - so on a Czech Windows the whole page read
+            // "1,5" while the rest of the interface stayed English.
+            static string Format(int tenths) => (tenths / 10f).ToString(
+                "0.0", System.Globalization.CultureInfo.InvariantCulture);
 
             var readout = new Label
             {
