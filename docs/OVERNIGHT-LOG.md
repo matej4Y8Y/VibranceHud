@@ -42,6 +42,26 @@ Tools/PlexusXKeys/MainForm.cs:394        Button
 and `KeybindsPage` — all of which Phase 2 deletes. Re-count after the cuts before doing any
 migration work by hand.
 
+## DDC/CI verdict — the night's key fact
+
+**This machine's monitor supports DDC/CI on all three channels.** Phase 6 is buildable.
+
+```
+monitors found : 1
+  name       : Generic PnP Monitor
+  brightness : True  (0..0..100)
+  contrast   : True
+  rgb gain   : True
+  refusal    : (none - it answered)
+```
+
+**Caution carried into Task 6.3:** brightness reports current = **0** while the screen is
+plainly lit, so that read is either stale or the panel answers lazily on first contact. S6 says
+store the original before the first write and always offer a revert — but reverting to a
+falsely-zero original would black the panel out. Task 6.3 must re-read immediately before
+storing, and refuse to treat a bottom-of-range first read as the original without a confirming
+second read.
+
 ## Surprises
 
 - The font violation count is 89, not the ~23 estimated from an earlier grep. The earlier grep
