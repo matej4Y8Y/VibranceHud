@@ -39,6 +39,11 @@ namespace VibranceHud.Tests
             yield return new object[] { "SwatchButton", () => (Control)new SwatchButton(ThemeCatalog.ByName("Violet")) { Size = new Size(40, 40) } };
             yield return new object[] { "KeyboardView", () => (Control)new KeyboardView { Size = new Size(600, 300) } };
             yield return new object[] { "GlassTextBox", () => (Control)new GlassTextBox { Size = new Size(200, 30) } };
+            yield return new object[] { "GlassTextBox-multiline", () => (Control)new GlassTextBox { Size = new Size(300, 120), Multiline = true, Text = "one\r\ntwo\r\nthree" } };
+            yield return new object[] { "GlassDropdown", () => (Control)new GlassDropdown { Size = new Size(200, 34) } };
+            yield return new object[] { "GlassDropdown-filled", () => { var d = new GlassDropdown { Size = new Size(200, 34) }; d.SetItems(new[] { "Rust", "CS2" }); return (Control)d; } };
+            yield return new object[] { "HotkeyPicker", () => (Control)new HotkeyPicker { Size = new Size(220, 34) } };
+            yield return new object[] { "CrosshairCell", () => (Control)new CrosshairCell(Crosshair.CrosshairGallery.All[0]) { Size = new Size(96, 96) } };
             yield return new object[] { "ColourWheel", () => (Control)new ColourWheel { Size = new Size(196, 130) } };
             // Mid-brightness as well: the shaded path over the wheel only runs below full value.
             yield return new object[] { "ColourWheel-dim", () => (Control)new ColourWheel { Size = new Size(196, 130), Colour = Color.FromArgb(255, 60, 20, 90) } };
@@ -67,6 +72,24 @@ namespace VibranceHud.Tests
 
             SetFocused(control, true);
             Render(control, name, "focused");
+        }
+
+        /// <summary>
+        /// Disabled has to look disabled.
+        ///
+        /// GlassButton ignored Enabled for its entire life: a disabled one painted identically
+        /// to a live one and simply stopped responding, which reads as the app having frozen
+        /// rather than as the control being unavailable. Four buttons in the app disable
+        /// themselves, so nobody would have found this by clicking around.
+        /// </summary>
+        [Theory]
+        [MemberData(nameof(AllControls))]
+        public void PaintsWhileDisabledWithoutThrowing(string name, Func<Control> make)
+        {
+            Theme.Apply("Violet");
+            using var control = make();
+            control.Enabled = false;
+            Render(control, name, "disabled");
         }
 
         /// <summary>
