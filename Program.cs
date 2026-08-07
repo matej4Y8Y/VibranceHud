@@ -1,8 +1,7 @@
-using System;
+﻿using System;
 using System.Threading;
 using System.Windows.Forms;
 using VibranceHud.License;
-using VibranceHud.SystemTweaks;
 
 namespace VibranceHud
 {
@@ -11,16 +10,11 @@ namespace VibranceHud
         [STAThread]
         private static int Main(string[] args)
         {
-            // Elevated relaunch to apply one admin-only FPS tweak, then exit - no UI, no tray.
-            if (SystemTweakService.IsHeadlessTweakInvocation(args))
-                return SystemTweakService.RunHeadless(args);
+            // The elevated headless relaunches are both gone: the NVAPI driver tweak in v0.9.0,
+            // and the admin-only registry tweak with the system-tweak engine itself. PlexusX
+            // no longer changes anything under the hood, so it never needs to run elevated.
 
-            // Elevated relaunch to apply one NVAPI driver tweak removed in
-            // v0.9.0 - see docs/design/specs/2026-07-29-remove-nvidia-tweaks.md.
-
-            // One copy per user session. Deliberately AFTER the headless branch above:
-            // those elevated helpers are short-lived, run alongside the real app on
-            // purpose, and must never be turned away by the mutex.
+            // One copy per user session.
             if (!SingleInstance.TryAcquire())
             {
                 SingleInstance.SignalExistingInstance();

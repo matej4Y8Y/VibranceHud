@@ -197,7 +197,7 @@ namespace VibranceHud
             if (_settings.AudioEdgeEnabled) _audioEdge.Start();
             }
 
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey, GameSelectionInstance);
+            _window = new MainWindow(_engine, _settings, _store, _audioEdge, ApplyTheme, _customTheme, _crosshair, BuildProfileCoordinator(), _license, ReRegisterHotkey, ReRegisterMainHotkey, GameSelectionInstance);
 
             _hotkeyWindow = new HotkeyWindow();
             _hotkeyWindow.HotkeyPressed += (s, e) =>
@@ -434,7 +434,7 @@ namespace VibranceHud
         /// <summary>
         /// Poll for DX11 becoming available after a fallback start, then stop.
         ///
-        /// Backs off (2s, 4s, 8s, …) so a machine that genuinely has no DX11 isn't building
+        /// Backs off (2s, 4s, 8s, �) so a machine that genuinely has no DX11 isn't building
         /// throwaway devices forever, and gives up after a handful of tries - by then the
         /// cause is not transient and the Settings hint is the right answer instead.
         /// </summary>
@@ -540,13 +540,13 @@ namespace VibranceHud
                 }
             }
 
-            _splash.SetStatus("Checking for updates…");
+            _splash.SetStatus("Checking for updates�");
             var update = await UpdateService.TryGetUpdateAsync();
 
             if (update != null && await InstallUpdateAsync(update))
             return; // the installer took over and will relaunch PlexusX
 
-            _splash.SetStatus("Starting…");
+            _splash.SetStatus("Starting�");
             var notes = await WhatsNewNotesAsync();
 
             // Keep the splash up briefly so it never flashes past on a fast machine.
@@ -586,7 +586,7 @@ namespace VibranceHud
         /// <summary>Returns true when the installer started and this instance should quit.</summary>
         private async Task<bool> InstallUpdateAsync(ReleaseInfo update)
             {
-            string label = $"Downloading update {update.Version}…";
+            string label = $"Downloading update {update.Version}�";
             _splash.SetStatus(label, 0);
 
             var file = await UpdateService.DownloadAndStageAsync(update, new Progress<int>(p => _splash.SetStatus(label, p)));
@@ -659,7 +659,7 @@ namespace VibranceHud
         private void RebuildWindow()
         {
             var old = _window;
-            _window = new MainWindow(_engine, _settings, _store, new SystemTweaks.SystemTweakService(), _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey, GameSelectionInstance);
+            _window = new MainWindow(_engine, _settings, _store, _audioEdge, ApplyTheme, _customTheme, _crosshair, _profileCoordinator, _license, ReRegisterHotkey, ReRegisterMainHotkey, GameSelectionInstance);
             _window.ShowAndFocus();
             old.Dispose();
         }
@@ -701,7 +701,7 @@ namespace VibranceHud
             // Process names come from the catalogue now, so adding a game is one entry in
             // SupportedGames rather than an edit here plus one in every service.
             var watcher = new GameProcessWatcher(Games.SupportedGames.ProcessNames);
-            var applyEngine = new ProfileApplyEngine(_engine, new GameHubApplier());
+            var applyEngine = new ProfileApplyEngine(_engine);
             var coordinator = new ProfileEngineCoordinator(
                 watcher, applyEngine, new GameProfileApplyGate(_settings), _settings);
             coordinator.Start();

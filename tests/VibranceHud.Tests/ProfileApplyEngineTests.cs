@@ -20,20 +20,19 @@ namespace VibranceHud.Tests
         public int Gamma { get; set; } = 100;
     }
 
-    internal sealed class FakeGameHubApplier : IGameHubApplier
-    {
-        public List<string> Applied { get; } = new();
-        public void Apply(string gameId, GameHubOptions opts) => Applied.Add(gameId);
-    }
-
+    /// <summary>
+    /// The per-game profile engine, now colour-only. It used to also push settings into the
+    /// game's own config file through an IGameHubApplier; that went with the Games Hub,
+    /// because writing to a game's files is under the hood and PlexusX only changes what the
+    /// monitor shows.
+    /// </summary>
     public class ProfileApplyEngineTests
     {
         [Fact]
         public void Apply_ThenRestore_RoundTripsValues()
         {
             var v = new FakeVibranceEngine();
-            var hub = new FakeGameHubApplier();
-            var engine = new ProfileApplyEngine(v, hub);
+            var engine = new ProfileApplyEngine(v);
             engine.SetCurrent(new GameProfile
             {
                 GameId = "rust",
@@ -50,7 +49,6 @@ namespace VibranceHud.Tests
             Assert.Equal(200, v.Saturation);
             Assert.Equal(75, v.Brightness);
             Assert.Equal(125, v.Gamma);
-            Assert.Single(hub.Applied);
 
             engine.RestoreAsync().Wait();
 
@@ -65,18 +63,16 @@ namespace VibranceHud.Tests
         public void ApplyAsync_WithoutSetCurrent_IsNoOp()
         {
             var v = new FakeVibranceEngine();
-            var hub = new FakeGameHubApplier();
-            var engine = new ProfileApplyEngine(v, hub);
+            var engine = new ProfileApplyEngine(v);
             engine.ApplyAsync("rust").Wait();
             Assert.Equal(100, v.Vibrance); // untouched
-            Assert.Empty(hub.Applied);
         }
 
         [Fact]
         public void RestoreAsync_WithoutApply_IsNoOp()
         {
             var v = new FakeVibranceEngine { Vibrance = 77 };
-            var engine = new ProfileApplyEngine(v, new FakeGameHubApplier());
+            var engine = new ProfileApplyEngine(v);
             engine.RestoreAsync().Wait();
             Assert.Equal(77, v.Vibrance);
         }

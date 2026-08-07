@@ -73,7 +73,18 @@ second read.
 
 ## Skipped and why
 
-_(nothing yet)_
+- **`GameProfile.GameHub` is now dead data.** The Games Hub is gone, so nothing reads or applies
+  those fields, but they are still in the persisted profile format. Removing them changes a
+  saved-file format for no user-visible benefit, so they stay for 1.0 and should be dropped in
+  a migration later.
+
+## Notes to self
+
+- **Never round-trip a source file through `Get-Content | Set-Content`.** Windows PowerShell 5.1
+  reads as ANSI and writes UTF-8, which corrupted every non-ASCII character in
+  `TrayApplicationContext.cs` — em-dashes became `â€”`. The mojibake contract test caught it
+  within one run. Repair is to re-encode the mojibake chars back through CP1252 and decode as
+  UTF-8. Use the Edit tool on source files instead.
 
 ## Test count history
 

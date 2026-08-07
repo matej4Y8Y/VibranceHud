@@ -176,9 +176,20 @@ namespace VibranceHud.Capabilities
             return GetDpiForMonitor(monitor, 0, out uint x, out _) == 0 ? x : 96;
         }
 
+        /// <summary>
+        /// Whether the process is running as administrator.
+        ///
+        /// Inlined here when the system-tweak engine was deleted - that was the only other
+        /// caller, and this is a three-line question that does not deserve a home of its own.
+        /// </summary>
         private static bool SafeElevated()
         {
-            try { return SystemTweaks.SystemTweakService.IsElevated(); }
+            try
+            {
+                using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+                return new System.Security.Principal.WindowsPrincipal(identity)
+                    .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            }
             catch { return false; }
         }
 

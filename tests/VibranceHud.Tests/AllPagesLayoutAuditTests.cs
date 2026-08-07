@@ -38,10 +38,7 @@ namespace VibranceHud.Tests
             yield return new object[] { "Monitor" };
             yield return new object[] { "Crosshair" };
             yield return new object[] { "Settings" };
-            yield return new object[] { "FpsTweaks" };
             yield return new object[] { "Account" };
-            yield return new object[] { "Keybinds" };
-            yield return new object[] { "GamesHub" };
         }
 
         // ---- the audits ------------------------------------------------------------------
@@ -217,10 +214,8 @@ namespace VibranceHud.Tests
                 "Monitor" => new MonitorPage(settings, store, selection),
                 "Crosshair" => new CrosshairPage(settings, store, new CrosshairService()),
                 "Settings" => new SettingsPage(settings, store, _ => { }, _ => { }),
-                "FpsTweaks" => new FpsTweaksPage(new SystemTweaks.SystemTweakService()),
                 "Account" => new AccountPage(new LicenseService(_temp.Path)),
-                "Keybinds" => new KeybindsPage(settings, store, selection),
-                _ => new GamesHubPage(_ => { }, _ => { }),
+                _ => new AccountPage(new LicenseService(_temp.Path)),
             };
 
             page.Size = new Size(900, 700);

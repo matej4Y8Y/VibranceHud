@@ -34,8 +34,7 @@ namespace VibranceHud.Tests
         /// <summary>The shell's pages. Kept in step with MainWindow's navigation.</summary>
         internal static readonly string[] PageNames =
         {
-            "Display", "Monitor", "Crosshair", "Settings",
-            "FpsTweaks", "Account", "Keybinds", "GamesHub",
+            "Display", "Monitor", "Crosshair", "Settings", "Account",
         };
 
         /// <summary>Render every page into <paramref name="outputDirectory"/> as &lt;name&gt;.png.</summary>
@@ -115,10 +114,7 @@ namespace VibranceHud.Tests
                 "Monitor" => new MonitorPage(settings, store, selection),
                 "Crosshair" => new CrosshairPage(settings, store, new CrosshairService()),
                 "Settings" => new SettingsPage(settings, store, _ => { }, _ => { }),
-                "FpsTweaks" => new FpsTweaksPage(new SystemTweaks.SystemTweakService()),
                 "Account" => new AccountPage(new LicenseService(scratch)),
-                "Keybinds" => new KeybindsPage(settings, store, selection),
-                "GamesHub" => new GamesHubPage(_ => { }, _ => { }),
                 _ => throw new ArgumentException("unknown page: " + name, nameof(name)),
             };
 

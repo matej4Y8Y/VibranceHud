@@ -52,21 +52,18 @@ namespace VibranceHud
         private readonly VibrancePage _vibrancePage;
         private readonly SettingsPage _settingsPage;
         private readonly AccountPage _accountPage;
-        private readonly FpsTweaksPage _fpsPage;
         private readonly CrosshairPage _crosshairPage;
         private readonly Crosshair.CrosshairService _crosshair;
-        private readonly NavButton _navVibrance, _navGames, _navFps, _navCrosshair, _navSettings, _navAccount, _navMonitor, _navKeybinds;
+        private readonly NavButton _navVibrance, _navCrosshair, _navSettings, _navAccount, _navMonitor;
         private readonly MonitorPage _monitorPage;
-        private readonly KeybindsPage _keybindsPage;
         private readonly Games.GameSelection _selection;
         private readonly GameChooser _gameChooser;
-        private readonly SystemTweaks.SystemTweakService _tweaks;
         private readonly Audio.AudioEdgeService? _audio;
         private readonly ProfileEngineCoordinator? _profileCoordinator;
         private readonly LicenseService _license;
 
         public MainWindow(VibranceEngine engine, AppSettings settings, SettingsStore store,
-            SystemTweaks.SystemTweakService tweaks, Audio.AudioEdgeService? audio,
+            Audio.AudioEdgeService? audio,
             Action<string> onThemeChanged, Theming.CustomThemeService? custom = null,
             Crosshair.CrosshairService? crosshair = null,
             ProfileEngineCoordinator? profileCoordinator = null,
@@ -84,7 +81,6 @@ namespace VibranceHud
             // Owned by the tray so it survives the window rebuild a theme change causes;
             // constructed here only when nobody handed one in (tests, standalone use).
             _selection = selection ?? new Games.GameSelection(settings, store);
-            _tweaks = tweaks;
             _audio = audio;
             _onThemeChanged = onThemeChanged;
 
@@ -161,10 +157,8 @@ namespace VibranceHud
             _accountPage = new AccountPage(_license);
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
-            _fpsPage = new FpsTweaksPage(_tweaks);
             _monitorPage = new MonitorPage(_settings, _store, _selection);
-            _keybindsPage = new KeybindsPage(_settings, _store, _selection);
-            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _fpsPage, _crosshairPage, _monitorPage, _keybindsPage })
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _crosshairPage, _monitorPage })
                 AttachField(page);
 
             _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, titleH), Size = new Size(navW, ClientSize.Height - titleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
@@ -177,13 +171,6 @@ namespace VibranceHud
             // inside Rust's page, which meant a CS2 player could not reach it at all.
             _navMonitor = MakeNav("Monitor", iconKind: 7);
             _navCrosshair = MakeNav("Crosshair", iconKind: 5);
-            // Singular. The app is pointed at one game now - chosen in the nav below - so
-            // this tab is that game, not a catalogue to browse.
-            _navGames = MakeNav("Game", iconKind: 1);
-            // Directly under Game because it only exists for a game, and it is hidden
-            // entirely at Desktop - a bind has no meaning without one.
-            _navKeybinds = MakeNav("Keybinds", iconKind: 8);
-            _navFps = MakeNav("FPS Tweaks", iconKind: 4);
             _navSettings = MakeNav("Settings", iconKind: 6);
             _navAccount = MakeNav("Account", iconKind: 3);
 
@@ -194,13 +181,10 @@ namespace VibranceHud
             ApplyLicenseVisibility();
             _navVibrance.Click += (s, e) => ShowVibrance();
             _navMonitor.Click += (s, e) => Select(_navMonitor, _monitorPage);
-            _navKeybinds.Click += (s, e) => Select(_navKeybinds, _keybindsPage);
-            _navGames.Click += (s, e) => ShowGames();
-            _navFps.Click += (s, e) => Select(_navFps, _fpsPage);
             _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navCrosshair, _navSettings, _navAccount });
 
             // The game chooser sits directly above the version, anchored to the bottom of the
             // nav. Above rather than beside: 210px of nav is not enough for a readable game
@@ -226,8 +210,8 @@ namespace VibranceHud
             version.MouseDown += DragWindow;
             _nav.Controls.Add(version);
 
-            // Everything that is scoped to a game rebuilds when the selection changes.
-            _selection.Changed += (_, _) => OnGameChanged();
+            // Nothing in the shell is scoped to the selected game any more - the pages that
+            // were (Game, Keybinds) are gone, and Monitor subscribes to the selection itself.
             Controls.Add(_nav);
 
             _contentHost = new Panel
@@ -431,8 +415,7 @@ namespace VibranceHud
         /// once instead of being implied by a position argument at each construction site.</summary>
         private NavButton[] NavOrder => new[]
         {
-            _navVibrance, _navMonitor, _navCrosshair, _navGames, _navKeybinds,
-            _navFps, _navSettings, _navAccount
+            _navVibrance, _navMonitor, _navCrosshair, _navSettings, _navAccount
         };
 
         private NavButton MakeNav(string label, int iconKind) => new()
@@ -505,97 +488,17 @@ namespace VibranceHud
         {
             bool has = _license.HasValidLicense;
             _navVibrance.Visible = has;
-            _navGames.Visible = has;
             _navMonitor.Visible = has;
-            _navFps.Visible = has;
             _navCrosshair.Visible = has;
             _navSettings.Visible = has;
             _navAccount.Visible = true;
-            ApplyGameScopedVisibility();
-        }
-
-        /// <summary>
-        /// Hide the tabs that only mean something with a game selected.
-        ///
-        /// Keybinds is the whole tab: the commands, their syntax and the file they land in are
-        /// all per-game, so at Desktop there is nothing it could show. Hiding it beats showing
-        /// an empty page that explains why it is empty.
-        /// </summary>
-        private void ApplyGameScopedVisibility()
-        {
-            bool licensed = _license.HasValidLicense;
-            _navKeybinds.Visible = licensed && _selection.Current != null;
-
-            // Close the hole this leaves. Keybinds is hidden by default - Desktop is the
-            // default selection - so without this the nav ships with a blank 48px slot
-            // between Game and FPS Tweaks on most launches.
             LayoutNav();
-
-            // If the user was on Keybinds and just went back to Desktop, they are now looking
-            // at a page whose tab has gone. Move them somewhere that still exists.
-            if (!_navKeybinds.Visible && ReferenceEquals(_currentPage, _keybindsPage))
-                ShowVibrance();
         }
 
         private void ShowVibrance()
         {
             Select(_navVibrance, _vibrancePage);
             _vibrancePage.Refresh();
-        }
-
-        /// <summary>
-        /// The Game tab. With a game selected this IS that game's page - no grid, no
-        /// click-through. At Desktop it falls back to the catalogue, which is now an empty
-        /// state ("pick one") rather than a permanent hub.
-        /// </summary>
-        private void ShowGames()
-        {
-            // Catch a game installed or uninstalled since the window opened. Cheap, and it
-            // means the tab is never pointed at something that has gone.
-            _selection.Refresh();
-
-            GlowPage page = _selection.Detected is { } detected
-                ? BuildGamePage(detected)
-                : new GamesHubPage(d => _selection.Select(d.Game.Id), OnEditProfile);
-
-            AttachField(page);
-            Select(_navGames, page);
-        }
-
-        /// <summary>Rebuild whatever is scoped to the selected game. Only the Game tab and the
-        /// Profile Editor care - Display, Crosshair, FPS Tweaks and Settings are global and
-        /// deliberately untouched.</summary>
-        private void OnGameChanged()
-        {
-            ApplyGameScopedVisibility();
-
-            // Only rebuild the Game tab if it is what the user is looking at; otherwise it
-            // rebuilds itself next time they open it.
-            if (_navGames.Active) ShowGames();
-        }
-
-        /// <summary>
-        /// The engine goes to every game page so each can offer "use my current look for this
-        /// game". That section replaced the Profile Editor: what is on the Display page is
-        /// what gets saved, rather than a second set of sliders to configure the same look in.
-        /// </summary>
-        private GlowPage BuildGamePage(DetectedGame game) => GamePageRouter.Resolve(game.Game.Id) switch
-        {
-            // No back link any more - the chooser is how you change game, and there is
-            // nothing behind this page to go back to.
-            GamePageKind.Rust => new RustSettingsPage(game, _settings, _store, _audio, onBack: ShowGames, engine: _engine),
-            GamePageKind.Cs2 => new Cs2SettingsPage(game, onBack: ShowGames, engine: _engine),
-            GamePageKind.Apex => new ApexSettingsPage(game, onBack: ShowGames, engine: _engine),
-            GamePageKind.Fortnite => new FortniteSettingsPage(game, onBack: ShowGames, engine: _engine),
-            _ => new UnsupportedGamePage(game.Game, onBack: ShowGames),
-        };
-
-        /// <summary>"Edit profile" on a game card: point the app at that game and open it.
-        /// The profile now lives on the game's own page, so there is nowhere else to go.</summary>
-        private void OnEditProfile(SupportedGame game)
-        {
-            _selection.Select(game.Id);
-            ShowGames();
         }
 
         private void Select(NavButton button, Control page)
@@ -606,7 +509,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navMonitor, _navGames, _navKeybinds, _navFps, _navCrosshair, _navSettings, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navMonitor, _navCrosshair, _navSettings, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
@@ -628,8 +531,7 @@ namespace VibranceHud
 
             if (old != null && old != page &&
                 old != _vibrancePage && old != _settingsPage && old != _accountPage &&
-                old != _fpsPage && old != _crosshairPage &&
-                old != _monitorPage && old != _keybindsPage)
+                old != _crosshairPage && old != _monitorPage)
                 old.Dispose();
         }
 

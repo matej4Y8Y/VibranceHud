@@ -11,31 +11,29 @@ namespace VibranceHud
     /// All visual writes go through the existing <see cref="IVibranceEngine"/>
     /// setters, so the DX11 overlay / NVAPI / gamma-ramp paths in
     /// <see cref="VibranceEngine"/> keep owning how a value reaches the GPU.
-    /// Game-Hub writes go through <see cref="IGameHubApplier"/>.
+    ///
+    /// Colour only. This used to also push settings into the game's own config file through
+    /// an IGameHubApplier; that went with the Games Hub, because writing to a game's files is
+    /// under the hood and PlexusX only changes what the monitor shows.
     /// </summary>
     public sealed class ProfileApplyEngine
     {
         private readonly IVibranceEngine _engine;
-        private readonly IGameHubApplier _hubApplier;
         private GameProfile? _current;
         private GameProfile? _before;
 
         /// <summary>The profile currently applied (or null if none).</summary>
         public GameProfile? Current => _current;
 
-        public ProfileApplyEngine(IVibranceEngine engine, IGameHubApplier hubApplier)
-        {
-            _engine = engine;
-            _hubApplier = hubApplier;
-        }
+        public ProfileApplyEngine(IVibranceEngine engine) => _engine = engine;
 
         /// <summary>The coordinator hands the engine the profile it found in the
         /// store before calling <see cref="ApplyAsync"/>.</summary>
         public void SetCurrent(GameProfile profile) => _current = profile;
 
-        /// <summary>Snapshots the current desktop state, then applies the
-        /// profile's visual + hub values. No-op if no profile is set or the
-        /// id doesn't match (defensive: the coordinator already filtered).</summary>
+        /// <summary>Snapshots the current desktop state, then applies the profile's colour.
+        /// No-op if no profile is set or the id doesn't match (defensive: the coordinator
+        /// already filtered).</summary>
         public Task ApplyAsync(string gameId)
         {
             if (_current == null || _current.GameId != gameId) return Task.CompletedTask;
@@ -55,9 +53,6 @@ namespace VibranceHud
             _engine.Saturation = _current.Saturation;
             _engine.Brightness = _current.Brightness;
             _engine.Gamma = _current.Gamma;
-
-            // 3. Push the hub options into the game's own config.
-            _hubApplier.Apply(_current.GameId, _current.GameHub);
 
             return Task.CompletedTask;
         }
