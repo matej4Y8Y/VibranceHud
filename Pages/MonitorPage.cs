@@ -61,7 +61,10 @@ namespace VibranceHud.Pages
 
             Controls.Add(new Label
             {
-                Text = "Monitor",
+                // "Resolution", not "Monitor". This page owns the display mode - resolution,
+                // refresh rate, stretched presets, HDR. The Monitor tab is the physical panel
+                // itself, reached over DDC/CI, and the two were sharing one name.
+                Text = "Resolution",
                 ForeColor = Theme.Text,
                 Font = new Font(Theme.FontFamily, 18f, FontStyle.Bold),
                 Location = new Point(Pad - 2, y),

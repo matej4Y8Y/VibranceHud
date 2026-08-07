@@ -166,10 +166,10 @@ namespace VibranceHud
             // Profile Editor used to share Settings' sliders, so three of the seven rows
             // were only told apart by their label.
             _navVibrance = MakeNav("Display", iconKind: 0);
-            // Monitor sits next to Display because they are the same subject: Display is what
-            // colour the picture is, Monitor is what shape it is. Resolution used to be a card
-            // inside Rust's page, which meant a CS2 player could not reach it at all.
-            _navMonitor = MakeNav("Monitor", iconKind: 7);
+            // Next to Display because they are the same subject seen at different layers:
+            // Display is what colour the picture is, Resolution is what shape it is, and the
+            // Monitor tab below is the panel those two land on.
+            _navMonitor = MakeNav("Resolution", iconKind: 7);
             _navCrosshair = MakeNav("Crosshair", iconKind: 5);
             _navSettings = MakeNav("Settings", iconKind: 6);
             _navAccount = MakeNav("Account", iconKind: 3);
