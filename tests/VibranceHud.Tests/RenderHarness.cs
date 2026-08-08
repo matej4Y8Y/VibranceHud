@@ -34,7 +34,17 @@ namespace VibranceHud.Tests
         /// <summary>The shell's pages. Kept in step with MainWindow's navigation.</summary>
         internal static readonly string[] PageNames =
         {
-            "Display", "Monitor", "Crosshair", "Settings", "Account", "Legal",
+            "Display", "Monitor", "Panel", "Crosshair", "Settings", "Account", "Legal",
+        };
+
+        /// <summary>
+        /// A panel that answers everything, so the Monitor tab renders its full UI rather than
+        /// whatever the machine running the tests happens to have plugged in. The refusal path
+        /// gets its own test with its own fake.
+        /// </summary>
+        internal static IReadOnlyList<Monitors.MonitorCapability> FakeCapableMonitor() => new[]
+        {
+            new Monitors.MonitorCapability("Test Monitor", true, true, true, 0, 50, 100, ""),
         };
 
         /// <summary>Render every page into <paramref name="outputDirectory"/> as &lt;name&gt;.png.</summary>
@@ -128,6 +138,7 @@ namespace VibranceHud.Tests
                 "Settings" => new SettingsPage(settings, store, _ => { }, _ => { },
                     audio: new Audio.AudioEdgeService(new SilentOutput())),
                 "Account" => new AccountPage(new LicenseService(scratch)),
+                "Panel" => new MonitorHardwarePage(settings, store, FakeCapableMonitor()),
                 "Legal" => new LegalPage(),
                 _ => throw new ArgumentException("unknown page: " + name, nameof(name)),
             };

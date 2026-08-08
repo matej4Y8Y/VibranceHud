@@ -54,7 +54,8 @@ namespace VibranceHud
         private readonly AccountPage _accountPage;
         private readonly CrosshairPage _crosshairPage;
         private readonly Crosshair.CrosshairService _crosshair;
-        private readonly NavButton _navVibrance, _navCrosshair, _navSettings, _navAccount, _navMonitor;
+        private readonly NavButton _navVibrance, _navCrosshair, _navSettings, _navAccount, _navMonitor, _navPanel;
+        private readonly MonitorHardwarePage _panelPage;
         private readonly MonitorPage _monitorPage;
         private readonly Games.GameSelection _selection;
         private readonly GameChooser _gameChooser;
@@ -159,7 +160,8 @@ namespace VibranceHud
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
             _monitorPage = new MonitorPage(_settings, _store, _selection);
-            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _crosshairPage, _monitorPage })
+            _panelPage = new MonitorHardwarePage(_settings, _store);
+            foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _crosshairPage, _monitorPage, _panelPage })
                 AttachField(page);
 
             _nav = new GlowPanel { Field = _field, Scrim = 0, Location = new Point(0, titleH), Size = new Size(navW, ClientSize.Height - titleH), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom };
@@ -171,6 +173,9 @@ namespace VibranceHud
             // Display is what colour the picture is, Resolution is what shape it is, and the
             // Monitor tab below is the panel those two land on.
             _navMonitor = MakeNav("Resolution", iconKind: 7);
+            // The third layer of the stack: Display is the signal, Resolution is the mode,
+            // Monitor is the glass they land on.
+            _navPanel = MakeNav("Monitor", iconKind: 7);
             _navCrosshair = MakeNav("Crosshair", iconKind: 5);
             _navSettings = MakeNav("Settings", iconKind: 6);
             _navAccount = MakeNav("Account", iconKind: 3);
@@ -182,10 +187,11 @@ namespace VibranceHud
             ApplyLicenseVisibility();
             _navVibrance.Click += (s, e) => ShowVibrance();
             _navMonitor.Click += (s, e) => Select(_navMonitor, _monitorPage);
+            _navPanel.Click += (s, e) => Select(_navPanel, _panelPage);
             _navCrosshair.Click += (s, e) => Select(_navCrosshair, _crosshairPage);
             _navSettings.Click += (s, e) => Select(_navSettings, _settingsPage);
             _navAccount.Click += (s, e) => Select(_navAccount, _accountPage);
-            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navCrosshair, _navSettings, _navAccount });
+            _nav.Controls.AddRange(new Control[] { _navVibrance, _navMonitor, _navPanel, _navCrosshair, _navSettings, _navAccount });
 
             // The game chooser sits directly above the version, anchored to the bottom of the
             // nav. Above rather than beside: 210px of nav is not enough for a readable game
@@ -416,7 +422,7 @@ namespace VibranceHud
         /// once instead of being implied by a position argument at each construction site.</summary>
         private NavButton[] NavOrder => new[]
         {
-            _navVibrance, _navMonitor, _navCrosshair, _navSettings, _navAccount
+            _navVibrance, _navMonitor, _navPanel, _navCrosshair, _navSettings, _navAccount
         };
 
         private NavButton MakeNav(string label, int iconKind) => new()
@@ -490,6 +496,7 @@ namespace VibranceHud
             bool has = _license.HasValidLicense;
             _navVibrance.Visible = has;
             _navMonitor.Visible = has;
+            _navPanel.Visible = has;
             _navCrosshair.Visible = has;
             _navSettings.Visible = has;
             _navAccount.Visible = true;
@@ -524,7 +531,7 @@ namespace VibranceHud
 
         private void SetActive(NavButton active)
         {
-            foreach (var b in new[] { _navVibrance, _navMonitor, _navCrosshair, _navSettings, _navAccount })
+            foreach (var b in new[] { _navVibrance, _navMonitor, _navPanel, _navCrosshair, _navSettings, _navAccount })
                 b.Active = ReferenceEquals(b, active);
         }
 
@@ -546,7 +553,7 @@ namespace VibranceHud
 
             if (old != null && old != page &&
                 old != _vibrancePage && old != _settingsPage && old != _accountPage &&
-                old != _crosshairPage && old != _monitorPage)
+                old != _crosshairPage && old != _monitorPage && old != _panelPage)
                 old.Dispose();
         }
 

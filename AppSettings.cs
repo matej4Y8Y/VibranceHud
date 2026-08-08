@@ -310,6 +310,21 @@ namespace VibranceHud
         /// </summary>
         public ToneSettings? Tone { get; set; }
 
+        // ---- physical monitor (DDC/CI) ----
+        //
+        // -1 means "never set", which is different from 0. Zero brightness is a legitimate
+        // value somebody could choose; not having chosen one means the page should read the
+        // panel instead of assuming.
+
+        /// <summary>Panel brightness 0-100, or -1 if the user has never set it.</summary>
+        public int MonitorBrightness { get; set; } = -1;
+
+        /// <summary>Panel contrast 0-100, or -1 if never set.</summary>
+        public int MonitorContrast { get; set; } = -1;
+
+        /// <summary>Low blue light strength 0-100, or -1 if never set.</summary>
+        public int MonitorLowBlue { get; set; } = -1;
+
         /// <summary>The grade to actually apply, with gamma taken from the existing
         /// standalone setting so the two can never disagree. Not serialized - it is derived,
         /// and writing it would duplicate state that already has one home.</summary>
