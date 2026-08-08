@@ -71,6 +71,7 @@ namespace VibranceHud.Pages
         protected override void OnScroll(ScrollEventArgs se)
         {
             base.OnScroll(se);
+            SyncBar();
             Invalidate(true);
         }
 
@@ -102,6 +103,7 @@ namespace VibranceHud.Pages
                 int target = Math.Clamp(-AutoScrollPosition.Y - step, 0, extent);
 
                 AutoScrollPosition = new Point(-AutoScrollPosition.X, target);
+                SyncBar();
 
                 if (e is HandledMouseEventArgs handled) handled.Handled = true;
             }
@@ -158,10 +160,66 @@ namespace VibranceHud.Pages
             OnDescendantAdded(this, e);
         }
 
+        // ---- the app's own scrollbar -------------------------------------------------------
+        //
+        // Every page gets one, from here, so no page can be built without it. Hiding the Win32
+        // bar left no sign that a page had more content - and a page that had silently stopped
+        // scrolling looked exactly like one with nothing below the fold, which is how Display
+        // stayed broken through several rounds of "it still doesn't scroll".
+
+        private Controls.GlassScrollBar? _bar;
+
+        private void EnsureBar()
+        {
+            if (_bar != null || !AutoScroll) return;
+
+            _bar = new Controls.GlassScrollBar
+            {
+                Width = Design.Tokens.Scale(10),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom,
+            };
+
+            // Dragging the bar scrolls the page. The page scrolling back into the bar is
+            // handled by SyncBar, which only ever writes Value - never raises Scrolled - so
+            // the two cannot chase each other.
+            _bar.Scrolled += (_, _) =>
+            {
+                AutoScrollPosition = new Point(-AutoScrollPosition.X, _bar.Value);
+                Invalidate(true);
+            };
+
+            // Added to the page but deliberately NOT part of the scrolled content: it is
+            // positioned in client coordinates on every layout, so it stays pinned.
+            Controls.Add(_bar);
+            _bar.BringToFront();
+        }
+
+        /// <summary>Keep the bar showing where the page actually is.</summary>
+        private void SyncBar()
+        {
+            if (_bar == null) return;
+
+            _bar.Maximum = AutoScrollMinSize.Height;
+            _bar.Viewport = ClientSize.Height;
+            _bar.Value = -AutoScrollPosition.Y;
+
+            _bar.Visible = _bar.Needed;
+            if (!_bar.Needed) return;
+
+            // Pinned to the right edge in client space, so scrolling never carries it away.
+            _bar.SetBounds(ClientSize.Width - _bar.Width - Design.Tokens.Scale(4),
+                Design.Tokens.Scale(4), _bar.Width,
+                Math.Max(1, ClientSize.Height - Design.Tokens.Scale(8)));
+
+            _bar.BringToFront();
+        }
+
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
             HookWheelForwarding(this);
+            EnsureBar();
+            SyncBar();
         }
 
         protected override void WndProc(ref Message m)
@@ -199,6 +257,7 @@ namespace VibranceHud.Pages
         {
             base.OnLayout(e);
             HideNativeScrollBars();
+            SyncBar();
         }
 
         private void HideNativeScrollBars()

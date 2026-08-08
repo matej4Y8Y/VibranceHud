@@ -53,6 +53,24 @@ namespace VibranceHud.Display
             Vibrance: 50, Saturation: 100, Brightness: 100, Contrast: 100, Temperature: 0,
             Tone: ToneSettings.Neutral);
 
+        /// <remarks>
+        /// These use the engine's actual range.
+        ///
+        /// The first set topped out at vibrance 120 against a maximum of 350, which is under a
+        /// third of the axis - every preset sat in a narrow band around neutral and none of
+        /// them looked like a decision anybody had made. The scale to hold in mind:
+        ///
+        ///     vibrance    0 grey · 50 untouched · 200 strong · 350 maximum
+        ///     saturation  0 grey · 100 untouched · 300 maximum
+        ///     brightness  50 dark · 100 untouched · 170 maximum
+        ///     gamma       50 · 100 untouched · 150      (shown as 0.50 to 1.50)
+        ///     contrast    50 flat · 100 untouched · 150
+        ///     temperature -100 cool · 0 neutral · 100 warm
+        ///
+        /// The PvP entries are deliberately extreme. They pair heavy vibrance with reduced
+        /// brightness and lifted gamma: the picture gets darker overall while the midtones come
+        /// up, so shadowed areas stay readable instead of being washed flat by raw brightness.
+        /// </remarks>
         public static readonly IReadOnlyList<GamePresetGroup> All = new[]
         {
             // Rust is brown, grey and green almost everywhere, which is exactly the palette
@@ -63,24 +81,29 @@ namespace VibranceHud.Display
                 Neutral,
                 new ColourPreset("Daylight",
                     "For long sessions above ground. Lifts the brown-grey without going cartoon.",
-                    Vibrance: 78, Saturation: 112, Brightness: 100, Contrast: 104, Temperature: -6,
-                    Tone: new ToneSettings(Gamma: 102, Shadows: 12, Highlights: -8)),
+                    Vibrance: 150, Saturation: 118, Brightness: 100, Contrast: 106, Temperature: -8,
+                    Tone: new ToneSettings(Gamma: 102, Shadows: 14, Highlights: -8)),
+                new ColourPreset("PvP",
+                    "Built for fights. Heavy colour, darker picture, lifted midtones so nothing "
+                    + "hides in shadow.",
+                    Vibrance: 230, Saturation: 100, Brightness: 80, Contrast: 90, Temperature: -12,
+                    Tone: new ToneSettings(Gamma: 115, Shadows: 34, Blacks: 20, Highlights: -14)),
                 new ColourPreset("Caves",
                     "For underground and night. Opens up the dark end without washing out the rest.",
-                    Vibrance: 68, Saturation: 106, Brightness: 104, Contrast: 96, Temperature: -4,
-                    Tone: new ToneSettings(Gamma: 110, Shadows: 30, Blacks: 18, Highlights: -6)),
+                    Vibrance: 175, Saturation: 110, Brightness: 92, Contrast: 94, Temperature: -6,
+                    Tone: new ToneSettings(Gamma: 128, Shadows: 44, Blacks: 30, Highlights: -10)),
                 new ColourPreset("Cloth",
-                    "Pushes fabric and skin away from dirt and rock. The loudest of the three.",
-                    Vibrance: 105, Saturation: 124, Brightness: 100, Contrast: 108, Temperature: -10,
-                    Tone: new ToneSettings(Gamma: 100, Shadows: 8, MidtoneTint: -14)),
-                new ColourPreset("Flat",
-                    "Low contrast, easy on the eyes. For very long sessions.",
-                    Vibrance: 44, Saturation: 104, Brightness: 100, Contrast: 92, Temperature: 4,
-                    Tone: new ToneSettings(Gamma: 104, Fade: 12)),
+                    "Pushes fabric and skin as far from dirt and rock as the app can. Very loud.",
+                    Vibrance: 300, Saturation: 145, Brightness: 100, Contrast: 112, Temperature: -16,
+                    Tone: new ToneSettings(Gamma: 104, Shadows: 12, MidtoneTint: -20)),
                 new ColourPreset("Recording",
                     "Holds up after a stream's compression, which eats saturation first.",
-                    Vibrance: 95, Saturation: 118, Brightness: 102, Contrast: 106, Temperature: -4,
-                    Tone: new ToneSettings(Gamma: 100, Highlights: -12, Whites: -6)),
+                    Vibrance: 205, Saturation: 128, Brightness: 104, Contrast: 108, Temperature: -6,
+                    Tone: new ToneSettings(Gamma: 102, Highlights: -16, Whites: -8)),
+                new ColourPreset("Flat",
+                    "Low contrast, easy on the eyes. For very long sessions.",
+                    Vibrance: 44, Saturation: 104, Brightness: 100, Contrast: 88, Temperature: 6,
+                    Tone: new ToneSettings(Gamma: 104, Fade: 16)),
             }),
 
             // CS2 is concrete, sand and orange light, with player models that are already
@@ -91,24 +114,29 @@ namespace VibranceHud.Display
                 Neutral,
                 new ColourPreset("Competitive",
                     "Clean and even. Keeps bright maps from flaring without dulling them.",
-                    Vibrance: 82, Saturation: 110, Brightness: 100, Contrast: 106, Temperature: -8,
-                    Tone: new ToneSettings(Gamma: 100, Highlights: -14, Shadows: 10)),
+                    Vibrance: 190, Saturation: 116, Brightness: 100, Contrast: 108, Temperature: -10,
+                    Tone: new ToneSettings(Gamma: 102, Highlights: -18, Shadows: 12)),
+                new ColourPreset("PvP",
+                    "Built for fights. Heavy colour, darker picture, lifted midtones so nothing "
+                    + "hides in shadow.",
+                    Vibrance: 230, Saturation: 100, Brightness: 80, Contrast: 90, Temperature: -14,
+                    Tone: new ToneSettings(Gamma: 115, Shadows: 32, Blacks: 18, Highlights: -16)),
                 new ColourPreset("Dust",
                     "For the sand maps. Cuts the orange cast so models stop blending into it.",
-                    Vibrance: 88, Saturation: 108, Brightness: 100, Contrast: 104, Temperature: -16,
-                    Tone: new ToneSettings(Gamma: 100, MidtoneTint: -20, Highlights: -10)),
+                    Vibrance: 215, Saturation: 112, Brightness: 98, Contrast: 106, Temperature: -30,
+                    Tone: new ToneSettings(Gamma: 104, MidtoneTint: -30, Highlights: -14)),
                 new ColourPreset("Dark corners",
                     "Lifts the black end for maps with a lot of unlit space.",
-                    Vibrance: 72, Saturation: 106, Brightness: 102, Contrast: 98, Temperature: -6,
-                    Tone: new ToneSettings(Gamma: 108, Shadows: 26, Blacks: 14)),
+                    Vibrance: 165, Saturation: 108, Brightness: 94, Contrast: 96, Temperature: -8,
+                    Tone: new ToneSettings(Gamma: 126, Shadows: 40, Blacks: 26)),
                 new ColourPreset("Punchy",
                     "Maximum separation. Loud, and not for everybody.",
-                    Vibrance: 120, Saturation: 126, Brightness: 100, Contrast: 110, Temperature: -10,
-                    Tone: new ToneSettings(Gamma: 98, Shadows: 6, Highlights: -8)),
+                    Vibrance: 320, Saturation: 150, Brightness: 100, Contrast: 116, Temperature: -14,
+                    Tone: new ToneSettings(Gamma: 98, Shadows: 8, Highlights: -10)),
                 new ColourPreset("Flat",
                     "Low contrast for long sessions.",
-                    Vibrance: 46, Saturation: 104, Brightness: 100, Contrast: 94, Temperature: 2,
-                    Tone: new ToneSettings(Gamma: 104, Fade: 10)),
+                    Vibrance: 46, Saturation: 104, Brightness: 100, Contrast: 90, Temperature: 4,
+                    Tone: new ToneSettings(Gamma: 104, Fade: 14)),
             }),
 
             // The catch-all. Somebody playing something not listed still wants a starting
@@ -118,19 +146,28 @@ namespace VibranceHud.Display
                 Neutral,
                 new ColourPreset("Richer",
                     "A little more colour everywhere. The safe one to start with.",
-                    Vibrance: 70, Saturation: 110, Brightness: 100, Contrast: 102, Temperature: 0,
+                    Vibrance: 130, Saturation: 112, Brightness: 100, Contrast: 104, Temperature: 0,
                     Tone: new ToneSettings(Gamma: 100)),
+                new ColourPreset("PvP",
+                    "Built for fights. Heavy colour, darker picture, lifted midtones so nothing "
+                    + "hides in shadow.",
+                    Vibrance: 230, Saturation: 100, Brightness: 80, Contrast: 90, Temperature: -10,
+                    Tone: new ToneSettings(Gamma: 115, Shadows: 32, Blacks: 18, Highlights: -14)),
                 new ColourPreset("Vivid",
                     "Noticeably stronger. Good for anything stylised.",
-                    Vibrance: 112, Saturation: 122, Brightness: 100, Contrast: 106, Temperature: -4,
-                    Tone: new ToneSettings(Gamma: 100, Shadows: 8)),
+                    Vibrance: 240, Saturation: 135, Brightness: 100, Contrast: 108, Temperature: -6,
+                    Tone: new ToneSettings(Gamma: 100, Shadows: 10)),
+                new ColourPreset("Maximum",
+                    "Everything the app can do at once. Try it, then back it off.",
+                    Vibrance: 340, Saturation: 175, Brightness: 102, Contrast: 120, Temperature: -12,
+                    Tone: new ToneSettings(Gamma: 104, Shadows: 16, Highlights: -12)),
                 new ColourPreset("Bright rooms",
                     "For playing with a window open or a light on behind the screen.",
-                    Vibrance: 76, Saturation: 112, Brightness: 106, Contrast: 108, Temperature: -6,
-                    Tone: new ToneSettings(Gamma: 96, Blacks: -10, Highlights: 6)),
+                    Vibrance: 160, Saturation: 120, Brightness: 112, Contrast: 112, Temperature: -8,
+                    Tone: new ToneSettings(Gamma: 94, Blacks: -14, Highlights: 8)),
                 new ColourPreset("Night",
                     "Warmer and softer for late sessions.",
-                    Vibrance: 58, Saturation: 104, Brightness: 96, Contrast: 96, Temperature: 22,
+                    Vibrance: 110, Saturation: 106, Brightness: 88, Contrast: 94, Temperature: 40,
                     Tone: new ToneSettings(Gamma: 104, Highlights: -14, Fade: 8)),
                 new ColourPreset("Film",
                     "Lifted blacks and pulled highlights. A look rather than an advantage.",

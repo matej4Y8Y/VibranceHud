@@ -109,6 +109,9 @@ namespace VibranceHud.Tests
             host.Close();
         }
 
+        /// <summary>Test seam: build any page by name, for checks that apply to all of them.</summary>
+        internal static GlowPage BuildPageForTest(string name, string scratch) => BuildPage(name, scratch);
+
         /// <summary>Test seam: build a Display page outside ShootAllPages, so a shot can put
         /// it into a state the default construction does not reach.</summary>
         internal static VibrancePage BuildDisplay()
