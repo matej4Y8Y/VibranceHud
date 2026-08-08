@@ -36,7 +36,7 @@ namespace VibranceHud.Controls
                    | ControlStyles.ResizeRedraw, true);
 
             BackColor = Color.Transparent;
-            Width = 10;
+            Width = 8;
             TabStop = false;   // the page it scrolls is the keyboard target, not the bar
         }
 
@@ -163,14 +163,24 @@ namespace VibranceHud.Controls
             // The track: barely there, just enough to show how far down you are.
             var track = new RectangleF(2f, TrackTop, Math.Max(1, Width - 4), TrackHeight);
             using (var path = Glass.RoundedPath(track, radius))
-            using (var back = new SolidBrush(Color.FromArgb(40, Theme.GlassEdge)))
+            using (var back = new SolidBrush(Color.FromArgb(28, Theme.GlassEdge)))
                 g.FillPath(back, path);
 
+            // The thumb is drawn from Text, not Accent.
+            //
+            // Accent is near-black on the light theme, which turned a slim scrollbar into a
+            // heavy black slab down the side of a white page - it read as a rendering fault
+            // rather than as a control. Text tracks the theme the right way round: dark on
+            // light, light on dark, and muted at rest either way. The accent is kept for the
+            // hover and drag states, where a deliberate colour change is the point.
             var thumb = new RectangleF(2f, ThumbTop, Math.Max(1, Width - 4), ThumbHeight);
             using (var path = Glass.RoundedPath(thumb, radius))
             {
-                int alpha = _dragging ? 235 : _hover ? 200 : 150;
-                using var fill = new SolidBrush(Color.FromArgb(alpha, Theme.Accent));
+                Color colour = _dragging || _hover
+                    ? Color.FromArgb(_dragging ? 220 : 180, Theme.Accent)
+                    : Color.FromArgb(Theme.IsLight ? 70 : 90, Theme.Text);
+
+                using var fill = new SolidBrush(colour);
                 g.FillPath(fill, path);
             }
         }
