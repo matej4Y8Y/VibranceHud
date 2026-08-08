@@ -61,6 +61,23 @@ namespace VibranceHud.Pages
 
         private readonly GlassButton _resetFine;
 
+        // ---- advanced grade ----
+        //
+        // The engine has carried a full three-way corrector for a while - highlights,
+        // shadows, whites, blacks, fade and split toning, all resolving to the same gamma
+        // ramp - and it was saved, shared in profiles and applied, with no way to reach it.
+        // Collapsed by default, because the six controls above are the front door.
+        private readonly Label _advancedLabel;
+        private readonly GlassButton _advancedToggle;
+        private readonly SliderRow _highlights, _shadows, _whites, _blacks, _fade;
+        private readonly SliderRow _shadowTint, _midTint, _highTint;
+        private bool _advancedOpen;
+
+        /// <summary>Set once the constructor has finished. LayoutContent touches every field
+        /// on the page, so anything that calls it during construction dereferences whatever
+        /// has not been assigned yet.</summary>
+        private bool _built;
+
 
         // ---- share ----
         private readonly Label _shareLabel, _shareHint, _shareStatus;
@@ -92,6 +109,51 @@ namespace VibranceHud.Pages
 
             _card = new CardPanel();
             Controls.Add(_card);
+
+            // ---- advanced ----
+            //
+            // Every one of these is a field of ToneSettings, which the engine already applies
+            // through ToneCurve. Nothing new is computed here; this is the missing UI for a
+            // grade that has been shipping invisibly.
+            _advancedLabel = SectionLabel("ADVANCED");
+            _advancedToggle = new GlassButton { Text = "Show", Kind = GlassButtonKind.Ghost };
+            _advancedToggle.Click += (_, _) => SetAdvancedOpen(!_advancedOpen);
+            _card.Controls.Add(_advancedToggle);
+
+            _highlights = ToneRow("Highlights", v => _engine.Tone = _engine.Tone with { Highlights = v },
+                _engine.Tone.Highlights);
+            _shadows = ToneRow("Shadows", v => _engine.Tone = _engine.Tone with { Shadows = v },
+                _engine.Tone.Shadows);
+            _whites = ToneRow("Whites", v => _engine.Tone = _engine.Tone with { Whites = v },
+                _engine.Tone.Whites);
+            _blacks = ToneRow("Blacks", v => _engine.Tone = _engine.Tone with { Blacks = v },
+                _engine.Tone.Blacks);
+
+            // Fade is the one that only runs one way - it lifts the black point toward grey,
+            // and there is no meaningful negative of that.
+            _fade = Row("Fade", 0, 100, 0, _engine.Tone.Fade,
+                v => { _engine.Tone = _engine.Tone with { Fade = v }; _settings.Tone = _engine.Tone; },
+                palette: SliderPalette.Luminance, format: v => $"{v}%");
+
+            _shadowTint = ToneRow("Shadow tint", v => _engine.Tone = _engine.Tone with { ShadowTint = v },
+                _engine.Tone.ShadowTint);
+            _midTint = ToneRow("Midtone tint", v => _engine.Tone = _engine.Tone with { MidtoneTint = v },
+                _engine.Tone.MidtoneTint);
+            _highTint = ToneRow("Highlight tint", v => _engine.Tone = _engine.Tone with { HighlightTint = v },
+                _engine.Tone.HighlightTint);
+
+            Explain(_highlights, "The brightest parts only. Pull it down to recover detail in a blown-out sky.");
+            Explain(_shadows, "The darkest parts only. Lift it to see into corners without washing the whole picture out.");
+            Explain(_whites, "Where white begins. Lower it and more of the picture counts as fully bright.");
+            Explain(_blacks, "Where black begins. Raise it and more of the picture counts as fully dark.");
+            Explain(_fade, "Lifts black toward grey for a softer, filmic look. Zero is off.");
+            Explain(_shadowTint, "Colours the dark parts. Cool to the left, warm to the right.");
+            Explain(_midTint, "Colours the midtones, which is most of what you look at.");
+            Explain(_highTint, "Colours the bright parts, including highlights on skin and metal.");
+
+            // Open if the saved grade is actually using any of this. A non-neutral grade
+            // behind a collapsed section is a screen that looks wrong with no visible cause.
+            SetAdvancedOpen(!_engine.Tone.IsGammaOnly);
 
             _presetsLabel = SectionLabel("SCENE PRESETS");
             foreach (var preset in DisplayPresets.All)
@@ -249,6 +311,8 @@ namespace VibranceHud.Pages
 
             Resize += (_, _) => LayoutContent();
             HandleCreated += (_, _) => LayoutContent();
+
+            _built = true;
         }
 
         // ---- construction helpers ----------------------------------------------------
@@ -308,6 +372,42 @@ namespace VibranceHud.Pages
 
         /// <summary>Build one slider row and wire it to the engine, the settings file and the
         /// preset highlight in one place, so no row can quietly forget one of the three.</summary>
+        /// <summary>
+        /// One advanced row. They all share the same shape - centred on zero, -100 to 100,
+        /// signed readout - so the only thing that differs is which field of ToneSettings it
+        /// writes and what it is called.
+        /// </summary>
+        private SliderRow ToneRow(string caption, Action<int> apply, int value) =>
+            Row(caption, -100, 100, 0, value,
+                v => { apply(v); _settings.Tone = _engine.Tone; },
+                palette: SliderPalette.Luminance,
+                // Signed, so "which side of neutral am I on" is answerable without looking at
+                // the thumb. A bare "-40" reads as a measurement; "+40" reads as a choice.
+                format: v => v > 0 ? "+" + v : v.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture));
+
+        /// <summary>
+        /// Show or hide the advanced rows.
+        ///
+        /// Collapsed by default. The six controls above are the front door, and eight more
+        /// sliders opening onto them turns the page into a mixing desk. Anything non-neutral
+        /// forces it open on load, or a saved grade would be invisible and unexplainable.
+        /// </summary>
+        private void SetAdvancedOpen(bool open)
+        {
+            _advancedOpen = open;
+            _advancedToggle.Text = open ? "Hide" : "Show";
+
+            foreach (var row in AdvancedRows) row.Visible = open;
+
+            if (_built) LayoutContent();
+        }
+
+        private SliderRow[] AdvancedRows => new[]
+        {
+            _highlights, _shadows, _whites, _blacks, _fade, _shadowTint, _midTint, _highTint,
+        };
+
         private SliderRow Row(string caption, int min, int max, int? notch, int value,
             Action<int> apply, bool large = false, SliderPalette? palette = null,
             Func<int, string>? format = null)
@@ -391,6 +491,33 @@ namespace VibranceHud.Pages
             _contrast.Place(leftX, y, colW);
             _temperature.Place(rightX, y, colW);
             y += SliderRow.RowHeight + SectionGap;
+
+            // ---- advanced: four more 2x2 rows, hidden until asked for ----
+            //
+            // The label stops short of its toggle for the same reason FINE TUNE does: a
+            // transparent label added to the card first paints straight over a button that
+            // sits inside its bounds.
+            _advancedLabel.SetBounds(leftX, y, innerW - ResetW - Design.Tokens.Scale(Design.Tokens.S), SectionLabelH);
+            _advancedToggle.SetBounds(leftX + innerW - ResetW, y - Design.Tokens.Scale(4), ResetW, ResetH);
+            y += SectionLabelH + Design.Tokens.Scale(6);
+
+            if (_advancedOpen)
+            {
+                _highlights.Place(leftX, y, colW);
+                _shadows.Place(rightX, y, colW);
+                y += SliderRow.RowHeight;
+                _whites.Place(leftX, y, colW);
+                _blacks.Place(rightX, y, colW);
+                y += SliderRow.RowHeight;
+                _fade.Place(leftX, y, colW);
+                _shadowTint.Place(rightX, y, colW);
+                y += SliderRow.RowHeight;
+                _midTint.Place(leftX, y, colW);
+                _highTint.Place(rightX, y, colW);
+                y += SliderRow.RowHeight;
+            }
+
+            y += SectionGap;
 
             // ---- scene presets: compact chips, under the controls they drive ----
             _presetsLabel.SetBounds(leftX, y, innerW, SectionLabelH);

@@ -99,6 +99,15 @@ namespace VibranceHud.Tests
             host.Close();
         }
 
+        /// <summary>Test seam: build a Display page outside ShootAllPages, so a shot can put
+        /// it into a state the default construction does not reach.</summary>
+        internal static VibrancePage BuildDisplay()
+        {
+            string scratch = Path.Combine(Path.GetTempPath(), "PxShot_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(scratch);
+            return (VibrancePage)BuildPage("Display", scratch);
+        }
+
         private static GlowPage BuildPage(string name, string scratch)
         {
             Theme.Apply("Violet");
