@@ -23,6 +23,11 @@ namespace VibranceHud.Pages
         private readonly CardPanel _card;
         private readonly FlowLayoutPanel _savedFlow;
         private readonly Label _savedEmpty;
+
+        // ---- share ----
+        private readonly Label _shareCaption, _shareHint, _shareStatus;
+        private readonly GlassTextBox _codeBox;
+        private readonly GlassButton _copyCode, _applyCode;
         private readonly ToggleSwitch _enabled;
         private readonly Label _status;
         private readonly List<ChipButton> _shapes = new();
@@ -45,7 +50,7 @@ namespace VibranceHud.Pages
         // config changes and every readout keeps showing the old number, because each slider
         // captured its starting value when it was built.
         private FlatSlider _sizeSlider = null!, _thicknessSlider = null!, _gapSlider = null!;
-        private FlatSlider _dotSlider = null!, _circleSlider = null!;
+        private FlatSlider _dotSlider = null!, _circleSlider = null!, _opacitySlider = null!;
         private readonly List<ChipButton> _partChips = new();
 
         /// <summary>Suppresses the per-slider save while several are being set at once.</summary>
@@ -176,7 +181,7 @@ namespace VibranceHud.Pages
             // Opacity, in whole percent rather than tenths - nobody needs 43.7% opaque.
             // A large share of real crosshairs are semi-transparent and there was no way to
             // express that at all.
-            AddPercentSlider(_card, "OPACITY", y + 310, 10, 100, _current.Opacity,
+            _opacitySlider = AddPercentSlider(_card, "OPACITY", y + 310, 10, 100, _current.Opacity,
                 v => { _current.Opacity = v; OnSliderMoved(); RefreshGalleryPreviews(); });
 
             // ---- Colour + options ----
@@ -218,6 +223,9 @@ namespace VibranceHud.Pages
 
             _hexBox = new GlassTextBox
             {
+                // Named because the page now has two text fields - this one and the share
+                // code - and "the only TextBox on the page" stopped being a way to find it.
+                Name = "hexBox",
                 Location = new Point(252, y + 456),
                 Size = new Size(110, 30),
             };
@@ -300,6 +308,59 @@ namespace VibranceHud.Pages
                 TextAlign = ContentAlignment.MiddleLeft
             };
             _card.Controls.Add(_savedEmpty);
+
+            // ---- Share ----
+            //
+            // The same job the display share code does, for the thing people are far more
+            // likely to be asked about. A screenshot cannot answer "how did you get that
+            // crosshair"; a short code can. Positioned by RefreshSavedList, because the saved
+            // list above it grows with however many crosshairs somebody has kept.
+            _shareCaption = UiHelpers.Caption("SHARE", 18, 0, 200);
+            _card.Controls.Add(_shareCaption);
+
+            _shareHint = new Label
+            {
+                Text = "Paste a friend's code to get their exact crosshair, or copy yours to send.",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Size = new Size(ContentW, 20),
+            };
+            _card.Controls.Add(_shareHint);
+
+            _codeBox = new GlassTextBox
+            {
+                Name = "shareCodeBox",
+                Size = new Size(ContentW - 260, 30),
+                CharacterCasing = CharacterCasing.Upper,
+                PlaceholderText = "PXC-XXXXXXXXXXXXXXXXXXXXX",
+            };
+            _codeBox.Inner.Font = new Font("Consolas", 9.5f);
+            _card.Controls.Add(_codeBox);
+
+            _copyCode = Button("Copy my code", 0, 0, 120);
+            _copyCode.Height = 30;
+            _copyCode.Click += (_, _) => CopyMyCode();
+            _card.Controls.Add(_copyCode);
+
+            _applyCode = new GlassButton
+            {
+                Text = "Apply",
+                Kind = GlassButtonKind.Primary,
+                Size = new Size(90, 30),
+            };
+            _applyCode.Click += (_, _) => ApplySharedCode();
+            _card.Controls.Add(_applyCode);
+
+            _shareStatus = new Label
+            {
+                Text = "",
+                ForeColor = Theme.TextDim,
+                BackColor = Color.Transparent,
+                Font = new Font(Theme.FontFamily, 8.5f),
+                Size = new Size(ContentW, 20),
+            };
+            _card.Controls.Add(_shareStatus);
 
             Controls.Add(_card);
 
@@ -692,10 +753,74 @@ namespace VibranceHud.Pages
             _savedFlow.Visible = any;
             _savedEmpty.Visible = !any;
 
+            // SHARE sits under whichever of the two is showing, so it moves down as somebody
+            // saves more crosshairs rather than being overlapped by them.
+            int shareTop = (any ? _savedFlow.Bottom : _savedEmpty.Bottom) + 28;
+
+            _shareCaption.Location = new Point(18, shareTop);
+            _shareHint.Location = new Point(18, shareTop + 22);
+            _codeBox.Location = new Point(18, shareTop + 48);
+            _copyCode.Location = new Point(18 + _codeBox.Width + 10, shareTop + 48);
+            _applyCode.Location = new Point(18 + _codeBox.Width + 10 + _copyCode.Width + 10, shareTop + 48);
+            _shareStatus.Location = new Point(18, shareTop + 84);
+
             // Set explicitly rather than relying on WinForms to infer it from children - a
             // UserControl doesn't always recompute this reliably on its own.
-            _card.Height = Math.Max(BaseCardHeight, _savedFlow.Bottom + 20);
+            _card.Height = Math.Max(BaseCardHeight, _shareStatus.Bottom + 20);
             AutoScrollMinSize = new Size(0, _card.Bottom + 20);
+        }
+
+        /// <summary>
+        /// Put this crosshair on the clipboard as a code.
+        ///
+        /// The code is built from what is on screen right now, not from a saved entry - the
+        /// thing somebody wants to share is usually the one they have just finished tweaking
+        /// and have not named yet.
+        /// </summary>
+        private void CopyMyCode()
+        {
+            string code = CrosshairCode.Encode(_current);
+            try
+            {
+                Clipboard.SetText(code);
+                _codeBox.Text = code;
+                SetShareStatus("Copied. Paste it to a friend.", Theme.Accent);
+            }
+            catch
+            {
+                // Another process can hold the clipboard open. Showing the code still lets
+                // them select it by hand, which is better than a dead button.
+                _codeBox.Text = code;
+                SetShareStatus("Couldn't reach the clipboard - copy it from the box.", Theme.TextDim);
+            }
+        }
+
+        private void ApplySharedCode()
+        {
+            if (!CrosshairCode.TryDecode(_codeBox.Text, out var incoming))
+            {
+                // Deliberately says nothing about which part is wrong: the checksum cannot
+                // tell, and guessing would send people looking in the wrong place.
+                SetShareStatus("That code isn't valid. Nothing changed.",
+                    Color.FromArgb(240, 130, 130));
+                return;
+            }
+
+            // The name is not part of a code - a shared crosshair is not somebody else's
+            // saved entry, it is a starting point that this user can name themselves.
+            incoming.Name = _current.Name;
+            _current = incoming;
+
+            SyncControlsToCurrent();
+            Push();
+            RefreshGalleryPreviews();
+            SetShareStatus("Applied.", Theme.Accent);
+        }
+
+        private void SetShareStatus(string text, Color colour)
+        {
+            _shareStatus.Text = text;
+            _shareStatus.ForeColor = colour;
         }
 
         private void LoadSaved(string name)
@@ -704,23 +829,46 @@ namespace VibranceHud.Pages
             if (found == null) return;
             _current = found.Clone();
 
-            // Move the sliders to the loaded crosshair, not just the config behind them.
+            SyncControlsToCurrent();
+            Push();
+            RefreshSavedList();
+        }
+
+        /// <summary>
+        /// Move every control on the page to whatever _current now holds.
+        ///
+        /// Used by loading a saved crosshair and by applying a shared code - both replace the
+        /// config wholesale, and a control left showing the old value is worse than one that
+        /// never moved, because the page then disagrees with itself.
+        ///
+        /// This used to move three of the five sliders. Loading a saved crosshair left DOT
+        /// SIZE, RING SIZE and OPACITY showing the previous one's numbers while the crosshair
+        /// on screen was correct.
+        /// </summary>
+        private void SyncControlsToCurrent()
+        {
+            // Suppressed, or each assignment writes itself straight back into _current
+            // through the slider's own change handler.
             _applyingPreset = true;
             try
             {
-                _sizeSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedSize * 10),
-                    _sizeSlider.Minimum, _sizeSlider.Maximum);
-                _thicknessSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedThickness * 10),
-                    _thicknessSlider.Minimum, _thicknessSlider.Maximum);
-                _gapSlider.Value = Math.Clamp((int)Math.Round(_current.ResolvedGap * 10),
-                    _gapSlider.Minimum, _gapSlider.Maximum);
+                Set(_sizeSlider, (int)Math.Round(_current.ResolvedSize * 10));
+                Set(_thicknessSlider, (int)Math.Round(_current.ResolvedThickness * 10));
+                Set(_gapSlider, (int)Math.Round(_current.ResolvedGap * 10));
+                Set(_dotSlider, (int)Math.Round(_current.ResolvedDotSize * 10));
+                Set(_circleSlider, (int)Math.Round(_current.ResolvedCircleRadius * 10));
+                Set(_opacitySlider, _current.Opacity);
+
+                _wheel.Colour = Color.FromArgb(_current.ColourArgb);
+                _hexBox.Text = ColourWheel.ToHex(Color.FromArgb(_current.ColourArgb));
             }
             finally { _applyingPreset = false; }
 
             HighlightActivePreset();
             SyncColourDots();
-            Push();
-            RefreshSavedList();
+
+            static void Set(FlatSlider slider, int value) =>
+                slider.Value = Math.Clamp(value, slider.Minimum, slider.Maximum);
         }
 
         private void SaveCurrent()

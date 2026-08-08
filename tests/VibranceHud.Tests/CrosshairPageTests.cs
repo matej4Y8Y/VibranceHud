@@ -209,7 +209,7 @@ namespace VibranceHud.Tests
             using var page = BuildPage(temp.Path);
 
             var wheel = Descendants(page).OfType<ColourWheel>().Single();
-            var hex = Descendants(page).OfType<TextBox>().Single();
+            var hex = HexBox(page);
 
             hex.Text = "FF3C3C";     // the red swatch
 
@@ -232,7 +232,7 @@ namespace VibranceHud.Tests
             using var page = BuildPage(temp.Path);
 
             var wheel = Descendants(page).OfType<ColourWheel>().Single();
-            var hex = Descendants(page).OfType<TextBox>().Single();
+            var hex = HexBox(page);
 
             wheel.TestPressKey(Keys.Right);
 
@@ -245,7 +245,7 @@ namespace VibranceHud.Tests
             using var temp = new TempDirectory();
             using var page = BuildPage(temp.Path);
 
-            var hex = Descendants(page).OfType<TextBox>().Single();
+            var hex = HexBox(page);
             var swatch = Descendants(page).First(c => c.GetType().Name == "SwatchDot"
                 && (Color)c.GetType().GetProperty("Colour")!.GetValue(c)! == Color.White);
 
@@ -263,13 +263,80 @@ namespace VibranceHud.Tests
             using var page = BuildPage(temp.Path);
 
             var wheel = Descendants(page).OfType<ColourWheel>().Single();
-            var hex = Descendants(page).OfType<TextBox>().Single();
+            var hex = HexBox(page);
 
             var before = wheel.Colour;
             hex.Text = "FF3C";
 
             Assert.Equal(before, wheel.Colour);
         }
+
+        /// <summary>
+        /// Pasting a code has to move the controls, not only the config behind them.
+        ///
+        /// This is the bug that already existed for loading a saved crosshair: three of the
+        /// five sliders were moved and DOT SIZE, RING SIZE and OPACITY were left showing the
+        /// previous crosshair's numbers while the one on screen was correct.
+        /// </summary>
+        [Fact]
+        public void ApplyingASharedCodeMovesEverySlider()
+        {
+            using var temp = new TempDirectory();
+            using var page = BuildPage(temp.Path);
+
+            var wanted = new CrosshairConfig
+            {
+                ArmTop = true, ArmBottom = true, ArmLeft = true, ArmRight = true,
+                ShowCircle = true, CentreDot = true, Outline = false,
+                SizeTenths = 91, ThicknessTenths = 28, GapTenths = 47,
+                DotSizeTenths = 62, CircleRadiusTenths = 288, Opacity = 64,
+                ColourArgb = unchecked((int)0xFFFF3C3C),
+            };
+
+            ShareBox(page).Text = CrosshairCode.Encode(wanted);
+            Click(Descendants(page).OfType<GlassButton>().First(b => b.Text == "Apply"));
+
+            var sliders = Descendants(page).OfType<FlatSlider>().ToList();
+
+            Assert.Contains(sliders, s => s.Value == 91);    // size
+            Assert.Contains(sliders, s => s.Value == 28);    // thickness
+            Assert.Contains(sliders, s => s.Value == 47);    // gap
+            Assert.Contains(sliders, s => s.Value == 62);    // dot
+            Assert.Contains(sliders, s => s.Value == 288);   // ring
+            Assert.Contains(sliders, s => s.Value == 64);    // opacity
+
+            Assert.Equal("FF3C3C", HexBox(page).Text);
+        }
+
+        [Fact]
+        public void AnInvalidCodeChangesNothingAndSaysSo()
+        {
+            using var temp = new TempDirectory();
+            using var page = BuildPage(temp.Path);
+
+            string before = HexBox(page).Text;
+
+            ShareBox(page).Text = "PXC-NOTAREALCODEATALL1";
+            Click(Descendants(page).OfType<GlassButton>().First(b => b.Text == "Apply"));
+
+            Assert.Equal(before, HexBox(page).Text);
+
+            var statuses = Descendants(page).OfType<Label>().Select(l => l.Text ?? "");
+            Assert.Contains(statuses, t => t.Contains("isn't valid", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// The hex field, by name.
+        ///
+        /// It used to be found as "the only TextBox on the page", which stopped being true the
+        /// moment SHARE added a second one - and the failure was four tests throwing on
+        /// Single() rather than anything being wrong with the page.
+        /// </summary>
+        private static GlassTextBox HexBox(Control page) =>
+            Descendants(page).OfType<GlassTextBox>().Single(b => b.Name == "hexBox");
+
+        private static GlassTextBox ShareBox(Control page) =>
+            Descendants(page).OfType<GlassTextBox>().Single(b => b.Name == "shareCodeBox");
 
         /// <summary>SwatchDot is a private nested control, so its Click is raised the same way
         /// Windows would rather than through a public seam that only exists for tests.</summary>
