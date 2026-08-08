@@ -61,6 +61,20 @@ namespace VibranceHud.Pages
 
         private readonly GlassButton _resetFine;
 
+        // ---- before / after ----
+        //
+        // The demo moment for a product whose promise is "your game looks way better": the
+        // effect is invisible until you can see what it replaced.
+        private readonly GlassButton _compare;
+        private readonly Display.AbCompare _ab = new();
+        private ComparedLook? _beforeCompare;
+
+        /// <summary>Everything the compare has to put back. Captured on the way to neutral so
+        /// the return trip cannot depend on the sliders still holding the old values.</summary>
+        private readonly record struct ComparedLook(
+            int Vibrance, int Saturation, int Brightness, int Contrast, int Temperature,
+            ToneSettings Tone);
+
         // ---- advanced grade ----
         //
         // The engine has carried a full three-way corrector for a while - highlights,
@@ -201,6 +215,12 @@ namespace VibranceHud.Pages
             // was for each - 100, 100, 100, and 0, which is not something anyone should have
             // to remember. Presets can reach neutral too, but only via "Balanced", which
             // reads like a look rather than an undo.
+            _compare = new GlassButton { Text = "Compare", Kind = GlassButtonKind.Ghost };
+            _compare.Click += (_, _) => ToggleCompare();
+            _card.Controls.Add(_compare);
+            _presetTips.SetToolTip(_compare,
+                "Hold your look against neutral, so you can see what it is actually doing.");
+
             _fineLabel = SectionLabel("FINE TUNE");
             _resetFine = new GlassButton { Text = "Reset", Kind = GlassButtonKind.Ghost };
             _resetFine.Click += (_, _) => ResetFineTune();
@@ -403,6 +423,67 @@ namespace VibranceHud.Pages
             if (_built) LayoutContent();
         }
 
+        /// <summary>
+        /// Flip between the user's look and neutral.
+        ///
+        /// Writes straight to the engine and deliberately does NOT move the sliders or save
+        /// anything: neutral is a preview, not a change. If it touched the sliders, a compare
+        /// interrupted by closing the window would persist as the user's settings.
+        /// </summary>
+        private void ToggleCompare()
+        {
+            if (!_ab.TryToggle()) return;   // inside the cooldown - do nothing at all
+
+            if (_ab.ShowingNeutral)
+            {
+                _beforeCompare = new ComparedLook(
+                    _engine.Vibrance, _engine.Saturation, _engine.Brightness,
+                    _engine.Contrast, _engine.Temperature, _engine.Tone);
+
+                _engine.Vibrance = 0;
+                _engine.Saturation = 100;
+                _engine.Brightness = 100;
+                _engine.Contrast = 100;
+                _engine.Temperature = 0;
+                _engine.Tone = ToneSettings.Neutral;
+
+                _compare.Text = "Showing off";
+            }
+            else RestoreFromCompare();
+        }
+
+        private void RestoreFromCompare()
+        {
+            if (_beforeCompare is { } look)
+            {
+                _engine.Vibrance = look.Vibrance;
+                _engine.Saturation = look.Saturation;
+                _engine.Brightness = look.Brightness;
+                _engine.Contrast = look.Contrast;
+                _engine.Temperature = look.Temperature;
+                _engine.Tone = look.Tone;
+                _beforeCompare = null;
+            }
+
+            _compare.Text = "Compare";
+        }
+
+        /// <summary>
+        /// Leaving the page while comparing must not strand the user on neutral - their look
+        /// would appear to have been wiped, with nothing on screen explaining why. Reset is
+        /// not rate-limited, so this can never be refused.
+        /// </summary>
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+
+            if (!Visible && _ab.ShowingNeutral)
+            {
+                _ab.Reset();
+                RestoreFromCompare();
+            }
+        }
+
         private SliderRow[] AdvancedRows => new[]
         {
             _highlights, _shadows, _whites, _blacks, _fade, _shadowTint, _midTint, _highTint,
@@ -470,7 +551,12 @@ namespace VibranceHud.Pages
             int y = CardPad;
 
             // ---- primary: the two headline sliders, side by side and larger ----
-            _primaryLabel.SetBounds(leftX, y, innerW, SectionLabelH);
+            //
+            // The label stops short of Compare for the same reason FINE TUNE stops short of
+            // Reset: a transparent label added to the card first paints over any button
+            // sitting inside its bounds, which is how Reset once rendered as an empty outline.
+            _primaryLabel.SetBounds(leftX, y, innerW - ResetW - Design.Tokens.Scale(Design.Tokens.S), SectionLabelH);
+            _compare.SetBounds(leftX + innerW - ResetW, y - Design.Tokens.Scale(4), ResetW, ResetH);
             y += SectionLabelH + Design.Tokens.Scale(8);
             _saturation.Place(leftX, y, colW);
             _vibrance.Place(rightX, y, colW);
