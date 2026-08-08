@@ -661,9 +661,23 @@ namespace VibranceHud.Pages
 
         // ---- layout ------------------------------------------------------------------
 
+        private bool _laying;
+
         private void LayoutContent()
         {
             if (Width <= 0) return;
+
+            // Re-entrancy guard. Several things in here - sizing the card, assigning the
+            // scroll extent - raise layout events of their own, and without this a single
+            // resize recursed through the whole page more than once.
+            if (_laying) return;
+            _laying = true;
+            try { LayoutContentCore(); }
+            finally { _laying = false; }
+        }
+
+        private void LayoutContentCore()
+        {
 
             // Capped, not just floored. This page stretches its card to the window, which was
             // right while the window was welded at 1040px. Once it could be dragged wide, the
@@ -684,10 +698,24 @@ namespace VibranceHud.Pages
 
             // Title box is sized from the font, not from a number that happened to fit the
             // old one. At 30px the 'p' and 'y' descenders in "Display" were being sliced off.
-            _title.SetBounds(leftMargin, Design.Tokens.Scale(16), cardW, Design.Tokens.Scale(38));
-            _subtitle.SetBounds(leftMargin, Design.Tokens.Scale(56), cardW, Design.Tokens.Scale(22));
+            // Everything the page positions directly has to be offset by how far it is
+            // scrolled.
+            //
+            // This is what made the page look frozen. A scrolled container reports its
+            // children's positions in virtual coordinates, and SetBounds writes CLIENT
+            // coordinates - so laying out while scrolled put the card straight back at the
+            // top. The wheel was arriving and working the whole time: a live trace counted 163
+            // wheel events against 303 layout passes, and each of those layouts undid the
+            // scroll a fraction of a second after it happened.
+            //
+            // AutoScrollPosition reads back negative, which is WinForms' convention, so this
+            // is an addition rather than a subtraction.
+            int scrollY = AutoScrollPosition.Y;
 
-            int cardTop = Design.Tokens.Scale(86);
+            _title.SetBounds(leftMargin, Design.Tokens.Scale(16) + scrollY, cardW, Design.Tokens.Scale(38));
+            _subtitle.SetBounds(leftMargin, Design.Tokens.Scale(56) + scrollY, cardW, Design.Tokens.Scale(22));
+
+            int cardTop = Design.Tokens.Scale(86) + scrollY;
             int y = CardPad;
 
             // ---- primary: the two headline sliders, side by side and larger ----
@@ -822,8 +850,17 @@ namespace VibranceHud.Pages
             // The card ends where its contents do, plus the same padding it started with.
             _card.SetBounds(leftMargin, cardTop, cardW, y + CardPad);
 
-            // Scroll extent covers the header band, the card and a margin underneath.
-            AutoScrollMinSize = new Size(0, cardTop + _card.Height + PageMargin);
+            // Only assigned when it actually changes.
+            //
+            // Setting AutoScrollMinSize triggers a layout, which fires Resize, which calls
+            // this method again - so assigning it unconditionally turned every wheel notch
+            // into three full re-layouts of forty-odd controls. A trace counted 285 layout
+            // passes for 92 wheel events, which is precisely why scrolling did not feel smooth.
+            // Measured from the unscrolled top, not from wherever the card currently sits -
+            // cardTop already carries the scroll offset, and feeding that back in would shrink
+            // the extent as the user scrolled down.
+            var wanted = new Size(0, Design.Tokens.Scale(86) + _card.Height + PageMargin);
+            if (AutoScrollMinSize != wanted) AutoScrollMinSize = wanted;
         }
 
         // ---- behaviour ---------------------------------------------------------------
