@@ -274,16 +274,23 @@ namespace VibranceHud
             // 50ms, not 33.
             //
             // A frame repaints every transparent control on the current page - seventy-eight
-            // of them on Display - and measured at 27ms on a fast machine. Against a 33ms
-            // budget that is eighty percent spent before anything the user is doing gets a
-            // look in, and on a slower PC it simply does not fit, which is what "the whole app
-            // feels laggy" actually is.
+            // of them on Display - and measures 19.7ms. Against a 33ms budget that is most of
+            // it spent before anything the user is doing gets a look in, and on a slower PC it
+            // does not fit at all, which is what "the whole app feels laggy" actually is. The
+            // plexus is a slow-drifting background; twenty frames a second is indistinguishable
+            // from thirty for it, and it hands a third of the budget back to everything else.
             //
-            // The plexus is a slow-drifting background. Twenty frames a second is
-            // indistinguishable from thirty for it, and it hands a third of the budget back to
-            // everything else. The right long-term fix is to stop repainting every control for
-            // a backdrop change, but that is a rework of how the glass composites; this is the
-            // honest measure-and-adjust in the meantime.
+            // Worth recording what the cost is NOT, because the obvious fix is the wrong one.
+            // The backdrop was assumed to be the expense - a transparent child gets its
+            // background by making the page repaint inside the child's clip, so the plexus is
+            // drawn 36 times a frame. Caching it into a bitmap and blitting won 0.3ms, i.e.
+            // nothing: those repaints are clipped and already cheap. Measured, the page with no
+            // children on it costs 1.2ms a frame and the same page with them costs 19.7ms. The
+            // backdrop is 1.2 of it. The other 18.5 is the controls drawing themselves, and
+            // making that cheaper means caching each glass control's own rendering, not the
+            // background behind it.
+            //
+            // FrameCostTests measures this on every build so the number cannot drift quietly.
             _timer = new System.Windows.Forms.Timer { Interval = 50 };
             _timer.Tick += OnAnimationTick;
             _timer.Start();
@@ -398,9 +405,9 @@ namespace VibranceHud
             // Freeze the backdrop while any mouse button is held.
             //
             // A frame repaints every transparent control on the page - seventy-eight of them
-            // on Display - and measured at 27ms against a 33ms budget on a fast machine. That
-            // leaves almost nothing for the control actually being dragged, which is why
-            // sliders felt like they were lagging behind the cursor.
+            // on Display - and measures 19.7ms on a fast machine. That leaves little for the
+            // control actually being dragged, which is why sliders felt like they were lagging
+            // behind the cursor.
             //
             // Control.MouseButtons rather than wiring each control's drag events: it covers
             // the sliders, the colour wheel, the scrollbar and anything added later, with no
