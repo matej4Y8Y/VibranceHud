@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
+using VibranceHud.Controls;
 
 namespace VibranceHud.Pages
 {
@@ -93,6 +95,16 @@ namespace VibranceHud.Pages
         private bool _built;
 
 
+        // ---- game presets ----
+        //
+        // Pick a game, get looks tuned to its palette, hover one to see it at a readable size
+        // before committing. This is what replaced the Games Hub: the Hub tried to be a worse
+        // copy of each game's settings menu, and this does the thing no config file can.
+        private readonly Label _gamePresetsLabel;
+        private readonly GlassDropdown _gamePicker;
+        private readonly PresetPreviewPanel _presetPreview;
+        private readonly List<PresetTile> _tiles = new();
+
         // ---- share ----
         private readonly Label _shareLabel, _shareHint, _shareStatus;
         private readonly GlassTextBox _codeBox;
@@ -168,6 +180,19 @@ namespace VibranceHud.Pages
             // Open if the saved grade is actually using any of this. A non-neutral grade
             // behind a collapsed section is a screen that looks wrong with no visible cause.
             SetAdvancedOpen(!_engine.Tone.IsGammaOnly);
+
+            // ---- game presets ----
+            _gamePresetsLabel = SectionLabel("PRESETS FOR YOUR GAME");
+
+            _gamePicker = new GlassDropdown { Size = new Size(200, 34) };
+            _gamePicker.SetItems(Display.GameColourPresets.All.Select(g => g.Game));
+            _gamePicker.SelectedIndexChanged += (_, _) => RebuildGameTiles();
+            _card.Controls.Add(_gamePicker);
+
+            _presetPreview = new PresetPreviewPanel();
+            _card.Controls.Add(_presetPreview);
+
+            RebuildGameTiles();
 
             _presetsLabel = SectionLabel("SCENE PRESETS");
             foreach (var preset in DisplayPresets.All)
@@ -484,6 +509,106 @@ namespace VibranceHud.Pages
             }
         }
 
+        /// <summary>
+        /// Rebuild the tiles for whichever game is selected.
+        ///
+        /// Torn down and rebuilt rather than reused: the groups have different lengths, and a
+        /// pool of recycled tiles showing the wrong preset is a far worse bug than the cost of
+        /// making six controls.
+        /// </summary>
+        private void RebuildGameTiles()
+        {
+            foreach (var tile in _tiles)
+            {
+                _card.Controls.Remove(tile);
+                tile.Dispose();
+            }
+            _tiles.Clear();
+
+            int index = Math.Max(0, _gamePicker.SelectedIndex);
+            var group = Display.GameColourPresets.All[
+                Math.Min(index, Display.GameColourPresets.All.Count - 1)];
+
+            foreach (var preset in group.Presets)
+            {
+                var tile = new PresetTile(preset);
+                var captured = preset;
+
+                tile.Click += (_, _) => ApplyGamePreset(captured);
+
+                // Hovering shows it larger; leaving falls back to whatever is applied, so the
+                // panel is never blank once something has been chosen.
+                tile.HoverChanged += (_, _) => _presetPreview.Preset =
+                    _tiles.FirstOrDefault(t => t.Hovered)?.Preset
+                    ?? _tiles.FirstOrDefault(t => t.Active)?.Preset;
+
+                _tiles.Add(tile);
+                _card.Controls.Add(tile);
+            }
+
+            _presetPreview.Preset = _tiles.FirstOrDefault(t => t.Active)?.Preset;
+
+            if (_built) LayoutContent();
+        }
+
+        /// <summary>
+        /// Apply a preset to every channel it covers.
+        ///
+        /// Goes through the sliders rather than straight to the engine, so the page and the
+        /// screen cannot disagree - the same reason the scene presets do it this way.
+        /// </summary>
+        private void ApplyGamePreset(Display.ColourPreset preset)
+        {
+            _applyingPreset = true;
+            try
+            {
+                _vibrance.Slider.Value = Math.Clamp(preset.Vibrance,
+                    _vibrance.Slider.Minimum, _vibrance.Slider.Maximum);
+                _saturation.Slider.Value = Math.Clamp(preset.Saturation,
+                    _saturation.Slider.Minimum, _saturation.Slider.Maximum);
+                _brightness.Slider.Value = Math.Clamp(preset.Brightness,
+                    _brightness.Slider.Minimum, _brightness.Slider.Maximum);
+                _contrast.Slider.Value = Math.Clamp(preset.Contrast,
+                    _contrast.Slider.Minimum, _contrast.Slider.Maximum);
+                _temperature.Slider.Value = Math.Clamp(preset.Temperature,
+                    _temperature.Slider.Minimum, _temperature.Slider.Maximum);
+                _gamma.Slider.Value = Math.Clamp(preset.Tone.ResolvedGamma,
+                    _gamma.Slider.Minimum, _gamma.Slider.Maximum);
+
+                // The advanced channels have no sliders of their own in the collapsed state,
+                // so they go to the engine directly and the rows are synced afterwards.
+                _engine.Tone = preset.Tone with { Gamma = preset.Tone.ResolvedGamma };
+                _settings.Tone = _engine.Tone;
+
+                SyncAdvancedRows();
+            }
+            finally { _applyingPreset = false; }
+
+            foreach (var tile in _tiles) tile.Active = ReferenceEquals(tile.Preset, preset);
+            _presetPreview.Preset = preset;
+
+            // A preset that touches the advanced channels has to show them, or the page is
+            // hiding the reason the screen changed.
+            if (!_engine.Tone.IsGammaOnly && !_advancedOpen) SetAdvancedOpen(true);
+
+            _store.Save(_settings);
+            UpdateActiveChip();
+        }
+
+        /// <summary>Move the advanced rows to whatever the engine's grade now holds.</summary>
+        private void SyncAdvancedRows()
+        {
+            var t = _engine.Tone;
+            _highlights.Slider.Value = Math.Clamp(t.Highlights, -100, 100);
+            _shadows.Slider.Value = Math.Clamp(t.Shadows, -100, 100);
+            _whites.Slider.Value = Math.Clamp(t.Whites, -100, 100);
+            _blacks.Slider.Value = Math.Clamp(t.Blacks, -100, 100);
+            _fade.Slider.Value = Math.Clamp(t.Fade, 0, 100);
+            _shadowTint.Slider.Value = Math.Clamp(t.ShadowTint, -100, 100);
+            _midTint.Slider.Value = Math.Clamp(t.MidtoneTint, -100, 100);
+            _highTint.Slider.Value = Math.Clamp(t.HighlightTint, -100, 100);
+        }
+
         private SliderRow[] AdvancedRows => new[]
         {
             _highlights, _shadows, _whites, _blacks, _fade, _shadowTint, _midTint, _highTint,
@@ -604,6 +729,35 @@ namespace VibranceHud.Pages
             }
 
             y += SectionGap;
+
+            // ---- game presets: a picker, a row of tiles, and the larger preview ----
+            _gamePresetsLabel.SetBounds(leftX, y, innerW - Design.Tokens.Scale(210), SectionLabelH);
+            _gamePicker.SetBounds(leftX + innerW - Design.Tokens.Scale(200), y - Design.Tokens.Scale(8),
+                Design.Tokens.Scale(200), Design.Tokens.Scale(30));
+            y += SectionLabelH + Design.Tokens.Scale(14);
+
+            if (_tiles.Count > 0)
+            {
+                // Wraps at three across rather than squeezing six into one row - a 90px tile
+                // cannot show a six-colour strip and its own name.
+                const int PerRow = 3;
+                int tileGap = Design.Tokens.Scale(10);
+                int tileW = (innerW - (PerRow - 1) * tileGap) / PerRow;
+                int tileH = Design.Tokens.Scale(74);
+
+                for (int i = 0; i < _tiles.Count; i++)
+                {
+                    int col = i % PerRow, row = i / PerRow;
+                    _tiles[i].SetBounds(leftX + col * (tileW + tileGap),
+                        y + row * (tileH + tileGap), tileW, tileH);
+                }
+
+                int rows = (_tiles.Count + PerRow - 1) / PerRow;
+                y += rows * (tileH + tileGap);
+            }
+
+            _presetPreview.SetBounds(leftX, y, innerW, Design.Tokens.Scale(96));
+            y += Design.Tokens.Scale(96) + SectionGap;
 
             // ---- scene presets: compact chips, under the controls they drive ----
             _presetsLabel.SetBounds(leftX, y, innerW, SectionLabelH);
