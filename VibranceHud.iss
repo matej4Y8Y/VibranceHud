@@ -34,6 +34,9 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayName=PlexusX
 UninstallDisplayIcon={app}\PlexusX.exe
+; The licence page, shown before anything is installed. Required before charging money -
+; a paid product whose terms nobody was ever shown has no terms.
+LicenseFile=EULA.md
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
@@ -50,6 +53,12 @@ Type: filesandordirs; Name: "{app}\*"
 
 [Files]
 Source: "publish\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; Installed alongside the app so the terms, the privacy policy and the third-party
+; attributions are readable offline, without the app running and without a browser.
+Source: "EULA.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "PRIVACY.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "LICENSE.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\PlexusX"; Filename: "{app}\PlexusX.exe"
