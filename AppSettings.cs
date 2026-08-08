@@ -342,6 +342,17 @@ namespace VibranceHud
 
         public List<PanelSettings> Panels { get; set; } = new();
 
+        /// <summary>
+        /// The game whose preset row was last open, and the preset last applied from it.
+        ///
+        /// Remembered because otherwise the page reopens with no tile lit and the preview panel
+        /// reading "hover a preset to see it" - while that preset's colours are on screen. The
+        /// page would be denying what it had just done.
+        /// </summary>
+        public string ColourPresetGame { get; set; } = "";
+
+        public string ColourPresetName { get; set; } = "";
+
         /// <summary>The record for one panel, created on first use so callers never null-check.</summary>
         public PanelSettings PanelFor(int index)
         {

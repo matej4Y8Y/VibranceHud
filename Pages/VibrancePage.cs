@@ -180,12 +180,16 @@ namespace VibranceHud.Pages
             _gamePicker = new GlassDropdown { Size = new Size(200, 34) };
             _gamePicker.SetItems(Display.GameColourPresets.All.Select(g => g.Game));
 
-            // Opens on the game the app has actually detected, rather than always on the first
-            // entry. Somebody who plays CS2 should not have to tell the app that every launch.
-            string detected = _settings.FavoriteGame ?? "";
+            // Opens on the row the user last used, falling back to the game the app has
+            // detected. Somebody who plays CS2 should not have to tell the app that every
+            // launch, and somebody who picked a row by hand should find it where they left it.
+            string wanted = !string.IsNullOrEmpty(_settings.ColourPresetGame)
+                ? _settings.ColourPresetGame
+                : _settings.FavoriteGame ?? "";
+
             int match = Display.GameColourPresets.All
                 .ToList()
-                .FindIndex(g => string.Equals(g.Game, detected, StringComparison.OrdinalIgnoreCase));
+                .FindIndex(g => string.Equals(g.Game, wanted, StringComparison.OrdinalIgnoreCase));
             if (match >= 0) _gamePicker.SelectedIndex = match;
 
             _gamePicker.SelectedIndexChanged += (_, _) => RebuildGameTiles();
@@ -537,6 +541,12 @@ namespace VibranceHud.Pages
                 _card.Controls.Add(tile);
             }
 
+            // Re-light whatever was applied last time, if it belongs to this row.
+            if (string.Equals(group.Game, _settings.ColourPresetGame, StringComparison.OrdinalIgnoreCase))
+                foreach (var tile in _tiles)
+                    tile.Active = string.Equals(tile.Preset.Name, _settings.ColourPresetName,
+                        StringComparison.OrdinalIgnoreCase);
+
             _presetPreview.Preset = _tiles.FirstOrDefault(t => t.Active)?.Preset;
 
             if (_built) LayoutContent();
@@ -581,6 +591,10 @@ namespace VibranceHud.Pages
 
             foreach (var tile in _tiles) tile.Active = ReferenceEquals(tile.Preset, preset);
             _presetPreview.Preset = preset;
+
+            // Remembered, so the page does not reopen denying what it just did.
+            _settings.ColourPresetGame = _gamePicker.SelectedItem;
+            _settings.ColourPresetName = preset.Name;
 
             // A preset that touches the advanced channels has to show them, or the page is
             // hiding the reason the screen changed.
