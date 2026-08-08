@@ -38,9 +38,19 @@ namespace VibranceHud.Display
     {
         /// <summary>The look with nothing applied. Always first, so "put it back" is never
         /// more than one click away and never requires knowing what neutral was.</summary>
+        /// <remarks>
+        /// Vibrance 50, not 0.
+        ///
+        /// The vibrance scale is 0 = greyscale, 50 = untouched, 200 = the ceiling - it is not
+        /// a percentage added to normal. This preset shipped at 0 for a few hours, which on
+        /// any AMD or Intel machine meant "Neutral" drained every colour off the screen. On
+        /// NVIDIA it happened to look fine, because the driver owns everything below 100 and
+        /// the matrix is left at 1.0 either way, which is exactly the kind of bug that only
+        /// shows up on somebody else's PC.
+        /// </remarks>
         public static readonly ColourPreset Neutral = new(
             "Neutral", "Your screen exactly as Windows leaves it.",
-            Vibrance: 0, Saturation: 100, Brightness: 100, Contrast: 100, Temperature: 0,
+            Vibrance: 50, Saturation: 100, Brightness: 100, Contrast: 100, Temperature: 0,
             Tone: ToneSettings.Neutral);
 
         public static readonly IReadOnlyList<GamePresetGroup> All = new[]
@@ -53,23 +63,23 @@ namespace VibranceHud.Display
                 Neutral,
                 new ColourPreset("Daylight",
                     "For long sessions above ground. Lifts the brown-grey without going cartoon.",
-                    Vibrance: 55, Saturation: 112, Brightness: 100, Contrast: 104, Temperature: -6,
+                    Vibrance: 78, Saturation: 112, Brightness: 100, Contrast: 104, Temperature: -6,
                     Tone: new ToneSettings(Gamma: 102, Shadows: 12, Highlights: -8)),
                 new ColourPreset("Caves",
                     "For underground and night. Opens up the dark end without washing out the rest.",
-                    Vibrance: 45, Saturation: 106, Brightness: 104, Contrast: 96, Temperature: -4,
+                    Vibrance: 68, Saturation: 106, Brightness: 104, Contrast: 96, Temperature: -4,
                     Tone: new ToneSettings(Gamma: 110, Shadows: 30, Blacks: 18, Highlights: -6)),
                 new ColourPreset("Cloth",
                     "Pushes fabric and skin away from dirt and rock. The loudest of the three.",
-                    Vibrance: 80, Saturation: 124, Brightness: 100, Contrast: 108, Temperature: -10,
+                    Vibrance: 105, Saturation: 124, Brightness: 100, Contrast: 108, Temperature: -10,
                     Tone: new ToneSettings(Gamma: 100, Shadows: 8, MidtoneTint: -14)),
                 new ColourPreset("Flat",
                     "Low contrast, easy on the eyes. For very long sessions.",
-                    Vibrance: 35, Saturation: 104, Brightness: 100, Contrast: 92, Temperature: 4,
+                    Vibrance: 44, Saturation: 104, Brightness: 100, Contrast: 92, Temperature: 4,
                     Tone: new ToneSettings(Gamma: 104, Fade: 12)),
                 new ColourPreset("Recording",
                     "Holds up after a stream's compression, which eats saturation first.",
-                    Vibrance: 70, Saturation: 118, Brightness: 102, Contrast: 106, Temperature: -4,
+                    Vibrance: 95, Saturation: 118, Brightness: 102, Contrast: 106, Temperature: -4,
                     Tone: new ToneSettings(Gamma: 100, Highlights: -12, Whites: -6)),
             }),
 
@@ -81,23 +91,23 @@ namespace VibranceHud.Display
                 Neutral,
                 new ColourPreset("Competitive",
                     "Clean and even. Keeps bright maps from flaring without dulling them.",
-                    Vibrance: 60, Saturation: 110, Brightness: 100, Contrast: 106, Temperature: -8,
+                    Vibrance: 82, Saturation: 110, Brightness: 100, Contrast: 106, Temperature: -8,
                     Tone: new ToneSettings(Gamma: 100, Highlights: -14, Shadows: 10)),
                 new ColourPreset("Dust",
                     "For the sand maps. Cuts the orange cast so models stop blending into it.",
-                    Vibrance: 65, Saturation: 108, Brightness: 100, Contrast: 104, Temperature: -16,
+                    Vibrance: 88, Saturation: 108, Brightness: 100, Contrast: 104, Temperature: -16,
                     Tone: new ToneSettings(Gamma: 100, MidtoneTint: -20, Highlights: -10)),
                 new ColourPreset("Dark corners",
                     "Lifts the black end for maps with a lot of unlit space.",
-                    Vibrance: 50, Saturation: 106, Brightness: 102, Contrast: 98, Temperature: -6,
+                    Vibrance: 72, Saturation: 106, Brightness: 102, Contrast: 98, Temperature: -6,
                     Tone: new ToneSettings(Gamma: 108, Shadows: 26, Blacks: 14)),
                 new ColourPreset("Punchy",
                     "Maximum separation. Loud, and not for everybody.",
-                    Vibrance: 90, Saturation: 126, Brightness: 100, Contrast: 110, Temperature: -10,
+                    Vibrance: 120, Saturation: 126, Brightness: 100, Contrast: 110, Temperature: -10,
                     Tone: new ToneSettings(Gamma: 98, Shadows: 6, Highlights: -8)),
                 new ColourPreset("Flat",
                     "Low contrast for long sessions.",
-                    Vibrance: 40, Saturation: 104, Brightness: 100, Contrast: 94, Temperature: 2,
+                    Vibrance: 46, Saturation: 104, Brightness: 100, Contrast: 94, Temperature: 2,
                     Tone: new ToneSettings(Gamma: 104, Fade: 10)),
             }),
 
@@ -108,23 +118,23 @@ namespace VibranceHud.Display
                 Neutral,
                 new ColourPreset("Richer",
                     "A little more colour everywhere. The safe one to start with.",
-                    Vibrance: 50, Saturation: 110, Brightness: 100, Contrast: 102, Temperature: 0,
+                    Vibrance: 70, Saturation: 110, Brightness: 100, Contrast: 102, Temperature: 0,
                     Tone: new ToneSettings(Gamma: 100)),
                 new ColourPreset("Vivid",
                     "Noticeably stronger. Good for anything stylised.",
-                    Vibrance: 85, Saturation: 122, Brightness: 100, Contrast: 106, Temperature: -4,
+                    Vibrance: 112, Saturation: 122, Brightness: 100, Contrast: 106, Temperature: -4,
                     Tone: new ToneSettings(Gamma: 100, Shadows: 8)),
                 new ColourPreset("Bright rooms",
                     "For playing with a window open or a light on behind the screen.",
-                    Vibrance: 55, Saturation: 112, Brightness: 106, Contrast: 108, Temperature: -6,
+                    Vibrance: 76, Saturation: 112, Brightness: 106, Contrast: 108, Temperature: -6,
                     Tone: new ToneSettings(Gamma: 96, Blacks: -10, Highlights: 6)),
                 new ColourPreset("Night",
                     "Warmer and softer for late sessions.",
-                    Vibrance: 35, Saturation: 104, Brightness: 96, Contrast: 96, Temperature: 22,
+                    Vibrance: 58, Saturation: 104, Brightness: 96, Contrast: 96, Temperature: 22,
                     Tone: new ToneSettings(Gamma: 104, Highlights: -14, Fade: 8)),
                 new ColourPreset("Film",
                     "Lifted blacks and pulled highlights. A look rather than an advantage.",
-                    Vibrance: 30, Saturation: 106, Brightness: 100, Contrast: 92, Temperature: 6,
+                    Vibrance: 42, Saturation: 106, Brightness: 100, Contrast: 92, Temperature: 6,
                     Tone: new ToneSettings(Gamma: 102, Fade: 28, Highlights: -18, ShadowTint: -12)),
             }),
         };
@@ -144,11 +154,22 @@ namespace VibranceHud.Display
         /// order, so a preview tile shows what the preset will really do. A preview that only
         /// looked roughly right would be a promise the app then breaks.
         /// </summary>
-        public static Color Preview(ColourPreset p, Color source)
+        public static Color Preview(ColourPreset p, Color source,
+            bool driverAvailable = false, bool streaming = false)
         {
             var m = ColorAdjust.Build(
                 saturation: p.Saturation / 100f,
-                vibrance: 1f + p.Vibrance / 100f,
+
+                // The engine's own function, not 1 + vibrance/100.
+                //
+                // Those are different numbers on every machine. On NVIDIA the driver owns
+                // 0-100 through its own non-linear curve, so the matrix gets 1.0 and a tile
+                // built from 1.55 was showing a saturation lift that would never happen. On
+                // AMD the software path interpolates: vibrance 55 is about 1.03, not 1.55 -
+                // roughly fifty times the real boost. This class claims not to approximate, so
+                // it has to call what ApplyOverlay calls.
+                vibrance: VibranceEngine.SoftwareVibranceFactor(p.Vibrance, driverAvailable, streaming),
+
                 contrast: p.Contrast / 100f,
                 brightness: p.Brightness / 100f,
                 warmth: p.Temperature / 100f);

@@ -18,9 +18,21 @@ namespace VibranceHud.Controls
         private bool _hover;
         private bool _active;
 
-        public PresetTile(ColourPreset preset)
+        private readonly Color[] _preview;
+
+        public PresetTile(ColourPreset preset, bool driverAvailable = false, bool streaming = false)
         {
             Preset = preset;
+
+            // Computed once, not per paint.
+            //
+            // Preview builds a 256-entry tone ramp with a Math.Pow per entry. Six tiles times
+            // six samples is 36 ramp builds and roughly 9,000 Math.Pow calls for one repaint -
+            // and these are transparent controls over an animated backdrop, so they repaint
+            // about thirty times a second. ColourPreset is immutable, so the answer cannot
+            // change and there is nothing to invalidate.
+            _preview = Array.ConvertAll(GameColourPresets.SampleColours,
+                c => GameColourPresets.Preview(preset, c, driverAvailable, streaming));
 
             SetStyle(ControlStyles.UserPaint
                    | ControlStyles.AllPaintingInWmPaint
@@ -100,14 +112,13 @@ namespace VibranceHud.Controls
             // part of the card rather than as a rectangle sitting on one.
             int stripH = Math.Max(6, Height / 3);
             int stripY = Height - stripH - 8;
-            var samples = GameColourPresets.SampleColours;
 
             if (Width > 16 && stripH > 0)
             {
-                float w = (Width - 16f) / samples.Length;
-                for (int i = 0; i < samples.Length; i++)
+                float w = (Width - 16f) / _preview.Length;
+                for (int i = 0; i < _preview.Length; i++)
                 {
-                    using var brush = new SolidBrush(GameColourPresets.Preview(Preset, samples[i]));
+                    using var brush = new SolidBrush(_preview[i]);
                     g.FillRectangle(brush, 8 + i * w, stripY, w + 0.5f, stripH);
                 }
 
@@ -139,6 +150,12 @@ namespace VibranceHud.Controls
     public sealed class PresetPreviewPanel : Control
     {
         private ColourPreset? _preset;
+        private Color[] _preview = Array.Empty<Color>();
+
+        /// <summary>Machine state for the preview, so the strip shows what this PC would
+        /// actually do rather than a generic answer. See PresetTile's constructor.</summary>
+        public bool DriverAvailable { get; set; }
+        public bool Streaming { get; set; }
 
         public PresetPreviewPanel()
         {
@@ -157,7 +174,20 @@ namespace VibranceHud.Controls
         public ColourPreset? Preset
         {
             get => _preset;
-            set { _preset = value; Invalidate(); }
+            set
+            {
+                _preset = value;
+
+                // Recomputed on assignment, not on paint - same reason as the tile: this is a
+                // 256-entry ramp with a Math.Pow per entry, and the panel is transparent over
+                // an animated backdrop.
+                _preview = value == null
+                    ? Array.Empty<Color>()
+                    : Array.ConvertAll(GameColourPresets.SampleColours,
+                        c => GameColourPresets.Preview(value, c, DriverAvailable, Streaming));
+
+                Invalidate();
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -176,16 +206,15 @@ namespace VibranceHud.Controls
                 return;
             }
 
-            var samples = GameColourPresets.SampleColours;
             int stripH = Math.Max(8, Height / 2 - 6);
             int stripY = Height - stripH - 10;
 
-            if (Width > 24)
+            if (Width > 24 && _preview.Length > 0)
             {
-                float w = (Width - 20f) / samples.Length;
-                for (int i = 0; i < samples.Length; i++)
+                float w = (Width - 20f) / _preview.Length;
+                for (int i = 0; i < _preview.Length; i++)
                 {
-                    using var brush = new SolidBrush(GameColourPresets.Preview(_preset, samples[i]));
+                    using var brush = new SolidBrush(_preview[i]);
                     g.FillRectangle(brush, 10 + i * w, stripY, w + 0.5f, stripH);
                 }
 
@@ -197,7 +226,19 @@ namespace VibranceHud.Controls
                 new Rectangle(12, 8, Width - 24, 18), Theme.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
 
-            TextRenderer.DrawText(g, _preset.Why, Design.Fonts.Caption,
+            // On NVIDIA the driver owns vibrance below its ceiling, and the driver's curve is
+            // applied after the desktop is composited - so no strip drawn here can contain it.
+            // Saying that is the only honest option: the alternative is a preview that
+            // silently under-sells every preset, or one that invents a lift the matrix will
+            // never perform.
+            bool driverCarriesSome = DriverAvailable && !Streaming
+                && _preset.Vibrance > 50 && _preset.Vibrance <= VibranceEngine.DriverVibranceCeiling;
+
+            string why = driverCarriesSome
+                ? _preset.Why + "  (your NVIDIA driver adds more colour than this strip can show)"
+                : _preset.Why;
+
+            TextRenderer.DrawText(g, why, Design.Fonts.Caption,
                 new Rectangle(12, 26, Width - 24, 20), Theme.TextDim,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }

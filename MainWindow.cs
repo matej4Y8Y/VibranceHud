@@ -179,7 +179,9 @@ namespace VibranceHud
             _navMonitor = MakeNav("Resolution", iconKind: 7);
             // The third layer of the stack: Display is the signal, Resolution is the mode,
             // Monitor is the glass they land on.
-            _navPanel = MakeNav("Monitor", iconKind: 7);
+            // Icon 9, not 7: Resolution above it already uses the plain screen, and two
+            // adjacent rows with the same glyph are told apart only by their label.
+            _navPanel = MakeNav("Monitor", iconKind: 9);
             _navCrosshair = MakeNav("Crosshair", iconKind: 5);
             _navSettings = MakeNav("Settings", iconKind: 6);
             _navAccount = MakeNav("Account", iconKind: 3);

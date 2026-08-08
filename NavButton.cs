@@ -157,12 +157,27 @@ namespace VibranceHud
                     g.FillRectangle(brush, r.X + 4, r.Y + 10, r.Width - 8, 2);
                     break;
 
-                case 7: // monitor: screen on a stand
+                case 7: // resolution: screen on a stand, with corner marks for the frame size
                     var screen = new Rectangle(r.X, r.Y + 1, r.Width, r.Height - 7);
                     using (var path = RoundedRect(screen, 2))
                         g.DrawPath(pen, path);
                     g.DrawLine(pen, r.X + r.Width / 2, screen.Bottom, r.X + r.Width / 2, r.Bottom - 1);
                     g.DrawLine(pen, r.X + 4, r.Bottom - 1, r.Right - 4, r.Bottom - 1);
+                    // The corner brackets are what tell this apart from the panel icon below.
+                    g.DrawLine(pen, screen.X + 3, screen.Y + 3, screen.X + 6, screen.Y + 3);
+                    g.DrawLine(pen, screen.Right - 6, screen.Bottom - 3, screen.Right - 3, screen.Bottom - 3);
+                    break;
+
+                case 9: // monitor panel: a screen with a brightness dial on it
+                    var glass = new Rectangle(r.X, r.Y + 1, r.Width, r.Height - 7);
+                    using (var path = RoundedRect(glass, 2))
+                        g.DrawPath(pen, path);
+                    g.DrawLine(pen, r.X + r.Width / 2, glass.Bottom, r.X + r.Width / 2, r.Bottom - 1);
+                    g.DrawLine(pen, r.X + 4, r.Bottom - 1, r.Right - 4, r.Bottom - 1);
+                    // Half-filled circle: the same "how much" idea the vibrance icon uses.
+                    var dial = new Rectangle(glass.X + glass.Width / 2 - 3, glass.Y + glass.Height / 2 - 3, 6, 6);
+                    g.DrawEllipse(pen, dial);
+                    g.FillPie(brush, dial, 90, 180);
                     break;
 
                 case 6: // settings: gear - hub plus six spokes

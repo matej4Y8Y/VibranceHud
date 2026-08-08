@@ -179,6 +179,15 @@ namespace VibranceHud.Pages
 
             _gamePicker = new GlassDropdown { Size = new Size(200, 34) };
             _gamePicker.SetItems(Display.GameColourPresets.All.Select(g => g.Game));
+
+            // Opens on the game the app has actually detected, rather than always on the first
+            // entry. Somebody who plays CS2 should not have to tell the app that every launch.
+            string detected = _settings.FavoriteGame ?? "";
+            int match = Display.GameColourPresets.All
+                .ToList()
+                .FindIndex(g => string.Equals(g.Game, detected, StringComparison.OrdinalIgnoreCase));
+            if (match >= 0) _gamePicker.SelectedIndex = match;
+
             _gamePicker.SelectedIndexChanged += (_, _) => RebuildGameTiles();
             _card.Controls.Add(_gamePicker);
 
@@ -506,9 +515,14 @@ namespace VibranceHud.Pages
             var group = Display.GameColourPresets.All[
                 Math.Min(index, Display.GameColourPresets.All.Count - 1)];
 
+            // The tiles need to know what this machine will actually do, or they preview a
+            // driver contribution that only exists on NVIDIA.
+            bool driver = _engine.DriverState == VibranceDriverState.Available;
+            _presetPreview.DriverAvailable = driver;
+
             foreach (var preset in group.Presets)
             {
-                var tile = new PresetTile(preset);
+                var tile = new PresetTile(preset, driver);
                 var captured = preset;
 
                 tile.Click += (_, _) => ApplyGamePreset(captured);
