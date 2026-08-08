@@ -249,6 +249,16 @@ namespace VibranceHud
             // it does can move the page.
             _scrollBar = new Controls.GlassScrollBar { Visible = false };
             _scrollBar.Scrolled += (_, _) => (_currentPage as GlowPage)?.ScrollTo(_scrollBar.Value);
+
+            // The wheel, with the pointer over the bar itself.
+            //
+            // The wheel router hands WM_MOUSEWHEEL to whatever window is under the pointer and
+            // reports it handled either way, so a window that ignores it swallows it. While the
+            // bar was a child of the page it forwarded like every other descendant; moving it
+            // out here took it out of that sweep, and the wheel died in the exact place people
+            // point at when a page grows a scrollbar.
+            _scrollBar.MouseWheel += (_, e) => (_currentPage as GlowPage)?.ScrollByWheel(e.Delta);
+
             Controls.Add(_scrollBar);
             _scrollBar.BringToFront();
 

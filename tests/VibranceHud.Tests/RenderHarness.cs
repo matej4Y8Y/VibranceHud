@@ -112,6 +112,12 @@ namespace VibranceHud.Tests
         /// <summary>Test seam: build any page by name, for checks that apply to all of them.</summary>
         internal static GlowPage BuildPageForTest(string name, string scratch) => BuildPage(name, scratch);
 
+        /// <summary>Test seam: an engine wired to stubs, for tests that build the whole shell
+        /// rather than one page. The stubs are private to this class because nothing outside
+        /// should be constructing them piecemeal.</summary>
+        internal static VibranceEngine StubEngine() =>
+            new VibranceEngine(new StubController(), new StubOverlay(), new StubGamma());
+
         /// <summary>Test seam: build a Display page outside ShootAllPages, so a shot can put
         /// it into a state the default construction does not reach.</summary>
         internal static VibrancePage BuildDisplay()

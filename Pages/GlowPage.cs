@@ -91,6 +91,10 @@ namespace VibranceHud.Pages
         {
             int extent = AutoScrollMinSize.Height - ClientSize.Height;
 
+            ScrollTrace.Write(() => $"{GetType().Name} wheel {e.Delta} autoScroll={AutoScroll} "
+                + $"client={ClientSize.Height} min={AutoScrollMinSize.Height} extent={extent} "
+                + $"offset={-AutoScrollPosition.Y}");
+
             if (AutoScroll && extent > 0)
             {
                 // Windows' own line count, at a line height that matches this app's rows.
@@ -105,19 +109,31 @@ namespace VibranceHud.Pages
                 AutoScrollPosition = new Point(-AutoScrollPosition.X, target);
                 RaiseScrollState();
 
+                ScrollTrace.Write(() => $"  -> target={target} landed={-AutoScrollPosition.Y}");
+
                 if (e is HandledMouseEventArgs handled) handled.Handled = true;
             }
             else
             {
+                ScrollTrace.Write(() => "  -> IGNORED (nothing to scroll)");
                 base.OnMouseWheel(e);
             }
 
             Invalidate(true);
         }
 
-        /// <summary>Test seam: OnMouseWheel is protected and a unit test has no message loop.</summary>
-        internal void TestScrollWheel(int delta) =>
+        /// <summary>
+        /// Scroll as though the wheel had turned over the page.
+        ///
+        /// For wheel events that land on shell chrome the page does not own - its scrollbar,
+        /// chiefly. The router hands the wheel to whatever window is under the pointer and
+        /// counts it delivered, so anything that ignores it silently eats it.
+        /// </summary>
+        public void ScrollByWheel(int delta) =>
             OnMouseWheel(new MouseEventArgs(MouseButtons.None, 0, 0, 0, delta));
+
+        /// <summary>Test seam: OnMouseWheel is protected and a unit test has no message loop.</summary>
+        internal void TestScrollWheel(int delta) => ScrollByWheel(delta);
 
         // ---- wheel from anywhere on the page ---------------------------------------------
         //
@@ -149,6 +165,13 @@ namespace VibranceHud.Pages
         {
             e.Control.MouseWheel -= ForwardWheel;
             e.Control.MouseWheel += ForwardWheel;
+
+            // The new control's OWN ControlAdded, not just its children's. Without this a
+            // control added after startup is hooked, but anything added inside it later never
+            // is - which is every gallery cell built on the second rebuild.
+            e.Control.ControlAdded -= OnDescendantAdded;
+            e.Control.ControlAdded += OnDescendantAdded;
+
             HookWheelForwarding(e.Control);
         }
 
@@ -196,6 +219,10 @@ namespace VibranceHud.Pages
             base.OnHandleCreated(e);
             HookWheelForwarding(this);
             RaiseScrollState();
+
+            ScrollTrace.Write(() => $"{GetType().Name} shown: dpi={DeviceDpi} "
+                + $"client={ClientSize.Width}x{ClientSize.Height} min={AutoScrollMinSize.Height} "
+                + $"autoScroll={AutoScroll}");
         }
 
         protected override void WndProc(ref Message m)
