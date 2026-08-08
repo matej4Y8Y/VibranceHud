@@ -96,7 +96,15 @@ namespace VibranceHud.Tests
         }
 
         /// <summary>
-        /// Probing twice must not change the picture. The probe reads; it never writes.
+        /// Probing twice must not change what the panel CAN do. The probe reads; it never
+        /// writes.
+        ///
+        /// Deliberately not asserting that the brightness reading repeats. This machine's
+        /// panel answers 0 on first contact and 100 on the second while plainly lit, which is
+        /// the whole reason ReadTrustedBrightness reads twice and disbelieves a lone zero.
+        /// Asserting a stable value here would be asserting that hardware is well-behaved,
+        /// which is exactly what the production code is written not to assume - and it made
+        /// this test fail at random.
         /// </summary>
         [Fact]
         public void ProbingIsRepeatableAndReadOnly()
@@ -110,7 +118,8 @@ namespace VibranceHud.Tests
             {
                 Assert.Equal(first[i].Description, second[i].Description);
                 Assert.Equal(first[i].SupportsBrightness, second[i].SupportsBrightness);
-                Assert.Equal(first[i].BrightnessCurrent, second[i].BrightnessCurrent);
+                Assert.Equal(first[i].SupportsContrast, second[i].SupportsContrast);
+                Assert.Equal(first[i].SupportsRgbGain, second[i].SupportsRgbGain);
             }
         }
     }

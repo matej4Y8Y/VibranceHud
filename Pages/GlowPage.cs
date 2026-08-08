@@ -71,7 +71,7 @@ namespace VibranceHud.Pages
         protected override void OnScroll(ScrollEventArgs se)
         {
             base.OnScroll(se);
-            SyncBar();
+            RaiseScrollState();
             Invalidate(true);
         }
 
@@ -103,7 +103,7 @@ namespace VibranceHud.Pages
                 int target = Math.Clamp(-AutoScrollPosition.Y - step, 0, extent);
 
                 AutoScrollPosition = new Point(-AutoScrollPosition.X, target);
-                SyncBar();
+                RaiseScrollState();
 
                 if (e is HandledMouseEventArgs handled) handled.Handled = true;
             }
@@ -162,74 +162,40 @@ namespace VibranceHud.Pages
 
         // ---- the app's own scrollbar -------------------------------------------------------
         //
-        // Every page gets one, from here, so no page can be built without it. Hiding the Win32
-        // bar left no sign that a page had more content - and a page that had silently stopped
-        // scrolling looked exactly like one with nothing below the fold, which is how Display
-        // stayed broken through several rounds of "it still doesn't scroll".
+        // The bar itself is NOT here. It belongs to the shell, drawn over the right edge of
+        // the content area, because a scrollbar cannot live inside the thing it scrolls:
+        // WinForms scrolls a container to bring a moved child into view, so repositioning a
+        // thumb pinned near the bottom made the page scroll itself back down - which is
+        // exactly what "I go down and can't get back up" was, on every page at once.
+        //
+        // What lives here is the notification the shell syncs from.
 
-        private Controls.GlassScrollBar? _bar;
+        /// <summary>Raised whenever this page's scroll position or extent changes.</summary>
+        public event EventHandler? ScrollStateChanged;
 
-        private void EnsureBar()
+        private void RaiseScrollState()
         {
-            if (_bar != null || !AutoScroll) return;
-
-            _bar = new Controls.GlassScrollBar
-            {
-                Width = Design.Tokens.Scale(10),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom,
-            };
-
-            // Dragging the bar scrolls the page. The page scrolling back into the bar is
-            // handled by SyncBar, which only ever writes Value - never raises Scrolled - so
-            // the two cannot chase each other.
-            _bar.Scrolled += (_, _) =>
-            {
-                AutoScrollPosition = new Point(-AutoScrollPosition.X, _bar.Value);
-                Invalidate(true);
-            };
-
-            // Added to the page but deliberately NOT part of the scrolled content: it is
-            // positioned in client coordinates on every layout, so it stays pinned.
-            Controls.Add(_bar);
-            _bar.BringToFront();
+            HideNativeScrollBars();
+            ScrollStateChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        /// <summary>Keep the bar showing where the page actually is.</summary>
-        private void SyncBar()
+        /// <summary>Where the page is, for whoever draws the bar.</summary>
+        public int ScrollExtent => AutoScrollMinSize.Height;
+        public int ScrollViewport => ClientSize.Height;
+        public int ScrollOffset => -AutoScrollPosition.Y;
+
+        /// <summary>Scroll to an absolute offset. Used by the shell's scrollbar.</summary>
+        public void ScrollTo(int offset)
         {
-            if (_bar == null) return;
-
-            _bar.Maximum = AutoScrollMinSize.Height;
-            _bar.Viewport = ClientSize.Height;
-            _bar.Value = -AutoScrollPosition.Y;
-
-            _bar.Visible = _bar.Needed;
-
-            if (_bar.Needed)
-            {
-                // Pinned to the right edge in client space, so scrolling never carries it away.
-                _bar.SetBounds(ClientSize.Width - _bar.Width - Design.Tokens.Scale(4),
-                    Design.Tokens.Scale(4), _bar.Width,
-                    Math.Max(1, ClientSize.Height - Design.Tokens.Scale(8)));
-
-                _bar.BringToFront();
-            }
-
-            // Last, and unconditionally.
-            //
-            // Moving the bar is itself a layout change, and Windows puts its own scrollbar
-            // back whenever the non-client area is recalculated - so hiding it before this
-            // ran left the native bar sitting next to ours. Two scrollbars side by side, one
-            // of them the flat grey strip the whole exercise was meant to remove.
-            HideNativeScrollBars();
+            AutoScrollPosition = new Point(-AutoScrollPosition.X, Math.Max(0, offset));
+            Invalidate(true);
         }
 
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
             HookWheelForwarding(this);
-            EnsureBar();
-            SyncBar();
+            RaiseScrollState();
         }
 
         protected override void WndProc(ref Message m)
@@ -266,7 +232,7 @@ namespace VibranceHud.Pages
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            SyncBar();          // ends by hiding the native bars, so nothing re-shows them
+            RaiseScrollState(); // ends by hiding the native bars, so nothing re-shows them
         }
 
         private void HideNativeScrollBars()

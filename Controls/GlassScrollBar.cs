@@ -176,9 +176,15 @@ namespace VibranceHud.Controls
             var thumb = new RectangleF(2f, ThumbTop, Math.Max(1, Width - 4), ThumbHeight);
             using (var path = Glass.RoundedPath(thumb, radius))
             {
+                // Accent only where it reads as accent. On the light theme Theme.Accent is
+                // near-black, so using it for hover turned the thumb into a black slab the
+                // moment the pointer went near it - the rest state had already been fixed and
+                // the hover state had not.
+                Color highlight = Theme.IsLight ? Theme.AccentDim : Theme.Accent;
+
                 Color colour = _dragging || _hover
-                    ? Color.FromArgb(_dragging ? 220 : 180, Theme.Accent)
-                    : Color.FromArgb(Theme.IsLight ? 70 : 90, Theme.Text);
+                    ? Color.FromArgb(_dragging ? 200 : 150, highlight)
+                    : Color.FromArgb(Theme.IsLight ? 60 : 90, Theme.Text);
 
                 using var fill = new SolidBrush(colour);
                 g.FillPath(fill, path);

@@ -47,6 +47,7 @@ namespace VibranceHud
         private readonly GlowPanel _titleBar;
         private readonly GlowPanel _nav;
         private readonly Panel _contentHost;
+        private readonly Controls.GlassScrollBar _scrollBar;
         private Control? _currentPage;
 
         private readonly VibrancePage _vibrancePage;
@@ -236,6 +237,20 @@ namespace VibranceHud
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom
             };
             Controls.Add(_contentHost);
+
+            // The scrollbar belongs to the shell, not to the page.
+            //
+            // It cannot live inside the thing it scrolls: WinForms scrolls a container to
+            // bring a moved child into view, so a thumb pinned near the bottom of a scrolling
+            // page dragged the page back down every time it was repositioned. Scrolling down
+            // then refusing to come back up was that, on every page at once.
+            //
+            // Here it is a sibling of the content host, drawn over its right edge, so nothing
+            // it does can move the page.
+            _scrollBar = new Controls.GlassScrollBar { Visible = false };
+            _scrollBar.Scrolled += (_, _) => (_currentPage as GlowPage)?.ScrollTo(_scrollBar.Value);
+            Controls.Add(_scrollBar);
+            _scrollBar.BringToFront();
 
             AddDivider(new Point(0, titleH), new Size(ClientSize.Width, Design.Tokens.Scale(1)), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right);
             AddDivider(new Point(navW, titleH), new Size(Design.Tokens.Scale(1), ClientSize.Height - titleH), AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom);
@@ -556,6 +571,40 @@ namespace VibranceHud
             SetContent(page);
         }
 
+        /// <summary>
+        /// Point the shell's scrollbar at whatever page is showing.
+        ///
+        /// Driven from the page's own ScrollStateChanged rather than polled, so the thumb
+        /// moves in the same frame the page does. Writing Value never raises Scrolled, so the
+        /// page and the bar cannot chase each other.
+        /// </summary>
+        private void SyncScrollBar()
+        {
+            if (IsDisposed || _currentPage is not GlowPage page)
+            {
+                _scrollBar.Visible = false;
+                return;
+            }
+
+            _scrollBar.Maximum = page.ScrollExtent;
+            _scrollBar.Viewport = page.ScrollViewport;
+            _scrollBar.Value = page.ScrollOffset;
+
+            _scrollBar.Visible = _scrollBar.Needed;
+            if (!_scrollBar.Needed) return;
+
+            int w = Design.Tokens.Scale(8);
+            int pad = Design.Tokens.Scale(4);
+
+            _scrollBar.SetBounds(
+                _contentHost.Right - w - pad,
+                _contentHost.Top + pad,
+                w,
+                Math.Max(1, _contentHost.Height - pad * 2));
+
+            _scrollBar.BringToFront();
+        }
+
         private void Select(NavButton button, Control page)
         {
             SetActive(button);
@@ -571,6 +620,11 @@ namespace VibranceHud
         private void SetContent(Control page)
         {
             var old = _currentPage;
+
+            // Unsubscribe the outgoing page, or the shell's bar keeps syncing to a page
+            // nobody is looking at - and to a disposed one for the pages that get rebuilt.
+            if (old is GlowPage previous) previous.ScrollStateChanged -= OnPageScrollStateChanged;
+
             _contentHost.SuspendLayout();
             _contentHost.Controls.Clear();
             page.Dock = DockStyle.Fill;
@@ -584,11 +638,21 @@ namespace VibranceHud
             _contentHost.ResumeLayout();
             _currentPage = page;
 
+            if (page is GlowPage incoming)
+            {
+                incoming.ScrollStateChanged -= OnPageScrollStateChanged;
+                incoming.ScrollStateChanged += OnPageScrollStateChanged;
+            }
+
+            SyncScrollBar();
+
             if (old != null && old != page &&
                 old != _vibrancePage && old != _settingsPage && old != _accountPage &&
                 old != _crosshairPage && old != _monitorPage && old != _panelPage)
                 old.Dispose();
         }
+
+        private void OnPageScrollStateChanged(object? sender, EventArgs e) => SyncScrollBar();
 
         public void ShowAndFocus()
         {

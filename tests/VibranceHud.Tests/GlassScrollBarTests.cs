@@ -91,8 +91,12 @@ namespace VibranceHud.Tests
         // ---- every page gets one ----------------------------------------------------------
 
         /// <summary>
-        /// The guarantee. A new page cannot be written without a scrollbar, because it comes
-        /// from GlowPage rather than from each page remembering to add one.
+        /// No page may contain a scrollbar.
+        ///
+        /// This is the rule the bug broke. A scrollbar inside the container it scrolls makes
+        /// WinForms scroll that container to bring the moved thumb into view, so scrolling
+        /// down and refusing to come back up was the thumb dragging the page after it. The bar
+        /// belongs to the shell, outside every scroll region.
         /// </summary>
         [Theory]
         [InlineData("Display")]
@@ -102,7 +106,7 @@ namespace VibranceHud.Tests
         [InlineData("Panel")]
         [InlineData("Legal")]
         [InlineData("Account")]
-        public void EveryPageHasTheAppsOwnScrollBar(string page)
+        public void NoPageContainsItsOwnScrollBar(string page)
         {
             string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
                 "PxBar_" + System.Guid.NewGuid().ToString("N"));
@@ -112,45 +116,73 @@ namespace VibranceHud.Tests
             built.Size = new Size(830, 628);
             built.CreateControl();
 
-            var bars = Descendants(built).OfType<GlassScrollBar>().ToList();
-
-            // A page that does not scroll legitimately has none; one that does must show one.
-            if (!built.AutoScroll) return;
-
-            Assert.True(bars.Count == 1,
-                $"{page} has {bars.Count} scrollbars - it should have exactly one, from GlowPage");
+            Assert.Empty(Descendants(built).OfType<GlassScrollBar>());
         }
 
-        /// <summary>A page taller than its window must show the bar, not just own one.</summary>
+        /// <summary>Every page still reports what a bar needs to draw itself.</summary>
         [Fact]
-        public void ATallPageActuallyShowsTheBar()
+        public void ATallPageReportsSomethingToScroll()
         {
             using var page = RenderHarness.BuildDisplay();
             page.Size = new Size(830, 628);
             page.CreateControl();
 
-            var bar = Descendants(page).OfType<GlassScrollBar>().Single();
-
-            Assert.True(bar.Needed, "Display is 1400px tall in a 628px window and the bar says it is not needed");
-            Assert.True(bar.Visible, "the bar exists but is hidden on a page that scrolls");
+            Assert.True(page.ScrollExtent > page.ScrollViewport,
+                $"extent {page.ScrollExtent} does not exceed viewport {page.ScrollViewport}");
         }
 
-        /// <summary>Scrolling with the wheel has to move the thumb, or the bar is decoration
-        /// that lies about where the page is.</summary>
+        /// <summary>
+        /// Down, then all the way back up.
+        ///
+        /// The reported symptom exactly: scrolling down worked and scrolling up did not,
+        /// because every thumb reposition pulled the page back down again.
+        /// </summary>
         [Fact]
-        public void TheWheelMovesTheThumb()
+        public void ScrollingDownThenUpReturnsToTheTop()
         {
             using var page = RenderHarness.BuildDisplay();
             page.Size = new Size(830, 628);
             page.CreateControl();
 
-            var bar = Descendants(page).OfType<GlassScrollBar>().Single();
-            int before = bar.Value;
+            for (int i = 0; i < 20; i++) page.TestScrollWheel(-120);
+            int bottom = page.ScrollOffset;
+            Assert.True(bottom > 0, "the page never scrolled down at all");
 
-            for (int i = 0; i < 3; i++) page.TestScrollWheel(-120);
+            for (int i = 0; i < 40; i++) page.TestScrollWheel(120);
 
-            Assert.True(bar.Value > before,
-                $"the thumb stayed at {bar.Value} while the page scrolled");
+            Assert.Equal(0, page.ScrollOffset);
+        }
+
+        /// <summary>And the card has to come back with it, not just the reported offset.</summary>
+        [Fact]
+        public void TheCardReturnsToTheTopToo()
+        {
+            using var page = RenderHarness.BuildDisplay();
+            page.Size = new Size(830, 628);
+            page.CreateControl();
+
+            var card = page.Controls.OfType<CardPanel>().First();
+            int top = card.Top;
+
+            for (int i = 0; i < 20; i++) page.TestScrollWheel(-120);
+            for (int i = 0; i < 40; i++) page.TestScrollWheel(120);
+
+            Assert.Equal(top, card.Top);
+        }
+
+        /// <summary>The shell can drive the page directly, which is what the bar does.</summary>
+        [Fact]
+        public void ScrollToMovesThePage()
+        {
+            using var page = RenderHarness.BuildDisplay();
+            page.Size = new Size(830, 628);
+            page.CreateControl();
+
+            page.ScrollTo(300);
+            Assert.Equal(300, page.ScrollOffset);
+
+            page.ScrollTo(0);
+            Assert.Equal(0, page.ScrollOffset);
         }
 
         /// <summary>
