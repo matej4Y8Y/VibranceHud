@@ -44,15 +44,10 @@ namespace VibranceHud
                 BackColor = Color.Transparent
             });
 
-            var body = new TextBox
+            var body = new GlassTextBox
             {
                 Multiline = true,
                 ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                BorderStyle = BorderStyle.None,
-                BackColor = Theme.Surface,
-                ForeColor = Theme.Text,
-                Font = new Font(Theme.FontFamily, 9.5f),
                 Location = new Point(28, 92),
                 Size = new Size(ClientSize.Width - 56, 250),
                 // Run through ReleaseNotesText so markdown from either notes source doesn't
@@ -64,9 +59,11 @@ namespace VibranceHud
                       + "For changes, help or to report something broken, join the Discord:\r\n"
                       + AppInfo.DiscordUrl
                     : ReleaseNotesText.ToPlainText(notes),
-                TabStop = false
             };
-            body.GotFocus += (s, e) => body.Select(0, 0);
+            body.Inner.TabStop = false;
+            // Opens un-selected. Without this the whole release note arrives highlighted,
+            // which reads as the window having done something rather than as text to read.
+            body.Inner.GotFocus += (s, e) => body.Inner.Select(0, 0);
             Controls.Add(body);
 
             var ok = Pages.SettingsPage.PrimaryButton(

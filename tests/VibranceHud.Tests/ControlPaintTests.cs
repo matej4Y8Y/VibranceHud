@@ -38,6 +38,7 @@ namespace VibranceHud.Tests
             yield return new object[] { "CardPanel", () => (Control)new CardPanel { Size = new Size(400, 200) } };
             yield return new object[] { "SwatchButton", () => (Control)new SwatchButton(ThemeCatalog.ByName("Violet")) { Size = new Size(40, 40) } };
             yield return new object[] { "KeyboardView", () => (Control)new KeyboardView { Size = new Size(600, 300) } };
+            yield return new object[] { "GlassLink", () => (Control)new GlassLink { Text = "Skip", Size = new Size(200, 20) } };
             yield return new object[] { "GlassTextBox", () => (Control)new GlassTextBox { Size = new Size(200, 30) } };
             yield return new object[] { "GlassTextBox-multiline", () => (Control)new GlassTextBox { Size = new Size(300, 120), Multiline = true, Text = "one\r\ntwo\r\nthree" } };
             yield return new object[] { "GlassDropdown", () => (Control)new GlassDropdown { Size = new Size(200, 34) } };

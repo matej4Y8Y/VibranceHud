@@ -161,25 +161,15 @@ namespace VibranceHud.Pages
                         // app can never change the outcome while the DX path is switched off.
                         if (DxDiagnosticsAreMeaningful && usingFallback)
                         {
-                            var retryBtn = new Button
-                            {
-                                Text = "Retry display engine",
-                                // AutoSize so the button always shows the full label
-                                // regardless of theme font width. A fixed Size(140,24)
-                                // clipped "Retry" -> "Retrv" and "display" -> "disblav"
-                                // when the theme font was wider than the dev machine's.
-                                AutoSize = true,
-                                AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                                Padding = new Padding(12, 4, 12, 4),
-                                MinimumSize = new Size(160, 28),
-                                Location = new Point(width - 180, 70),
-                                FlatStyle = FlatStyle.Flat,
-                                BackColor = Color.Transparent,
-                                ForeColor = Theme.Accent,
-                                Cursor = Cursors.Hand
-                            };
-                            retryBtn.FlatAppearance.BorderColor = Theme.Border;
-                            retryBtn.FlatAppearance.BorderSize = 1;
+                            // Sized from the label rather than fixed. A hardcoded Size(140,24)
+                            // clipped "Retry" to "Retrv" and "display" to "disblav" on any
+                            // machine whose theme font was wider than the dev box's - so the
+                            // width is measured, with the usual slack, and floored at 160.
+                            int retryW = Math.Max(160, TextRenderer.MeasureText(
+                                "Retry display engine", Design.Fonts.BodyBold).Width + 28);
+
+                            var retryBtn = FlatButton("Retry display engine",
+                                width - retryW - 20, 70, retryW);
                             retryBtn.Click += (s, e) =>
                             {
                                 // Restart the process so the DX11 init runs again. This is the only

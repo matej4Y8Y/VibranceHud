@@ -23,8 +23,8 @@ namespace VibranceHud
         private readonly SettingsStore _store;
 
         private readonly GlassButton _primary;
-        private readonly LinkLabel _back;
-        private readonly LinkLabel _skip;
+        private readonly GlassLink _back;
+        private readonly GlassLink _skip;
         private readonly List<SwatchButton> _swatches = new();
         private readonly List<Label> _swatchLabels = new();
         private readonly ToggleSwitch _startup;
@@ -156,20 +156,15 @@ namespace VibranceHud
             // minimum OnboardingComplete=true and use the current theme, so a
             // power user who just wants the app on screen is one click away from
             // the main window.
-            _skip = new LinkLabel
+            _skip = new GlassLink
             {
                 Text = "Skip — I'll set up later",
-                LinkColor = Theme.TextDim,
-                ActiveLinkColor = Theme.Accent,
-                LinkBehavior = LinkBehavior.NeverUnderline,
                 // Centred properly. AutoSize anchors the left edge, so the old
                 // "cx - 80" left this sitting visibly off-axis from the button above it -
                 // a fixed centred box is the only way to line the two up.
                 Location = new Point(cx - 150, 492),
                 Size = new Size(300, 20),
                 TextAlign = ContentAlignment.MiddleCenter,
-                AutoSize = false,
-                BackColor = Color.Transparent,
             };
             _skip.Click += (s, e) =>
             {
@@ -183,15 +178,12 @@ namespace VibranceHud
             };
             Controls.Add(_skip);
 
-            _back = new LinkLabel
+            _back = new GlassLink
             {
                 Text = "‹ Back",
-                LinkColor = Theme.TextDim,
-                ActiveLinkColor = Theme.Accent,
-                LinkBehavior = LinkBehavior.NeverUnderline,
                 Location = new Point(46, 452),
-                AutoSize = true,
-                BackColor = Color.Transparent,
+                Size = new Size(90, 20),
+                TextAlign = ContentAlignment.MiddleLeft,
                 Visible = false
             };
             _back.Click += (s, e) => ShowStep(_step - 1);
@@ -284,11 +276,10 @@ namespace VibranceHud
 
             Pages.SettingsPage.RestylePrimary(_primary);
 
-            foreach (var link in new[] { _back, _skip })
-            {
-                link.LinkColor = Theme.TextDim;
-                link.ActiveLinkColor = Theme.Accent;
-            }
+            // GlassLink reads Theme at paint time, so a theme switch cannot leave it painting
+            // the old palette - it only needs telling that something changed. This used to
+            // reassign LinkColor and ActiveLinkColor, which a stock LinkLabel caches.
+            foreach (var link in new[] { _back, _skip }) link.Invalidate();
         }
 
         protected override void OnPaint(PaintEventArgs e)
