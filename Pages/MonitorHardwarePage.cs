@@ -112,11 +112,32 @@ namespace VibranceHud.Pages
             Controls.Add(card);
         }
 
+        private bool _probeStarted;
+
+        /// <summary>
+        /// Probe the first time this page is actually shown.
+        ///
+        /// The shell constructs every page up front but only realises a handle when one is
+        /// first navigated to, so this is both the correct moment and the cheapest: a user who
+        /// never opens the Monitor tab never pays for three DDC/CI reads per panel.
+        ///
+        /// It also closes the hole this replaced - BeginProbe existed and nothing called it,
+        /// so the tab sat on "Asking your monitor what it supports" permanently.
+        /// </summary>
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+
+            if (_probeStarted || _caps.Count > 0) return;
+            _probeStarted = true;
+            BeginProbe();
+        }
+
         /// <summary>
         /// Probe off the UI thread and rebuild when it answers.
         ///
-        /// Called by the shell after the window is up. Safe to call when the page has already
-        /// been disposed - the marshalled continuation checks before touching anything.
+        /// Safe to call when the page has already been disposed - the marshalled continuation
+        /// checks before touching anything.
         /// </summary>
         public void BeginProbe()
         {
