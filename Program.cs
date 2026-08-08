@@ -41,6 +41,11 @@ namespace VibranceHud
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            // Scroll what the pointer is over, not what has focus. Windows sends the wheel to
+            // the focused control, so after clicking a nav button the wheel went up the
+            // navigation bar's chain and the page never saw it - the page just looked stuck.
+            WheelRouter.Install();
+
             // Hook every place an unhandled exception can land so a single bug
             // never silently kills the process. The global try/catch around
             // Application.Run below only sees what Application.Run rethrows -
