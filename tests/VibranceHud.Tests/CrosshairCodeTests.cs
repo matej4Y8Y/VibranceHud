@@ -92,20 +92,108 @@ namespace VibranceHud.Tests
         }
 
         /// <summary>
-        /// The checksum's whole job. One wrong character has to fail rather than decode into a
-        /// different, plausible-looking crosshair.
+        /// The checksum's whole job, checked exhaustively rather than at one lucky position.
+        ///
+        /// The first version of this test changed a single character near the end and passed -
+        /// while 36 other single-character typos, spread across ten positions, decoded
+        /// silently into a different crosshair. The weight was even at half the positions,
+        /// which destroys the guarantee. Every position and every substitution now.
         /// </summary>
         [Fact]
-        public void ASingleWrongCharacterIsRejected()
+        public void NoSingleCharacterTypoSurvivesAnywhereInTheCode()
+        {
+            const string alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ#";
+            string code = CrosshairCode.Encode(Sample());
+            var missed = new System.Collections.Generic.List<string>();
+
+            // Body only; the four-character prefix is checked separately.
+            for (int i = 4; i < code.Length; i++)
+            {
+                foreach (char c in alphabet)
+                {
+                    if (c == code[i]) continue;
+
+                    var chars = code.ToCharArray();
+                    chars[i] = c;
+
+                    if (CrosshairCode.TryDecode(new string(chars), out _))
+                        missed.Add($"position {i - 4}: '{code[i]}' -> '{c}'");
+                }
+            }
+
+            Assert.True(missed.Count == 0,
+                $"{missed.Count} single-character typos decode as valid:\n  "
+                + string.Join("\n  ", missed.Take(12)));
+        }
+
+        /// <summary>Transposing two adjacent characters must fail too - that is what happens
+        /// when somebody retypes a code rather than pasting it.</summary>
+        [Fact]
+        public void SwappingTwoAdjacentCharactersIsRejected()
         {
             string code = CrosshairCode.Encode(Sample());
 
-            // Change one body character to a different valid symbol.
-            var chars = code.ToCharArray();
-            int i = code.Length - 3;
-            chars[i] = chars[i] == '2' ? '3' : '2';
+            for (int i = 4; i < code.Length - 1; i++)
+            {
+                if (code[i] == code[i + 1]) continue;
 
-            Assert.False(CrosshairCode.TryDecode(new string(chars), out _));
+                var chars = code.ToCharArray();
+                (chars[i], chars[i + 1]) = (chars[i + 1], chars[i]);
+
+                Assert.False(CrosshairCode.TryDecode(new string(chars), out _),
+                    $"swapping positions {i - 4} and {i - 3} was accepted");
+            }
+        }
+
+        /// <summary>
+        /// A code is not a way around the sliders' limits. A value outside a slider's range
+        /// would leave the crosshair drawing at one size while the slider showed another.
+        /// </summary>
+        [Fact]
+        public void OutOfRangeValuesAreClampedRatherThanTrusted()
+        {
+            var huge = new CrosshairConfig
+            {
+                ArmTop = true, ArmBottom = true, ArmLeft = true, ArmRight = true,
+                ShowCircle = true, CentreDot = true, Outline = true,
+                SizeTenths = 999, ThicknessTenths = 999, GapTenths = 999,
+                DotSizeTenths = 999, CircleRadiusTenths = 999, Opacity = 100,
+                ColourArgb = unchecked((int)0xFF00FF66),
+            };
+
+            Assert.True(CrosshairCode.TryDecode(CrosshairCode.Encode(huge), out var back));
+
+            Assert.InRange(back.SizeTenths!.Value, CrosshairLimits.MinSizeTenths, CrosshairLimits.MaxSizeTenths);
+            Assert.InRange(back.ThicknessTenths!.Value, CrosshairLimits.MinThicknessTenths, CrosshairLimits.MaxThicknessTenths);
+            Assert.InRange(back.GapTenths!.Value, CrosshairLimits.MinGapTenths, CrosshairLimits.MaxGapTenths);
+            Assert.InRange(back.DotSizeTenths!.Value, CrosshairLimits.MinDotTenths, CrosshairLimits.MaxDotTenths);
+            Assert.InRange(back.CircleRadiusTenths!.Value, CrosshairLimits.MinRingTenths, CrosshairLimits.MaxRingTenths);
+            Assert.InRange(back.Opacity, CrosshairLimits.MinOpacity, CrosshairLimits.MaxOpacity);
+        }
+
+        /// <summary>The legacy whole-pixel fields have to move with the tenths, or a build
+        /// that only knows about whole pixels reads 8 for a crosshair shared at 3.4.</summary>
+        [Fact]
+        public void DecodingAlsoSetsTheLegacyWholePixelFields()
+        {
+            var config = Sample();
+            config.SetSizeTenths(34);
+
+            Assert.True(CrosshairCode.TryDecode(CrosshairCode.Encode(config), out var back));
+
+            Assert.Equal(3, back.Size);
+        }
+
+        /// <summary>A channel above 255 must not bleed its high bits into the next one.</summary>
+        [Fact]
+        public void ColourChannelsDoNotBleedIntoEachOther()
+        {
+            var black = Sample();
+            black.ColourArgb = unchecked((int)0xFF000000);
+
+            Assert.True(CrosshairCode.TryDecode(CrosshairCode.Encode(black), out var back));
+
+            Assert.Equal(0, back.ColourArgb & 0x00FFFFFF);
         }
 
         [Fact]

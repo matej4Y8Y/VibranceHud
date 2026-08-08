@@ -119,16 +119,32 @@ namespace VibranceHud.Crosshair
                 CentreDot = (flags & Dot) != 0,
                 Outline = (flags & Outline) != 0,
 
-                SizeTenths = values[1],
-                ThicknessTenths = values[2],
-                GapTenths = values[3],
-                DotSizeTenths = values[4],
-                CircleRadiusTenths = values[5],
-                Opacity = Math.Clamp(values[6], 0, 100),
+                Opacity = Math.Clamp(values[6], CrosshairLimits.MinOpacity, CrosshairLimits.MaxOpacity),
 
+                // Masked to a byte each. Without this a value above 255 - reachable, since two
+                // symbols hold up to 1023 - bleeds its high bits into the next channel, so a
+                // code with no red at all could decode to red 1.
                 ColourArgb = unchecked((int)0xFF000000)
-                           | (values[7] << 16) | (values[8] << 8) | values[9],
+                           | ((values[7] & 0xFF) << 16)
+                           | ((values[8] & 0xFF) << 8)
+                           | (values[9] & 0xFF),
             };
+
+            // Clamped into the same ranges the sliders use, and set through the Set*Tenths
+            // methods rather than the raw fields.
+            //
+            // Clamped, because a decoded value outside a slider's range leaves the page
+            // disagreeing with itself: the crosshair draws at the decoded size while the
+            // slider shows its own maximum, and saving then persists the number nobody can see.
+            //
+            // Through the setters, because those also write the legacy whole-pixel fields - a
+            // build that only knows about whole pixels would otherwise read 8 for a crosshair
+            // somebody had shared at 3.4.
+            crosshair.SetSizeTenths(Math.Clamp(values[1], CrosshairLimits.MinSizeTenths, CrosshairLimits.MaxSizeTenths));
+            crosshair.SetThicknessTenths(Math.Clamp(values[2], CrosshairLimits.MinThicknessTenths, CrosshairLimits.MaxThicknessTenths));
+            crosshair.SetGapTenths(Math.Clamp(values[3], CrosshairLimits.MinGapTenths, CrosshairLimits.MaxGapTenths));
+            crosshair.DotSizeTenths = Math.Clamp(values[4], CrosshairLimits.MinDotTenths, CrosshairLimits.MaxDotTenths);
+            crosshair.CircleRadiusTenths = Math.Clamp(values[5], CrosshairLimits.MinRingTenths, CrosshairLimits.MaxRingTenths);
 
             return true;
         }
@@ -138,16 +154,27 @@ namespace VibranceHud.Crosshair
             Math.Clamp((int)Math.Round(value * 10f), 0, 1023);
 
         /// <summary>
-        /// Position-weighted, so transposing two characters fails.
+        /// Position-weighted with ODD weights, so every single-character substitution is
+        /// caught as well as every transposition.
         ///
-        /// A plain sum would accept a swap, and swapping two characters is exactly what
-        /// happens when somebody retypes a code rather than pasting it.
+        /// The weight has to be odd. With a 32-symbol alphabet and a modulus of 32, an odd
+        /// weight is coprime to 32, so a change of delta at position i shifts the checksum by
+        /// delta*weight mod 32, which is zero only when delta is zero. An even weight breaks
+        /// that: this first shipped as (i + 1), which is even at half the positions, and left
+        /// 36 single-character typos undetectable. A real pair -
+        ///
+        ///     PXC-3Y4U2U3B43BV4B2P8A9MG   ring ON
+        ///     PXC-3F4U2U3B43BV4B2P8A9MG   ring OFF
+        ///
+        /// - differ by one character and produce the same checksum, so the second decoded
+        /// silently into a different crosshair. ProfileCode already used (2*i + 1) and says
+        /// why; this is the same reasoning, arrived at the hard way.
         /// </summary>
         private static int Checksum(string body)
         {
             int sum = 0;
             for (int i = 0; i < body.Length; i++)
-                sum += (Alphabet.IndexOf(body[i]) + 1) * (i + 1);
+                sum += (Alphabet.IndexOf(body[i]) + 1) * (2 * i + 1);
             return sum % 32;
         }
     }

@@ -158,30 +158,38 @@ namespace VibranceHud.Pages
             int y = shapeY + 72;
             // Ranges are in tenths: 0.5-30.0 size, 0.5-10.0 thickness, 0-30.0 gap. Same
             // limits as before, ten times the resolution inside them.
-            _sizeSlider = AddSlider(_card, "SIZE", y, 5, 300,
+            // Bounds come from CrosshairLimits so the share codec clamps to the same numbers
+            // the sliders enforce - they used to be literals here and nowhere else.
+            _sizeSlider = AddSlider(_card, "SIZE", y,
+                CrosshairLimits.MinSizeTenths, CrosshairLimits.MaxSizeTenths,
                 (int)Math.Round(_current.ResolvedSize * 10),
                 v => { _current.SetSizeTenths(v); OnSliderMoved(); });
-            _thicknessSlider = AddSlider(_card, "THICKNESS", y + 62, 5, 100,
+            _thicknessSlider = AddSlider(_card, "THICKNESS", y + 62,
+                CrosshairLimits.MinThicknessTenths, CrosshairLimits.MaxThicknessTenths,
                 (int)Math.Round(_current.ResolvedThickness * 10),
                 v => { _current.SetThicknessTenths(v); OnSliderMoved(); });
-            _gapSlider = AddSlider(_card, "GAP", y + 124, 0, 300,
+            _gapSlider = AddSlider(_card, "GAP", y + 124,
+                CrosshairLimits.MinGapTenths, CrosshairLimits.MaxGapTenths,
                 (int)Math.Round(_current.ResolvedGap * 10),
                 v => { _current.SetGapTenths(v); OnSliderMoved(); });
 
             // The dot and the ring get their own sizes, so a thin cross can carry a fat dot
             // or a wide ring - combinations the old single-thickness model could not express.
-            _dotSlider = AddSlider(_card, "DOT SIZE", y + 186, 5, 100,
+            _dotSlider = AddSlider(_card, "DOT SIZE", y + 186,
+                CrosshairLimits.MinDotTenths, CrosshairLimits.MaxDotTenths,
                 (int)Math.Round(_current.ResolvedDotSize * 10),
                 v => { _current.DotSizeTenths = v; OnSliderMoved(); });
 
-            _circleSlider = AddSlider(_card, "RING SIZE", y + 248, 10, 400,
+            _circleSlider = AddSlider(_card, "RING SIZE", y + 248,
+                CrosshairLimits.MinRingTenths, CrosshairLimits.MaxRingTenths,
                 (int)Math.Round(_current.ResolvedCircleRadius * 10),
                 v => { _current.CircleRadiusTenths = v; OnSliderMoved(); });
 
             // Opacity, in whole percent rather than tenths - nobody needs 43.7% opaque.
             // A large share of real crosshairs are semi-transparent and there was no way to
             // express that at all.
-            _opacitySlider = AddPercentSlider(_card, "OPACITY", y + 310, 10, 100, _current.Opacity,
+            _opacitySlider = AddPercentSlider(_card, "OPACITY", y + 310,
+                CrosshairLimits.MinOpacity, CrosshairLimits.MaxOpacity, _current.Opacity,
                 v => { _current.Opacity = v; OnSliderMoved(); RefreshGalleryPreviews(); });
 
             // ---- Colour + options ----
@@ -852,12 +860,14 @@ namespace VibranceHud.Pages
             _applyingPreset = true;
             try
             {
-                Set(_sizeSlider, (int)Math.Round(_current.ResolvedSize * 10));
-                Set(_thicknessSlider, (int)Math.Round(_current.ResolvedThickness * 10));
-                Set(_gapSlider, (int)Math.Round(_current.ResolvedGap * 10));
-                Set(_dotSlider, (int)Math.Round(_current.ResolvedDotSize * 10));
-                Set(_circleSlider, (int)Math.Round(_current.ResolvedCircleRadius * 10));
-                Set(_opacitySlider, _current.Opacity);
+                // The clamped value is written back, so _current can never hold a number the
+                // slider refuses to show.
+                _current.SetSizeTenths(Set(_sizeSlider, (int)Math.Round(_current.ResolvedSize * 10)));
+                _current.SetThicknessTenths(Set(_thicknessSlider, (int)Math.Round(_current.ResolvedThickness * 10)));
+                _current.SetGapTenths(Set(_gapSlider, (int)Math.Round(_current.ResolvedGap * 10)));
+                _current.DotSizeTenths = Set(_dotSlider, (int)Math.Round(_current.ResolvedDotSize * 10));
+                _current.CircleRadiusTenths = Set(_circleSlider, (int)Math.Round(_current.ResolvedCircleRadius * 10));
+                _current.Opacity = Set(_opacitySlider, _current.Opacity);
 
                 _wheel.Colour = Color.FromArgb(_current.ColourArgb);
                 _hexBox.Text = ColourWheel.ToHex(Color.FromArgb(_current.ColourArgb));
@@ -867,8 +877,15 @@ namespace VibranceHud.Pages
             HighlightActivePreset();
             SyncColourDots();
 
-            static void Set(FlatSlider slider, int value) =>
-                slider.Value = Math.Clamp(value, slider.Minimum, slider.Maximum);
+            // Clamps, and hands the clamped value back so the caller can write it into
+            // _current. Without that the page disagrees with itself: the crosshair draws at
+            // the out-of-range value while the slider shows its own limit.
+            static int Set(FlatSlider slider, int value)
+            {
+                int clamped = Math.Clamp(value, slider.Minimum, slider.Maximum);
+                slider.Value = clamped;
+                return clamped;
+            }
         }
 
         private void SaveCurrent()

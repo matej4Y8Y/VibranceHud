@@ -431,8 +431,9 @@ namespace VibranceHud
         private void ApplyDriverVibrance() =>
             // In Streaming Mode the driver is parked at its own neutral, NOT at zero. Driver
             // vibrance 0 is fully grey, so handing it a 0 while software does the work would
-            // drain the colour out of the screen and look like the app had broken.
-            _controller.SetLevel(_streamingMode
+            // drain the colour out of the screen and look like the app had broken. The same
+            // is true while previewing neutral - the point is "no effect", not "no colour".
+            _controller.SetLevel(_streamingMode || _previewNeutral
                 ? _controller.DefaultLevel
                 : Math.Min(_vibrance, DriverVibranceCeiling));
 
@@ -445,10 +446,44 @@ namespace VibranceHud
         /// </summary>
         private void ApplyGammaRamp()
         {
+            if (_previewNeutral) { _gammaRamp.Reset(); return; }
+
             var tone = _tone with { Gamma = _gamma };
 
             if (tone.IsNeutral) _gammaRamp.Reset();
             else _gammaRamp.Apply(ToneCurve.Build(tone));
+        }
+
+        private bool _previewNeutral;
+
+        /// <summary>
+        /// True while the screen is deliberately showing neutral instead of the user's look.
+        /// </summary>
+        public bool IsPreviewingNeutral => _previewNeutral;
+
+        /// <summary>
+        /// Show neutral without changing anything.
+        ///
+        /// This lives on the engine rather than on the page, and it is a flag rather than a
+        /// rewrite of the values, for one reason: the page can die while it is on. A theme
+        /// switch disposes the whole MainWindow and builds a new one, and the quick-colour
+        /// popup opens over the top from a global hotkey. When the compare state was a page
+        /// field holding the only copy of the user's settings, either of those threw that copy
+        /// away while the engine sat at neutral - and the next slider move saved neutral over
+        /// their look, permanently.
+        ///
+        /// Because this only gates what is applied, every getter keeps returning the user's
+        /// real values. A page constructed mid-preview seeds its sliders correctly, and
+        /// anything that saves during a preview saves the right numbers.
+        /// </summary>
+        public void PreviewNeutral(bool on)
+        {
+            if (_previewNeutral == on) return;
+            _previewNeutral = on;
+
+            ApplyDriverVibrance();
+            ApplyOverlay();
+            ApplyGammaRamp();
         }
 
         /// <summary>Everything the display state depends on, applied in one go. Used by the
@@ -512,6 +547,14 @@ namespace VibranceHud
 
         private void ApplyOverlay()
         {
+            // Preview wins over everything, and does it here rather than by rewriting the
+            // fields - see PreviewNeutral.
+            if (_previewNeutral)
+            {
+                _overlay.Clear();
+                return;
+            }
+
             // On a machine with no NVIDIA driver this now covers the whole 0-200 range,
             // rather than leaving 0-100 to a driver that isn't there.
             float vibrance = SoftwareVibranceFactor(_vibrance, _controller.IsAvailable, _streamingMode);

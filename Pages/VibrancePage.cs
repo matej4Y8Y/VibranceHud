@@ -69,13 +69,6 @@ namespace VibranceHud.Pages
         // effect is invisible until you can see what it replaced.
         private readonly GlassButton _compare;
         private readonly Display.AbCompare _ab = new();
-        private ComparedLook? _beforeCompare;
-
-        /// <summary>Everything the compare has to put back. Captured on the way to neutral so
-        /// the return trip cannot depend on the sliders still holding the old values.</summary>
-        private readonly record struct ComparedLook(
-            int Vibrance, int Saturation, int Brightness, int Contrast, int Temperature,
-            ToneSettings Tone);
 
         // ---- advanced grade ----
         //
@@ -455,58 +448,42 @@ namespace VibranceHud.Pages
         /// anything: neutral is a preview, not a change. If it touched the sliders, a compare
         /// interrupted by closing the window would persist as the user's settings.
         /// </summary>
+        /// <summary>
+        /// Flip between the user's look and neutral.
+        ///
+        /// The state lives on the engine, not here. This page can be destroyed while a
+        /// comparison is running - a theme switch rebuilds the whole window, and the quick
+        /// colour popup opens over the top from a global hotkey - and when the page held the
+        /// only copy of the user's settings, either of those threw it away while the engine
+        /// sat at neutral. The next slider nudge then saved neutral over their look for good.
+        ///
+        /// Because the engine only gates what it applies, its getters still report the real
+        /// values, so nothing else has to know a comparison is happening.
+        /// </summary>
         private void ToggleCompare()
         {
             if (!_ab.TryToggle()) return;   // inside the cooldown - do nothing at all
 
-            if (_ab.ShowingNeutral)
-            {
-                _beforeCompare = new ComparedLook(
-                    _engine.Vibrance, _engine.Saturation, _engine.Brightness,
-                    _engine.Contrast, _engine.Temperature, _engine.Tone);
-
-                _engine.Vibrance = 0;
-                _engine.Saturation = 100;
-                _engine.Brightness = 100;
-                _engine.Contrast = 100;
-                _engine.Temperature = 0;
-                _engine.Tone = ToneSettings.Neutral;
-
-                _compare.Text = "Showing off";
-            }
-            else RestoreFromCompare();
+            _engine.PreviewNeutral(_ab.ShowingNeutral);
+            _compare.Text = _ab.ShowingNeutral ? "Showing off" : "Compare";
         }
 
         private void RestoreFromCompare()
         {
-            if (_beforeCompare is { } look)
-            {
-                _engine.Vibrance = look.Vibrance;
-                _engine.Saturation = look.Saturation;
-                _engine.Brightness = look.Brightness;
-                _engine.Contrast = look.Contrast;
-                _engine.Temperature = look.Temperature;
-                _engine.Tone = look.Tone;
-                _beforeCompare = null;
-            }
-
+            _ab.Reset();
+            _engine.PreviewNeutral(false);
             _compare.Text = "Compare";
         }
 
         /// <summary>
-        /// Leaving the page while comparing must not strand the user on neutral - their look
-        /// would appear to have been wiped, with nothing on screen explaining why. Reset is
-        /// not rate-limited, so this can never be refused.
+        /// Leaving the page must not strand the user on neutral - their look would appear to
+        /// have been wiped, with nothing on screen explaining why. Reset is not rate-limited,
+        /// so this can never be refused.
         /// </summary>
         protected override void OnVisibleChanged(EventArgs e)
         {
             base.OnVisibleChanged(e);
-
-            if (!Visible && _ab.ShowingNeutral)
-            {
-                _ab.Reset();
-                RestoreFromCompare();
-            }
+            if (!Visible && _engine.IsPreviewingNeutral) RestoreFromCompare();
         }
 
         /// <summary>
@@ -559,6 +536,10 @@ namespace VibranceHud.Pages
         /// </summary>
         private void ApplyGamePreset(Display.ColourPreset preset)
         {
+            // Same reason as the sliders: picking a preset is an edit, and an edit ends the
+            // comparison rather than racing it.
+            if (_engine.IsPreviewingNeutral) RestoreFromCompare();
+
             _applyingPreset = true;
             try
             {
@@ -622,6 +603,12 @@ namespace VibranceHud.Pages
 
             row.Slider.ValueChanged += (_, _) =>
             {
+                // Touching anything ends the comparison. Otherwise an edit made while neutral
+                // is showing gets written to settings, then silently overwritten on screen the
+                // next time Compare is pressed - the slider, the file and the screen all end
+                // up saying different things.
+                if (_engine.IsPreviewingNeutral && !_applyingPreset) RestoreFromCompare();
+
                 apply(row.Slider.Value);
                 _saveDebounce.Trigger();
 
