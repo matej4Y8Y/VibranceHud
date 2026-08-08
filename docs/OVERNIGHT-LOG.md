@@ -109,3 +109,27 @@ second read.
 | Point | Passing | Skipped |
 |---|---|---|
 | Baseline before tonight | 1204 | 4 |
+| Phase 0 — contract tests | 1246 | 6 |
+| Phase 1 — DDC/CI probe | 1252 | 6 |
+| Phase 2 — after the cuts | 1153 | 6 |
+| Phase 3 — theme complete | 1158 | 6 |
+| Phase 4 — legal + viewer | 1176 | 6 |
+| Phase 5 — advanced grade | 1176 | 6 |
+
+The Phase 2 drop is ~99 tests deleted with the features they covered, not a regression.
+
+## Where the night stopped
+
+Done: Phase 0 (rules as tests), Phase 1 (DDC/CI probe — **the panel answers**), Phase 2 (the
+cuts + Audio Edge relocated), Phase 3 (theme complete except fonts), Phase 4 (legal + in-app
+viewer), Phase 5.0 (advanced grade re-exposed).
+
+Not started, in priority order:
+
+1. **Per-game colour presets** with hover preview, and custom presets kept visually separate.
+   The advanced channels they need now exist, which was the blocker.
+2. **A/B compare** with a cooldown.
+3. **The Monitor tab** — the probe is built and verified, the UI is not. Carry the brightness
+   caution above into it.
+4. **Crosshair share codes.**
+5. The 55 font sites, and un-skipping the last two contract guards.
