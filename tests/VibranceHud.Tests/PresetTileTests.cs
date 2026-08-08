@@ -1,5 +1,7 @@
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
+using VibranceHud;
 using VibranceHud.Controls;
 using VibranceHud.Display;
 using Xunit;
@@ -78,6 +80,84 @@ namespace VibranceHud.Tests
         /// not preview the same colours as one built for neutral. If those matched, the cache
         /// would be returning one preset's answer for another.
         /// </summary>
+        /// <summary>
+        /// Hiding the scrollbar must not take the scrolling with it.
+        ///
+        /// This exact combination has already shipped broken once at page level:
+        /// ScrollableControl checks whether its scrollbar is visible before acting on the
+        /// wheel, so hiding the bar silently kills the wheel. A gallery nobody can scroll is
+        /// worse than an ugly bar.
+        /// </summary>
+        [Fact]
+        public void TheGalleryStillScrollsWithItsScrollbarHidden()
+        {
+            Theme.Apply("Violet");
+            using var panel = new QuietScrollPanel { Size = new Size(300, 100) };
+            panel.Controls.Add(new Label { Location = new Point(0, 0), Size = new Size(200, 600) });
+            panel.AutoScrollMinSize = new Size(0, 600);
+            panel.CreateControl();
+
+            panel.TestScrollWheel(-120);
+
+            Assert.True(panel.AutoScrollPosition.Y < 0,
+                "the wheel did nothing - hiding the bar killed the scrolling");
+        }
+
+        /// <summary>The wheel arrives at whatever is under the cursor, and in a full gallery
+        /// that is always a cell - so a cell has to pass it on.</summary>
+        [Fact]
+        public void TheWheelWorksWithTheCursorOverACell()
+        {
+            Theme.Apply("Violet");
+            using var panel = new QuietScrollPanel { Size = new Size(300, 100) };
+            var child = new Label { Location = new Point(0, 0), Size = new Size(200, 600) };
+            panel.Controls.Add(child);
+            panel.AutoScrollMinSize = new Size(0, 600);
+            panel.CreateControl();
+            child.CreateControl();
+
+            typeof(Control)
+                .GetMethod("OnMouseWheel", System.Reflection.BindingFlags.Instance
+                                         | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(child, new object[] { new MouseEventArgs(MouseButtons.None, 0, 0, 0, -120) });
+
+            Assert.True(panel.AutoScrollPosition.Y < 0,
+                "the wheel over a child did nothing - the panel never received it");
+        }
+
+        /// <summary>
+        /// The unactivated Account page must offer a way forward.
+        ///
+        /// It stated the problem - "needs a valid activation key to run" - and hid its only
+        /// button, so the screen somebody sees at the moment they want to pay was a dead end.
+        /// </summary>
+        [Fact]
+        public void TheUnactivatedAccountPageOffersAWayToActivate()
+        {
+            Theme.Apply("Violet");
+            string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "PxAcct_" + System.Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+
+            using var page = new Pages.AccountPage(new License.LicenseService(dir));
+            page.Size = new Size(900, 700);
+            page.CreateControl();
+
+            var visible = Descendants(page).OfType<GlassButton>().Where(b => b.Visible).ToList();
+
+            Assert.Contains(visible, b => b.Text.Contains("Enter", System.StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(visible, b => b.Text.Contains("Get", System.StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static System.Collections.Generic.IEnumerable<Control> Descendants(Control root)
+        {
+            foreach (Control child in root.Controls)
+            {
+                yield return child;
+                foreach (var nested in Descendants(child)) yield return nested;
+            }
+        }
+
         [Fact]
         public void DifferentPresetsPreviewDifferently()
         {

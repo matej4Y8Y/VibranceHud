@@ -43,7 +43,7 @@ namespace VibranceHud.Pages
         private const int GalleryHeight = 190;
         private const int CellW = 84, CellH = 82, CellGap = 8;
 
-        private Panel _galleryHost = null!;
+        private QuietScrollPanel _galleryHost = null!;
         private readonly List<CrosshairCell> _cells = new();
 
         // Held so a preset - or loading a saved crosshair - can drive them. Without this the
@@ -127,12 +127,14 @@ namespace VibranceHud.Pages
             // does not scroll past thirty every time.
             _card.Controls.Add(UiHelpers.Caption("GALLERY", 18, 228, 200));
 
-            _galleryHost = new Panel
+            // QuietScrollPanel, not Panel: a plain AutoScroll panel draws a Win32 scrollbar,
+            // which is a flat grey strip down the side of a glass card and the one thing here
+            // that cannot be themed. The wheel still works - that is the whole point of the
+            // class, since hiding the bar on its own would kill it.
+            _galleryHost = new QuietScrollPanel
             {
                 Location = new Point(Gutter, 250),
                 Size = new Size(ContentW, GalleryHeight),
-                BackColor = Color.Transparent,
-                AutoScroll = true,
             };
             _card.Controls.Add(_galleryHost);
 

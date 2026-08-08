@@ -21,6 +21,8 @@ namespace VibranceHud.Pages
         private readonly Label _detailLabel;
         private readonly Label _keyLabel;
         private readonly GlassButton _deactivateButton;
+        private readonly GlassButton _activateButton;
+        private readonly GlassButton _getKeyButton;
 
         /// <summary>Raised after a successful deactivate+reactivate cycle, so
         /// MainWindow can re-run <c>ApplyLicenseVisibility</c> - the nav items hide
@@ -72,10 +74,36 @@ namespace VibranceHud.Pages
             };
             _deactivateButton.Click += (_, _) => DeactivateAndReactivate();
 
+            // The two that show when there is no licence.
+            //
+            // Without these the page stated the problem and offered nothing to do about it -
+            // "PlexusX needs a valid activation key to run" with no way to enter one and no
+            // way to get one. That is the screen somebody sees at the moment they want to pay,
+            // so it was the worst place in the app to leave a dead end.
+            _activateButton = new GlassButton
+            {
+                Text = "Enter a key",
+                Kind = GlassButtonKind.Primary,
+                Location = new Point(20, 176),
+                Size = new Size(140, 34),
+            };
+            _activateButton.Click += (_, _) => Activate();
+
+            _getKeyButton = new GlassButton
+            {
+                Text = "Get a key",
+                Kind = GlassButtonKind.Ghost,
+                Location = new Point(172, 176),
+                Size = new Size(140, 34),
+            };
+            _getKeyButton.Click += (_, _) => OpenDiscord();
+
             _card.Controls.Add(_tierLabel);
             _card.Controls.Add(_detailLabel);
             _card.Controls.Add(_keyLabel);
             _card.Controls.Add(_deactivateButton);
+            _card.Controls.Add(_activateButton);
+            _card.Controls.Add(_getKeyButton);
             Controls.Add(_card);
 
             Resize += (_, _) =>
@@ -109,14 +137,38 @@ namespace VibranceHud.Pages
                     : $"Key: {_license.KeyText}";
 
                 _deactivateButton.Visible = true;
+                _activateButton.Visible = false;
+                _getKeyButton.Visible = false;
             }
             else
             {
                 _tierLabel.Text = "Not activated";
-                _detailLabel.Text = "PlexusX needs a valid activation key to run.";
+                _detailLabel.Text = "PlexusX needs an activation key to run. "
+                                  + "If you already have one, enter it here.";
                 _keyLabel.Text = "";
                 _deactivateButton.Visible = false;
+                _activateButton.Visible = true;
+                _getKeyButton.Visible = true;
             }
+        }
+
+        private void Activate()
+        {
+            using var dialog = new LicenseDialog(_license);
+            if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+            RefreshLicenseDisplay();
+            LicenseChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void OpenDiscord()
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo(AppInfo.DiscordUrl) { UseShellExecute = true });
+            }
+            catch { /* no browser, or blocked - the page still says what is needed */ }
         }
 
         /// <summary>
