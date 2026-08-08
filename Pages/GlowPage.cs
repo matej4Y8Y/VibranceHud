@@ -204,14 +204,24 @@ namespace VibranceHud.Pages
             _bar.Value = -AutoScrollPosition.Y;
 
             _bar.Visible = _bar.Needed;
-            if (!_bar.Needed) return;
 
-            // Pinned to the right edge in client space, so scrolling never carries it away.
-            _bar.SetBounds(ClientSize.Width - _bar.Width - Design.Tokens.Scale(4),
-                Design.Tokens.Scale(4), _bar.Width,
-                Math.Max(1, ClientSize.Height - Design.Tokens.Scale(8)));
+            if (_bar.Needed)
+            {
+                // Pinned to the right edge in client space, so scrolling never carries it away.
+                _bar.SetBounds(ClientSize.Width - _bar.Width - Design.Tokens.Scale(4),
+                    Design.Tokens.Scale(4), _bar.Width,
+                    Math.Max(1, ClientSize.Height - Design.Tokens.Scale(8)));
 
-            _bar.BringToFront();
+                _bar.BringToFront();
+            }
+
+            // Last, and unconditionally.
+            //
+            // Moving the bar is itself a layout change, and Windows puts its own scrollbar
+            // back whenever the non-client area is recalculated - so hiding it before this
+            // ran left the native bar sitting next to ours. Two scrollbars side by side, one
+            // of them the flat grey strip the whole exercise was meant to remove.
+            HideNativeScrollBars();
         }
 
         protected override void OnHandleCreated(EventArgs e)
@@ -256,8 +266,7 @@ namespace VibranceHud.Pages
         protected override void OnLayout(LayoutEventArgs e)
         {
             base.OnLayout(e);
-            HideNativeScrollBars();
-            SyncBar();
+            SyncBar();          // ends by hiding the native bars, so nothing re-shows them
         }
 
         private void HideNativeScrollBars()

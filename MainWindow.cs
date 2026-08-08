@@ -357,6 +357,20 @@ namespace VibranceHud
             // already be queued when the drag starts.
             if (_userInteracting || _movingOrSizing) { _last = DateTime.UtcNow; return; }
 
+            // Freeze the backdrop while any mouse button is held.
+            //
+            // A frame repaints every transparent control on the page - seventy-eight of them
+            // on Display - and measured at 27ms against a 33ms budget on a fast machine. That
+            // leaves almost nothing for the control actually being dragged, which is why
+            // sliders felt like they were lagging behind the cursor.
+            //
+            // Control.MouseButtons rather than wiring each control's drag events: it covers
+            // the sliders, the colour wheel, the scrollbar and anything added later, with no
+            // plumbing to forget. The plexus is a slow background - nobody notices it holding
+            // still for the half second somebody is dragging a slider, and everybody notices
+            // the slider not keeping up.
+            if (Control.MouseButtons != MouseButtons.None) { _last = DateTime.UtcNow; return; }
+
             var now = DateTime.UtcNow;
             _field.Update(elapsed);
             _last = now;

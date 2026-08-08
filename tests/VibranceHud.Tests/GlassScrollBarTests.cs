@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using VibranceHud.Controls;
 using Xunit;
@@ -151,6 +152,39 @@ namespace VibranceHud.Tests
             Assert.True(bar.Value > before,
                 $"the thumb stayed at {bar.Value} while the page scrolled");
         }
+
+        /// <summary>
+        /// Only ONE scrollbar may be visible.
+        ///
+        /// Ours is drawn and Windows' is hidden - but moving our bar is itself a layout
+        /// change, and Windows puts its own back whenever the non-client area is recalculated.
+        /// Hiding it before that ran left the two side by side, one of them the flat grey strip
+        /// the whole exercise existed to remove.
+        /// </summary>
+        [Fact]
+        public void TheNativeScrollBarStaysHiddenAfterTheGlassOneMoves()
+        {
+            using var page = RenderHarness.BuildDisplay();
+            page.Size = new Size(830, 628);
+            page.CreateControl();
+
+            // Force the sequence that re-showed it: layout, scroll, layout again.
+            page.PerformLayout();
+            for (int i = 0; i < 5; i++) page.TestScrollWheel(-120);
+            page.PerformLayout();
+
+            Assert.False(NativeVerticalBarVisible(page),
+                "Windows' own scrollbar is showing next to ours");
+        }
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(System.IntPtr hWnd, int nIndex);
+
+        private const int GWL_STYLE = -16;
+        private const int WS_VSCROLL = 0x00200000;
+
+        private static bool NativeVerticalBarVisible(Control c) =>
+            c.IsHandleCreated && (GetWindowLong(c.Handle, GWL_STYLE) & WS_VSCROLL) != 0;
 
         private static System.Collections.Generic.IEnumerable<Control> Descendants(Control root)
         {
