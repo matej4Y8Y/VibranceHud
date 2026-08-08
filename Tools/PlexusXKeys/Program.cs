@@ -15,9 +15,18 @@ namespace PlexusXKeys
         [STAThread]
         private static void Main()
         {
-            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            // PerMonitorV2, matching the app. SystemAware makes Windows bitmap-stretch the
+            // whole window above 100% scaling, and stretched text is the strongest "cheap
+            // tool" signal there is - which matters here, because this is the window the
+            // owner looks at while taking somebody's money.
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            // The tool wears the app's own theme. Before this it approximated it with four
+            // hardcoded colours, which drifted the moment the palette moved.
+            VibranceHud.Theme.Apply("Violet");
+
             Application.Run(new MainForm());
         }
     }

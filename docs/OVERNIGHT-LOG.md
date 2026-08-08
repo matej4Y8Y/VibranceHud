@@ -78,6 +78,16 @@ second read.
   saved-file format for no user-visible benefit, so they stay for 1.0 and should be dropped in
   a migration later.
 
+## Known contract exceptions
+
+- **`Tools/PlexusXKeys/MainForm.cs` keeps a stock `ListView`** for the ledger grid. Replacing it
+  means writing a sortable multi-column grid, and this tool is never distributed (its own class
+  comment says so). It is themed by colour. This is the one place in the repo where U1 is
+  knowingly not met, and it is recorded rather than hidden.
+- **The U1 test does not catch target-typed `new()`.** A field written `private readonly ListView
+  _list = new();` slips past the regex, which only matches `new ListView(` / `new ListView {`.
+  Worth tightening if a stock control ever reappears that way.
+
 ## Notes to self
 
 - **Never round-trip a source file through `Get-Content | Set-Content`.** Windows PowerShell 5.1

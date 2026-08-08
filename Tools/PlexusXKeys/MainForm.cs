@@ -15,18 +15,25 @@ namespace PlexusXKeys
     /// </summary>
     public sealed class MainForm : Form
     {
-        private static readonly Color Bg = Color.FromArgb(18, 18, 22);
-        private static readonly Color PanelBg = Color.FromArgb(28, 28, 34);
-        private static readonly Color Fg = Color.FromArgb(235, 235, 240);
-        private static readonly Color Dim = Color.FromArgb(150, 150, 160);
-        private static readonly Color Accent = Color.FromArgb(140, 110, 240);
+        // Read from Theme rather than hardcoded, so the tool cannot drift away from the app it
+        // issues keys for. Properties, not static readonly fields: those initialise at type
+        // load, which happens before Program.cs has applied a theme.
+        private static Color Bg => VibranceHud.Theme.Background;
+        private static Color PanelBg => VibranceHud.Theme.Surface;
+        private static Color Fg => VibranceHud.Theme.Text;
+        private static Color Dim => VibranceHud.Theme.TextDim;
+        private static Color Accent => VibranceHud.Theme.Accent;
 
         private IReadOnlyList<KeyRecord> _ledger = new List<KeyRecord>();
 
+        // The ledger grid is still a stock ListView. It is themed by colour but not
+        // owner-drawn, because replacing it means writing a sortable multi-column grid, and
+        // this tool is never distributed - see the class comment. It is the one place in the
+        // repo where the "no stock controls" rule is knowingly not met.
         private readonly ListView _list = new();
         private readonly Label _stats = new();
-        private readonly ComboBox _plan = new();
-        private readonly TextBox _note = new();
+        private readonly VibranceHud.GlassDropdown _plan = new();
+        private readonly VibranceHud.GlassTextBox _note = new();
         private readonly Label _hint = new();
 
         public MainForm()
@@ -90,27 +97,19 @@ namespace PlexusXKeys
             var bar = new Panel { Dock = DockStyle.Top, Height = 92, BackColor = PanelBg, Padding = new Padding(16) };
 
             bar.Controls.Add(Caption("PLAN", 16, 12));
-            _plan.DropDownStyle = ComboBoxStyle.DropDownList;
-            _plan.Items.AddRange(new object[] { PlanCatalog.Monthly, PlanCatalog.Lifetime600, PlanCatalog.Trial });
-            _plan.SelectedIndex = 0;
-            _plan.SetBounds(16, 34, 150, 26);
-            _plan.FlatStyle = FlatStyle.Flat;
-            _plan.BackColor = Bg;
-            _plan.ForeColor = Fg;
+            _plan.SetItems(new[] { PlanCatalog.Monthly, PlanCatalog.Lifetime600, PlanCatalog.Trial });
+            _plan.SetBounds(16, 32, 150, 30);
             bar.Controls.Add(_plan);
 
             bar.Controls.Add(Caption("NOTE  (who is this for?)", 184, 12));
-            _note.SetBounds(184, 34, 420, 26);
-            _note.BorderStyle = BorderStyle.FixedSingle;
-            _note.BackColor = Bg;
-            _note.ForeColor = Fg;
+            _note.SetBounds(184, 32, 420, 30);
             bar.Controls.Add(_note);
 
-            var issue = Button("Generate key", 624, 33, 140, Accent);
+            var issue = Button("Generate key", 624, 32, 140, primary: true);
             issue.Click += (s, e) => IssueKey();
             bar.Controls.Add(issue);
 
-            var copyPub = Button("Copy public key", 776, 33, 150, Color.FromArgb(60, 60, 70));
+            var copyPub = Button("Copy public key", 776, 32, 150);
             copyPub.Click += (s, e) => CopyPublicKey();
             bar.Controls.Add(copyPub);
 
@@ -141,24 +140,26 @@ namespace PlexusXKeys
         {
             var bar = new Panel { Dock = DockStyle.Bottom, Height = 60, BackColor = PanelBg, Padding = new Padding(16) };
 
-            var copy = Button("Copy key", 16, 14, 110, Color.FromArgb(60, 60, 70));
+            var copy = Button("Copy key", 16, 14, 110);
             copy.Click += (s, e) => CopySelectedCode();
             bar.Controls.Add(copy);
 
-            var activate = Button("Activate...", 136, 14, 120, Accent);
+            var activate = Button("Activate...", 136, 14, 120, primary: true);
             activate.Click += (s, e) => ActivateSelected();
             bar.Controls.Add(activate);
 
-            var revoke = Button("Revoke", 266, 14, 100, Color.FromArgb(120, 50, 50));
+            // Revoke used to be the only red control in the tool. It keeps its confirmation
+            // prompt, which is the thing that actually protects against a misclick.
+            var revoke = Button("Revoke", 266, 14, 100);
             revoke.Click += (s, e) => ActOnSelection("revoke", KeyLedger.Revoke,
                 "Revoke this key? It stops working for whoever has it.");
             bar.Controls.Add(revoke);
 
-            var restore = Button("Un-revoke", 376, 14, 100, Color.FromArgb(60, 60, 70));
+            var restore = Button("Un-revoke", 376, 14, 100);
             restore.Click += (s, e) => ActOnSelection("restore", KeyLedger.Restore, null);
             bar.Controls.Add(restore);
 
-            var release = Button("Release from PC", 486, 14, 140, Color.FromArgb(60, 60, 70));
+            var release = Button("Release from PC", 486, 14, 140);
             release.Click += (s, e) => ActOnSelection("release", KeyLedger.Release,
                 "Release this key from the PC it's on?\n\n" +
                 "Use this when a customer changes their GPU or reinstalls Windows - it lets " +
@@ -200,7 +201,7 @@ namespace PlexusXKeys
 
                 _ledger = KeyLedger.Add(_ledger, record);
                 KeyVault.SaveLedger(_ledger);
-                _note.Clear();
+                _note.Text = "";
                 Reload();
 
                 Clipboard.SetText(code);
@@ -383,21 +384,22 @@ namespace PlexusXKeys
         private static Label Caption(string text, int x, int y) => new()
         {
             Text = text,
-            ForeColor = Color.FromArgb(150, 150, 160),
+            ForeColor = VibranceHud.Theme.TextDim,
             Font = new Font("Segoe UI", 7.5f, FontStyle.Bold),
             Location = new Point(x, y),
             AutoSize = true,
         };
 
-        private static Button Button(string text, int x, int y, int width, Color back)
+        private static VibranceHud.GlassButton Button(string text, int x, int y, int width,
+            bool primary = false)
         {
-            var b = new Button { Text = text };
+            var b = new VibranceHud.GlassButton
+            {
+                Text = text,
+                Kind = primary ? VibranceHud.GlassButtonKind.Primary
+                               : VibranceHud.GlassButtonKind.Ghost,
+            };
             b.SetBounds(x, y, width, 30);
-            b.FlatStyle = FlatStyle.Flat;
-            b.BackColor = back;
-            b.ForeColor = Color.FromArgb(235, 235, 240);
-            b.FlatAppearance.BorderColor = Color.FromArgb(70, 70, 80);
-            b.Cursor = Cursors.Hand;
             return b;
         }
     }

@@ -28,6 +28,27 @@
     <Compile Include="..\..\Licensing\KeyLedger.cs" Link="Licensing\KeyLedger.cs" />
     <Compile Include="..\..\Licensing\LicenceDocument.cs" Link="Licensing\LicenceDocument.cs" />
     <Compile Include="..\..\Licensing\LicenceSigner.cs" Link="Licensing\LicenceSigner.cs" />
+
+    <!-- The app's own controls, linked for the same reason as the licence files above: this
+         is the tool that mints keys, and it looked like a different product - stock grey
+         buttons and Win32 text boxes. Linked rather than project-referenced, because a
+         reference would drag the whole app (NVAPI, DirectX, the tray) into a tool that only
+         needs to draw six controls. -->
+    <Compile Include="..\..\Theme.cs" Link="Ui\Theme.cs" />
+    <Compile Include="..\..\ThemePalette.cs" Link="Ui\ThemePalette.cs" />
+    <Compile Include="..\..\ThemeCatalog.cs" Link="Ui\ThemeCatalog.cs" />
+    <!-- ImagePalette only: it defines ImageTheme, which ThemeCatalog.SetCustom takes.
+         CustomThemeService is deliberately not linked - it needs AppSettings, and the tool
+         has no settings file. -->
+    <Compile Include="..\..\Theming\ImagePalette.cs" Link="Ui\Theming\ImagePalette.cs" />
+    <Compile Include="..\..\Glass.cs" Link="Ui\Glass.cs" />
+    <Compile Include="..\..\UiHelpers.cs" Link="Ui\UiHelpers.cs" />
+    <Compile Include="..\..\CardPanel.cs" Link="Ui\CardPanel.cs" />
+    <Compile Include="..\..\Design\Tokens.cs" Link="Ui\Design\Tokens.cs" />
+    <Compile Include="..\..\Design\Fonts.cs" Link="Ui\Design\Fonts.cs" />
+    <Compile Include="..\..\Controls\GlassButton.cs" Link="Ui\Controls\GlassButton.cs" />
+    <Compile Include="..\..\Controls\GlassTextBox.cs" Link="Ui\Controls\GlassTextBox.cs" />
+    <Compile Include="..\..\Controls\GlassDropdown.cs" Link="Ui\Controls\GlassDropdown.cs" />
   </ItemGroup>
 
 </Project>

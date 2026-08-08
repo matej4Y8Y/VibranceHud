@@ -16,13 +16,15 @@ namespace PlexusXKeys
     /// </summary>
     public sealed class ActivateDialog : Form
     {
-        private static readonly Color Bg = Color.FromArgb(18, 18, 22);
-        private static readonly Color Fg = Color.FromArgb(235, 235, 240);
-        private static readonly Color Dim = Color.FromArgb(150, 150, 160);
-        private static readonly Color Accent = Color.FromArgb(140, 110, 240);
+        private static Color Bg => VibranceHud.Theme.Background;
+        // Read from Theme rather than hardcoded, so the tool cannot drift away from the app it
+        // issues keys for. Properties, not static readonly fields: those initialise at type
+        // load, which happens before Program.cs has applied a theme.
+        private static Color Fg => VibranceHud.Theme.Text;
+        private static Color Dim => VibranceHud.Theme.TextDim;
 
-        private readonly TextBox _pcId = new();
-        private readonly TextBox _licence = new();
+        private readonly VibranceHud.GlassTextBox _pcId = new();
+        private readonly VibranceHud.GlassTextBox _licence = new();
         private readonly Label _status = new();
         private readonly KeyRecord _key;
 
@@ -48,17 +50,17 @@ namespace PlexusXKeys
                               "activation window.", 16, 40, Dim));
 
             Controls.Add(Line("CUSTOMER'S PC ID", 16, 74, Dim, small: true));
-            _pcId.SetBounds(16, 94, 300, 26);
-            _pcId.BorderStyle = BorderStyle.FixedSingle;
-            _pcId.BackColor = Bg;
-            _pcId.ForeColor = Fg;
+            _pcId.SetBounds(16, 94, 300, 30);
             _pcId.CharacterCasing = CharacterCasing.Upper;
-            _pcId.Font = new Font("Consolas", 10f);
+            _pcId.Inner.Font = new Font("Consolas", 10f);
             Controls.Add(_pcId);
 
-            var make = new Button { Text = "Create licence" };
-            make.SetBounds(330, 93, 140, 28);
-            Style(make, Accent);
+            var make = new VibranceHud.GlassButton
+            {
+                Text = "Create licence",
+                Kind = VibranceHud.GlassButtonKind.Primary,
+            };
+            make.SetBounds(330, 93, 140, 30);
             make.Click += (s, e) => Create();
             Controls.Add(make);
 
@@ -70,24 +72,27 @@ namespace PlexusXKeys
             _licence.SetBounds(16, 176, 608, 160);
             _licence.Multiline = true;
             _licence.ReadOnly = true;
-            _licence.ScrollBars = ScrollBars.Vertical;
-            _licence.BorderStyle = BorderStyle.FixedSingle;
-            _licence.BackColor = Bg;
-            _licence.ForeColor = Fg;
-            _licence.Font = new Font("Consolas", 8.5f);
+            _licence.Inner.Font = new Font("Consolas", 8.5f);
             Controls.Add(_licence);
 
-            var copy = new Button { Text = "Copy licence" };
+            var copy = new VibranceHud.GlassButton { Text = "Copy licence" };
             copy.SetBounds(16, 348, 140, 30);
-            Style(copy, Color.FromArgb(60, 60, 70));
             copy.Click += (s, e) => CopyLicence();
             Controls.Add(copy);
 
-            var close = new Button { Text = "Done" };
+            var close = new VibranceHud.GlassButton { Text = "Done" };
             close.SetBounds(504, 348, 120, 30);
-            Style(close, Color.FromArgb(60, 60, 70));
             close.Click += (s, e) => Close();
             Controls.Add(close);
+
+            // Enter and Escape by hand: GlassButton is an owner-drawn Control, not an
+            // IButtonControl, so AcceptButton/CancelButton would compile to nothing.
+            KeyPreview = true;
+            KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Escape) Close();
+                else if (e.KeyCode == Keys.Enter && _pcId.Inner.Focused) Create();
+            };
         }
 
         private void Create()
@@ -137,7 +142,7 @@ namespace PlexusXKeys
 
         private void CopyLicence()
         {
-            if (_licence.TextLength == 0) return;
+            if (_licence.Text.Length == 0) return;
             Clipboard.SetText(_licence.Text);
         }
 
@@ -153,13 +158,5 @@ namespace PlexusXKeys
                     bold || small ? FontStyle.Bold : FontStyle.Regular),
             };
 
-        private static void Style(Button b, Color back)
-        {
-            b.FlatStyle = FlatStyle.Flat;
-            b.BackColor = back;
-            b.ForeColor = Color.FromArgb(235, 235, 240);
-            b.FlatAppearance.BorderColor = Color.FromArgb(70, 70, 80);
-            b.Cursor = Cursors.Hand;
-        }
     }
 }
