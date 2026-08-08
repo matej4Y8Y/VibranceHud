@@ -75,6 +75,14 @@
     <EmbeddedResource Include="brand\forest-chip.png"   LogicalName="preset-forest.png"   />
     <EmbeddedResource Include="brand\desert-chip.png"   LogicalName="preset-desert.png"   />
     <EmbeddedResource Include="brand\snow-chip.png"     LogicalName="preset-snow.png"     />
+
+    <!-- The legal set, embedded so Settings can show it with no network and no install
+         folder to hunt through. The installer also drops copies next to the exe, but a
+         user who wants to read the terms should not have to leave the app to do it. -->
+    <EmbeddedResource Include="EULA.md"                 LogicalName="EULA.md" />
+    <EmbeddedResource Include="PRIVACY.md"              LogicalName="PRIVACY.md" />
+    <EmbeddedResource Include="LICENSE.md"              LogicalName="LICENSE.md" />
+    <EmbeddedResource Include="THIRD-PARTY-NOTICES.md"  LogicalName="THIRD-PARTY-NOTICES.md" />
   </ItemGroup>
 
   <!-- The test project lives under tests\ inside this folder; keep its sources out of

@@ -86,7 +86,11 @@ namespace VibranceHud
             Location = new Point(x, y),
             Size = new Size(width, 16),
             TextAlign = align,
-            BackColor = Color.Transparent
+            BackColor = Color.Transparent,
+            // A Label treats "&" as a mnemonic prefix and swallows it, so Account's
+            // "ACCOUNT & LICENSE" rendered as "ACCOUNT  LICENSE" with the L underlined.
+            // Captions are headings, never keyboard targets, so the prefix means nothing here.
+            UseMnemonic = false,
         };
     }
 }

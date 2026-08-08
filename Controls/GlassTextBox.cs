@@ -105,7 +105,11 @@ namespace VibranceHud
             set
             {
                 _inner.Multiline = value;
-                if (value) _inner.ScrollBars = ScrollBars.Vertical;
+                // Deliberately no scrollbar. A Win32 scrollbar is the one part of a TextBox
+                // that cannot be themed - a flat grey strip down the side of a glass panel -
+                // and it is the same reason the pages hide theirs. The wheel, the caret and
+                // Page Up/Down all still scroll a multiline TextBox without it.
+                if (value) _inner.ScrollBars = ScrollBars.None;
                 PerformLayout();
             }
         }

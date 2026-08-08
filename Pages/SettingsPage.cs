@@ -29,7 +29,8 @@ namespace VibranceHud.Pages
         public SettingsPage(AppSettings settings, SettingsStore store,
             Action<int> onOpacityChanged, Action<string> onThemeChanged,
             Theming.CustomThemeService? custom = null, Action? onBackgroundChanged = null,
-            IVibranceEngine? engine = null, Audio.AudioEdgeService? audio = null)
+            IVibranceEngine? engine = null, Audio.AudioEdgeService? audio = null,
+            Action? onShowLegal = null)
         {
             _settings = settings;
             _store = store;
@@ -679,6 +680,17 @@ namespace VibranceHud.Pages
                 catch { /* no browser / blocked - nothing we can do */ }
             };
             about.Controls.Add(discordBtn);
+
+            // The terms, privacy policy, licence and third-party attributions. Reached from
+            // here rather than from a nav tab: it is a page somebody opens once, and a
+            // permanent row in a five-row navigation would cost more than it is worth.
+            if (onShowLegal != null)
+            {
+                var legalBtn = FlatButton("Legal & licences", 198, 104, 170);
+                legalBtn.Click += (s, e) => onShowLegal();
+                about.Controls.Add(legalBtn);
+            }
+
             Controls.Add(about);
 
             // Without this the page reports nothing to scroll, so everything past the

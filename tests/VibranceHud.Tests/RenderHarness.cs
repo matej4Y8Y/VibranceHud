@@ -34,7 +34,7 @@ namespace VibranceHud.Tests
         /// <summary>The shell's pages. Kept in step with MainWindow's navigation.</summary>
         internal static readonly string[] PageNames =
         {
-            "Display", "Monitor", "Crosshair", "Settings", "Account",
+            "Display", "Monitor", "Crosshair", "Settings", "Account", "Legal",
         };
 
         /// <summary>Render every page into <paramref name="outputDirectory"/> as &lt;name&gt;.png.</summary>
@@ -119,6 +119,7 @@ namespace VibranceHud.Tests
                 "Settings" => new SettingsPage(settings, store, _ => { }, _ => { },
                     audio: new Audio.AudioEdgeService(new SilentOutput())),
                 "Account" => new AccountPage(new LicenseService(scratch)),
+                "Legal" => new LegalPage(),
                 _ => throw new ArgumentException("unknown page: " + name, nameof(name)),
             };
 

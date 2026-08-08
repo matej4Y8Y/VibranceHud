@@ -153,7 +153,8 @@ namespace VibranceHud
             _vibrancePage.HotkeyChanged += (mask, vk) => onHotkeyChanged?.Invoke(mask, vk) ?? true;
             _vibrancePage.MainHotkeyChanged += (mask, vk, en) => onMainHotkeyChanged?.Invoke(mask, vk, en);
             _settingsPage = new SettingsPage(_settings, _store, SetWindowOpacity, _onThemeChanged,
-                custom, onBackgroundChanged: RefreshBackdrop, engine: _engine, audio: _audio);
+                custom, onBackgroundChanged: RefreshBackdrop, engine: _engine, audio: _audio,
+                onShowLegal: ShowLegal);
             _accountPage = new AccountPage(_license);
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
@@ -499,6 +500,20 @@ namespace VibranceHud
         {
             Select(_navVibrance, _vibrancePage);
             _vibrancePage.Refresh();
+        }
+
+        /// <summary>
+        /// The legal documents, opened from Settings.
+        ///
+        /// Shown without a nav button of its own, so Settings stays the active row and Back
+        /// returns there. Built fresh each time and disposed by SetContent, because it is
+        /// opened rarely and holding it costs more than rebuilding it.
+        /// </summary>
+        private void ShowLegal()
+        {
+            var page = new LegalPage(onBack: () => Select(_navSettings, _settingsPage));
+            AttachField(page);
+            SetContent(page);
         }
 
         private void Select(NavButton button, Control page)

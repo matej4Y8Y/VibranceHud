@@ -39,6 +39,7 @@ namespace VibranceHud.Tests
             yield return new object[] { "Crosshair" };
             yield return new object[] { "Settings" };
             yield return new object[] { "Account" };
+            yield return new object[] { "Legal" };
         }
 
         // ---- the audits ------------------------------------------------------------------
@@ -217,6 +218,7 @@ namespace VibranceHud.Tests
                 "Settings" => new SettingsPage(settings, store, _ => { }, _ => { },
                     audio: new Audio.AudioEdgeService(new SilentOutput())),
                 "Account" => new AccountPage(new LicenseService(_temp.Path)),
+                "Legal" => new LegalPage(),
                 _ => new AccountPage(new LicenseService(_temp.Path)),
             };
 
