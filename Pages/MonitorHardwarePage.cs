@@ -51,12 +51,16 @@ namespace VibranceHud.Pages
 
         private readonly List<PanelState> _panels = new();
 
+        private readonly IMonitorWriter _writer;
+
         public MonitorHardwarePage(AppSettings settings, SettingsStore store,
-            IReadOnlyList<MonitorCapability>? capabilities = null)
+            IReadOnlyList<MonitorCapability>? capabilities = null,
+            IMonitorWriter? writer = null)
         {
             _settings = settings;
             _store = store;
             _caps = capabilities ?? Array.Empty<MonitorCapability>();
+            _writer = writer ?? new Dxva2MonitorWriter();
 
             AutoScroll = true;
             ContentWidth = CardW + 80;
@@ -341,7 +345,7 @@ namespace VibranceHud.Pages
                 if (brightness >= 0)
                 {
                     CaptureOriginals(state);
-                    if (MonitorControl.SetBrightnessPercent(cap.Index, cap.Brightness, brightness))
+                    if (_writer.SetBrightnessPercent(cap.Index, cap.Brightness, brightness))
                         accepted.Add(p => p.Brightness = brightness);
                 }
 
@@ -349,7 +353,7 @@ namespace VibranceHud.Pages
                 if (contrast >= 0)
                 {
                     CaptureOriginals(state);
-                    if (MonitorControl.SetContrastPercent(cap.Index, cap.Contrast, contrast))
+                    if (_writer.SetContrastPercent(cap.Index, cap.Contrast, contrast))
                         accepted.Add(p => p.Contrast = contrast);
                 }
 
@@ -357,7 +361,7 @@ namespace VibranceHud.Pages
                 if (blue >= 0)
                 {
                     CaptureOriginals(state);
-                    if (MonitorControl.SetLowBlueLight(cap.Index, cap.BlueGain, blue))
+                    if (_writer.SetLowBlueLight(cap.Index, cap.BlueGain, blue))
                         accepted.Add(p => p.LowBlue = blue);
                 }
 
@@ -395,7 +399,7 @@ namespace VibranceHud.Pages
 
             // Brightness gets the two-read treatment; a lone zero from a lit screen is a lie,
             // and storing it would mean "put it back" blacks the panel.
-            int? brightness = cap.SupportsBrightness ? MonitorControl.ReadTrustedBrightness(cap.Index) : null;
+            int? brightness = cap.SupportsBrightness ? _writer.ReadTrustedBrightness(cap.Index) : null;
 
             Marshal(() =>
             {
@@ -415,9 +419,9 @@ namespace VibranceHud.Pages
             var panel = _settings.PanelFor(cap.Index);
             if (!panel.HasOriginals) return;
 
-            if (cap.SupportsBrightness) MonitorControl.RestoreBrightness(cap.Index, panel.OriginalBrightness);
-            if (cap.SupportsContrast) MonitorControl.RestoreContrast(cap.Index, panel.OriginalContrast);
-            if (cap.SupportsRgbGain) MonitorControl.RestoreBlueGain(cap.Index, panel.OriginalBlueGain);
+            if (cap.SupportsBrightness) _writer.RestoreBrightness(cap.Index, panel.OriginalBrightness);
+            if (cap.SupportsContrast) _writer.RestoreContrast(cap.Index, panel.OriginalContrast);
+            if (cap.SupportsRgbGain) _writer.RestoreBlueGain(cap.Index, panel.OriginalBlueGain);
 
             panel.Brightness = -1;
             panel.Contrast = -1;
@@ -454,6 +458,36 @@ namespace VibranceHud.Pages
                 foreach (var p in _panels) p.Write.Dispose();
 
             base.Dispose(disposing);
+        }
+
+        /// <summary>Test seam: run the write that the debounce would run, without waiting on a
+        /// timer. The contract being checked is what Flush does, not when it fires.</summary>
+        internal void FlushPendingForTest()
+        {
+            foreach (var p in _panels) Flush(p);
+        }
+
+        /// <summary>Test seam: move a slider the way a user would, so the pending value and
+        /// the debounce trigger both go through the real path.</summary>
+        internal void SetSliderForTest(string caption, int value)
+        {
+            var card = Controls.OfType<CardPanel>().FirstOrDefault();
+            if (card == null) return;
+
+            var labels = card.Controls.OfType<Label>().ToList();
+            var sliders = card.Controls.OfType<FlatSlider>().ToList();
+
+            // Captions are letter-spaced, so compare with the spaces removed.
+            for (int i = 0; i < labels.Count; i++)
+            {
+                if ((labels[i].Text ?? "").Replace(" ", "")
+                    .Equals(caption.Replace(" ", ""), StringComparison.OrdinalIgnoreCase))
+                {
+                    var slider = sliders.FirstOrDefault(s => s.Top > labels[i].Top && s.Top < labels[i].Top + 40);
+                    if (slider != null) slider.Value = value;
+                    return;
+                }
+            }
         }
 
         /// <summary>The probe's verdict, for tests and for the capability report.</summary>

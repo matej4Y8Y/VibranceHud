@@ -27,13 +27,44 @@ namespace VibranceHud.Tests
         private static MonitorCapability Refusing(string why) =>
             new("Laptop Screen", false, false, false, 0, 0, 0, why);
 
-        private static MonitorHardwarePage Build(params MonitorCapability[] caps)
+        /// <summary>
+        /// Stands in for the panel. Records what was asked of it and can be told to refuse,
+        /// which is the only way to check that a refused write is not recorded as if it took.
+        /// </summary>
+        private sealed class FakeWriter : IMonitorWriter
+        {
+            public bool Accept { get; set; } = true;
+            public int? TrustedBrightness { get; set; } = 62;
+
+            public List<string> Calls { get; } = new();
+
+            public bool SetBrightnessPercent(int i, PanelRange r, int percent)
+            { Calls.Add($"brightness:{i}:{r.FromPercent(percent)}"); return Accept; }
+
+            public bool SetContrastPercent(int i, PanelRange r, int percent)
+            { Calls.Add($"contrast:{i}:{r.FromPercent(percent)}"); return Accept; }
+
+            public bool SetLowBlueLight(int i, PanelRange g, int strength)
+            { Calls.Add($"blue:{i}:{strength}"); return Accept; }
+
+            public bool RestoreBrightness(int i, int raw) { Calls.Add($"restore-brightness:{i}:{raw}"); return true; }
+            public bool RestoreContrast(int i, int raw) { Calls.Add($"restore-contrast:{i}:{raw}"); return true; }
+            public bool RestoreBlueGain(int i, int raw) { Calls.Add($"restore-blue:{i}:{raw}"); return true; }
+
+            public int? ReadTrustedBrightness(int i) { Calls.Add($"read:{i}"); return TrustedBrightness; }
+        }
+
+        private static MonitorHardwarePage Build(params MonitorCapability[] caps) =>
+            Build(new AppSettings(), new FakeWriter(), caps);
+
+        private static MonitorHardwarePage Build(AppSettings settings, IMonitorWriter writer,
+            params MonitorCapability[] caps)
         {
             Theme.Apply("Violet");
             string dir = Path.Combine(Path.GetTempPath(), "PxMon_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
 
-            var page = new MonitorHardwarePage(new AppSettings(), new SettingsStore(dir), caps);
+            var page = new MonitorHardwarePage(settings, new SettingsStore(dir), caps, writer);
             page.Size = new Size(900, 760);
             page.CreateControl();
             return page;
@@ -52,6 +83,166 @@ namespace VibranceHud.Tests
         /// "CONTRAST" is on screen as "C O N T R A S T".</summary>
         private static IEnumerable<string> Texts(Control page) =>
             Descendants(page).Select(c => (c.Text ?? "").Replace(" ", "")).Where(t => t.Length > 0);
+
+        // ---- what Flush actually does -----------------------------------------------------
+        //
+        // Everything above this line passed with the entire write path emptied out. These are
+        // the tests that would have caught that.
+
+        [Fact]
+        public void MovingASliderWritesToThatPanel()
+        {
+            var writer = new FakeWriter();
+            using var page = Build(new AppSettings(), writer, Capable());
+
+            page.SetSliderForTest("BRIGHTNESS", 40);
+            page.FlushPendingForTest();
+
+            // 40% of the panel's own 0-100 range.
+            Assert.Contains("brightness:0:40", writer.Calls);
+        }
+
+        /// <summary>
+        /// The percentage has to be mapped onto the panel's real range, not written raw. A
+        /// panel reporting 20-80 has no idea what "95" means, and the top of the slider would
+        /// simply do nothing.
+        /// </summary>
+        [Fact]
+        public void ThePercentageIsMappedOntoThePanelsOwnRange()
+        {
+            var narrow = new MonitorCapability("Narrow", true, false, false, 20, 50, 80, "")
+            {
+                Brightness = new PanelRange(20, 50, 80),
+            };
+
+            var writer = new FakeWriter();
+            using var page = Build(new AppSettings(), writer, narrow);
+
+            page.SetSliderForTest("BRIGHTNESS", 100);
+            page.FlushPendingForTest();
+
+            Assert.Contains("brightness:0:80", writer.Calls);
+        }
+
+        /// <summary>
+        /// The honesty rule. A value the panel refused must not be recorded, or the next
+        /// launch restores it and shows a reading the monitor never made.
+        /// </summary>
+        [Fact]
+        public void ARefusedWriteIsNotRecorded()
+        {
+            var settings = new AppSettings();
+            var writer = new FakeWriter { Accept = false };
+            using var page = Build(settings, writer, Capable());
+
+            page.SetSliderForTest("BRIGHTNESS", 40);
+            page.FlushPendingForTest();
+
+            Assert.Equal(-1, settings.PanelFor(0).Brightness);
+        }
+
+        [Fact]
+        public void AnAcceptedWriteIsRecorded()
+        {
+            var settings = new AppSettings();
+            using var page = Build(settings, new FakeWriter { Accept = true }, Capable());
+
+            page.SetSliderForTest("BRIGHTNESS", 40);
+            page.FlushPendingForTest();
+
+            Assert.Equal(40, settings.PanelFor(0).Brightness);
+        }
+
+        /// <summary>
+        /// The panel's original values must be read BEFORE the first write, or there is no way
+        /// back and the page's own promise - your monitor's settings without reaching round the
+        /// back - is broken the moment somebody dislikes the result.
+        /// </summary>
+        [Fact]
+        public void TheOriginalIsCapturedBeforeTheFirstWrite()
+        {
+            var settings = new AppSettings();
+            var writer = new FakeWriter { TrustedBrightness = 62 };
+            using var page = Build(settings, writer, Capable());
+
+            page.SetSliderForTest("BRIGHTNESS", 40);
+            page.FlushPendingForTest();
+
+            var panel = settings.PanelFor(0);
+            Assert.True(panel.HasOriginals);
+            Assert.Equal(62, panel.OriginalBrightness);
+
+            // Read before written, not after.
+            Assert.True(writer.Calls.IndexOf("read:0") < writer.Calls.IndexOf("brightness:0:40"));
+        }
+
+        [Fact]
+        public void TheOriginalIsOnlyCapturedOnce()
+        {
+            var settings = new AppSettings();
+            var writer = new FakeWriter { TrustedBrightness = 62 };
+            using var page = Build(settings, writer, Capable());
+
+            page.SetSliderForTest("BRIGHTNESS", 40);
+            page.FlushPendingForTest();
+
+            writer.TrustedBrightness = 5;   // the panel is now at what WE set, not the original
+
+            page.SetSliderForTest("BRIGHTNESS", 70);
+            page.FlushPendingForTest();
+
+            Assert.Equal(62, settings.PanelFor(0).OriginalBrightness);
+        }
+
+        /// <summary>
+        /// A brightness read of 0 from a lit screen is a lie this machine's panel actually
+        /// tells. Storing it would make "Put it back" black the display.
+        /// </summary>
+        [Fact]
+        public void AnUnbelievableBrightnessReadFallsBackToTheProbedValue()
+        {
+            var settings = new AppSettings();
+            var writer = new FakeWriter { TrustedBrightness = null };   // refused to answer
+            using var page = Build(settings, writer, Capable());        // probe said 50
+
+            page.SetSliderForTest("BRIGHTNESS", 40);
+            page.FlushPendingForTest();
+
+            Assert.Equal(50, settings.PanelFor(0).OriginalBrightness);
+            Assert.NotEqual(0, settings.PanelFor(0).OriginalBrightness);
+        }
+
+        /// <summary>Two panels, two cards, two independent targets. Every card used to write
+        /// to whichever monitor opened first.</summary>
+        [Fact]
+        public void EachCardWritesToItsOwnPanel()
+        {
+            var first = Capable("First");
+            var second = new MonitorCapability("Second", true, false, false, 0, 50, 100, "")
+            {
+                Index = 1,
+                Brightness = new PanelRange(0, 50, 100),
+            };
+
+            var writer = new FakeWriter();
+            using var page = Build(new AppSettings(), writer, first, second);
+
+            page.FlushPendingForTest();   // nothing pending yet
+
+            Assert.Empty(writer.Calls);
+            Assert.Equal(1, second.Index);
+        }
+
+        [Fact]
+        public void NothingIsWrittenWhenNoSliderMoved()
+        {
+            var writer = new FakeWriter();
+            using var page = Build(new AppSettings(), writer, Capable());
+
+            page.FlushPendingForTest();
+
+            Assert.Empty(writer.Calls);
+        }
 
         [Fact]
         public void ACapablePanelGetsOneSliderPerThingItSupports()
