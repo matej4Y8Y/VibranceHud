@@ -1,70 +1,87 @@
 # Roadmap
 
-LIVING DOC. Changed 2026-07-26.
+LIVING DOC. Rewritten 2026-08-08, when the direction changed.
 
-## Before launch (must-do, blocks charging money)
+## The philosophy
 
-These are blocking. Don't take a single cent until they're done.
+> **PlexusX owns your monitor. Everything you look at, nothing under the hood.**
 
-**Trust + safety**
-- EV code-signing certificate (~€200–400/yr). Without it users see "Unknown publisher" and won't run the installer.
-- Privacy policy on a public URL (GDPR if you ever serve an EU user, which you will).
-- Terms of service / EULA shown by the installer.
-- Refund / cancellation policy linked from the product page (EU 14-day right of withdrawal).
-- `LICENSE` file in the repo root (NVAPIWrapper is LGPL; SharpDX is MIT — both need declaring).
-- 3rd-party licenses list somewhere visible.
+If a feature changes **what you see** — colour, resolution, refresh rate, HDR, the
+crosshair, the panel's own settings — it belongs. If it changes **what the PC is doing**
+— registry keys, game config files, process priority, RAM — it does not.
 
-**Selling infrastructure**
-- Merchant-of-Record account (LemonSqueezy or Paddle). They handle EU VAT, sales tax, refund disputes — you just get paid.
-- Product listed at the MoR with a price (€3/month was the original target).
-- License-key activation flow in PlexusX. Without this, anyone who downloads the paid version uses it forever.
-- In-app "Go Pro" button that deep-links to checkout.
-- Trial logic (30-min cumulative lockout, per the original HANDOFF spec).
-- Webhook so paid users get a license key without manual intervention.
+The pitch is *"it makes your monitor look right."*
 
-**First-impression polish**
-- App icon for installer, start menu, tray, splash — one designer day. A placeholder icon = hobby-product impression.
-- First-run onboarding screen. Trial → paid conversion happens in 30 seconds.
-- Friendly empty states ("No games detected — is Steam installed?").
-- No raw exception dialogs. Friendly "something broke" dialog with a report link.
+Full reasoning: `docs/superpowers/specs/2026-08-07-plexusx-monitor-philosophy-design.md`.
+The rules that follow from it: `docs/UI-CONTRACT.md`.
 
-**Distribution surface**
-- Landing page (Vercel/Netlify free tier). Plain. Hero, feature list, pricing, download, FAQ.
-- Discord community invite linked from the app + page.
-- Bug report channel (GitHub issues are fine for v1).
+## What this replaced, and why
 
-**Pre-launch smoke**
-- Clean-install QA run (Win 10 fresh, no dev tools).
-- Upgrade path: 0.7.2 installed → install 0.8.0 → settings preserved.
-- Uninstall + reinstall: trial returns to 0 min, license re-arms correctly.
-- 5–10 friend beta. People who aren't me catch what I can't see.
+The app used to be a gamer utility suite: a Games Hub that wrote to `client.cfg`, an FPS
+Tweaks page of registry edits, launch options, a RAM cleaner, per-game keybinds.
 
-## Now
-- System-wide vibrance 0-200% works in OBS / Discord / screen recorders (DX11 overlay at the DWM layer).
-- Auto-apply per-game profiles — pick your settings once, PlexusX swaps them when the game opens.
-- Games Hub knows about Rust / CS2 / Apex / Fortnite — portable Steam detection via registry + libraryfolders.vdf.
+All of it is gone, for reasons that were true before they were acted on:
+
+- **It competed with free.** Rust has a settings menu; config tweaks are all over YouTube.
+- **You could not see it work.** Colour is instant and obvious. A registry edit is invisible.
+- **It rotted.** A game update can rename a convar. It cannot change what a gamma ramp does.
+- **It was the only part that touched game files.** Everything else is display-layer.
+- **The category is a race to the bottom.** The tools in it ship "+24 Score" toggles and
+  things like *Disable Virtualization-Based Security*. Entering that market costs trust
+  that colour earns for free.
+
+The RAM cleaner in particular was already listed here under *"what I'm not building —
+placebo, damages credibility"* while shipping in the app. That contradiction is resolved.
+
+## The shape now
+
+| Tab | Owns | Layer |
+|---|---|---|
+| **Display** | Colour: vibrance, saturation, brightness, gamma, contrast, temperature, and the advanced channels. Presets, share codes, A/B compare. | Software — gamma ramp + NVAPI |
+| **Resolution** | Resolution, refresh rate, stretched PvP presets, HDR. | Windows display API |
+| **Monitor** | The physical panel: brightness, contrast, RGB gain, low blue light. | DDC/CI over the cable |
+| Crosshair | The overlay, its gallery, colour and share codes. | Overlay window |
+| Settings / Account | The app itself, loud footsteps, legal, licence. | — |
+
+Display changes the signal, Resolution changes the mode, Monitor changes the panel. Same
+picture, three layers of control.
+
+## Done
+
+- Design contract enforced by tests — stock controls, hardcoded colours, culture-dependent
+  numbers and mojibake are build failures, not messages.
+- DDC/CI capability probe. **Verified working on the dev machine** — brightness, contrast
+  and RGB gain all answer.
+- The cuts above, and the ~99 tests that went with them.
+- Every stock Win32 control replaced in the app, plus the key manager themed.
+- `LICENSE.md`, `THIRD-PARTY-NOTICES.md`, `PRIVACY.md`, `EULA.md`, readable in-app and
+  shipped by the installer. The EULA is the installer's licence page.
+- Licensing: trial policy, plan catalog, key issue/validate, revocation, beta gate.
 
 ## Next
-- Polish: app icon, installer branding, first-run onboarding, custom hotkey, start-minimized option, remember-last-page.
-- Add 2-3 more games (CS2 first via `autoexec.cfg`; Fortnite, Apex).
-- AMD / Intel vibrance. The 100-200% software path already works on any GPU; adding hardware-accelerated 0-100% on AMD (ADL) and Intel would roughly triple the market.
-- Crash reporting (Sentry) once ships to a wider audience.
-- In-game overlay for changing vibrance without alt-tabbing — overlay only, no injection.
 
-## What I'm not building
-- Anything that risks anti-cheat accounts. No injection, no memory writes.
-- Bespoke paid subscriptions with our own license server. There's a provider that does this for €3/month.
-- RAM cleaner / Windows service disabling toggles. Placebo, damages credibility.
+- **Advanced colour channels** — lift / gamma / gain and tint, so per-game presets can
+  actually differ from one another. Six sliders cannot express Rust's brown-grey against
+  CS2's concrete-orange.
+- **Per-game colour presets** with hover preview, and custom presets kept visually
+  separate from them.
+- **A/B compare**, rate-limited — the gamma ramp misbehaves when hammered.
+- **Monitor tab** on the verified DDC/CI probe: brightness, contrast, low blue light as a
+  blue-gain reduction, all revertible.
+- **Crosshair share codes**, the same `PX-` scheme Display already uses.
 
-## Recommended order
+## Not building
 
-1. Code-signing certificate (block SmartScreen).
-2. Privacy + EULA + LICENSE files (compliance).
-3. MoR account (LemonSqueezy).
-4. Trial + license activation in PlexusX.
-5. App icon + first-run onboarding.
-6. Landing page + Discord.
-7. Beta with 5–10 friends.
-8. Public launch.
+- Anything under the hood. That is the whole point.
+- Anything that risks a game account: no injection, no memory access, no game files.
+- Hue-selective colour. The gamma ramp is a per-channel curve — it does three-way
+  correction well and cannot do "make only the greens duller". The DX11 path that could is
+  disabled. **Do not promise HSL.**
 
-Roughly 50–80 hours across the items, mostly the legal/business side.
+## Before charging money
+
+- EV code-signing certificate. Without it the installer says "Unknown publisher".
+- Merchant-of-record account (LemonSqueezy or Paddle) — handles EU VAT and refunds.
+- Landing page, and the privacy policy on a public URL.
+- The legal entity name, which is `[[LEGAL_ENTITY]]` in all four documents until it is known.
+- Clean-install QA on a fresh Windows 10, and an upgrade-over-old-version run.

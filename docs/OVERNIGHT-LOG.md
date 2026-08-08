@@ -78,6 +78,14 @@ second read.
   saved-file format for no user-visible benefit, so they stay for 1.0 and should be dropped in
   a migration later.
 
+## Deliberately deprioritised
+
+- **The 55 remaining ad-hoc `new Font(Theme.FontFamily, …)` sites.** The guard test stays
+  skipped. This is a performance-hygiene rule — those fonts are allocated inside `OnPaint`,
+  which runs ~30×/second per control — and it is worth doing, but it is invisible to a user
+  and costs 55 hand edits. Product work (advanced colour, the Monitor tab, share codes) moves
+  the app further tonight. Un-skip `FontsComeFromTheDesignLayer` when the sites are migrated.
+
 ## Known contract exceptions
 
 - **`Tools/PlexusXKeys/MainForm.cs` keeps a stock `ListView`** for the ledger grid. Replacing it
