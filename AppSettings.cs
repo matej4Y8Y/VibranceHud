@@ -316,14 +316,44 @@ namespace VibranceHud
         // value somebody could choose; not having chosen one means the page should read the
         // panel instead of assuming.
 
-        /// <summary>Panel brightness 0-100, or -1 if the user has never set it.</summary>
-        public int MonitorBrightness { get; set; } = -1;
+        /// <summary>
+        /// What the user set on one physical panel, and where that panel was before we
+        /// touched it.
+        ///
+        /// Per monitor, because a two-screen desk gets two cards and they must not share one
+        /// value. The Original* fields are in the panel's OWN units, not percent - they are
+        /// what gets written back verbatim by "Put it back", and a percentage would be
+        /// re-derived through a range that may have been read differently.
+        /// </summary>
+        public sealed class PanelSettings
+        {
+            public int Index { get; set; }
 
-        /// <summary>Panel contrast 0-100, or -1 if never set.</summary>
-        public int MonitorContrast { get; set; } = -1;
+            // -1 means never set, which is different from 0.
+            public int Brightness { get; set; } = -1;
+            public int Contrast { get; set; } = -1;
+            public int LowBlue { get; set; } = -1;
 
-        /// <summary>Low blue light strength 0-100, or -1 if never set.</summary>
-        public int MonitorLowBlue { get; set; } = -1;
+            public bool HasOriginals { get; set; }
+            public int OriginalBrightness { get; set; }
+            public int OriginalContrast { get; set; }
+            public int OriginalBlueGain { get; set; }
+        }
+
+        public List<PanelSettings> Panels { get; set; } = new();
+
+        /// <summary>The record for one panel, created on first use so callers never null-check.</summary>
+        public PanelSettings PanelFor(int index)
+        {
+            Panels ??= new List<PanelSettings>();
+
+            var found = Panels.FirstOrDefault(p => p.Index == index);
+            if (found != null) return found;
+
+            found = new PanelSettings { Index = index };
+            Panels.Add(found);
+            return found;
+        }
 
         /// <summary>The grade to actually apply, with gamma taken from the existing
         /// standalone setting so the two can never disagree. Not serialized - it is derived,

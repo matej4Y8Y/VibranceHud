@@ -127,7 +127,9 @@ namespace VibranceHud.Tests
         [Fact]
         public void ConstructingThePageDoesNotTouchTheHardware()
         {
-            var settings = new AppSettings { MonitorBrightness = 77 };
+            var settings = new AppSettings();
+            settings.PanelFor(0).Brightness = 77;
+
             string dir = Path.Combine(Path.GetTempPath(), "PxMon_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
 
@@ -160,20 +162,50 @@ namespace VibranceHud.Tests
         }
 
         /// <summary>
-        /// Contrast cannot be read back, so an unset slider must not sit at 0 - that would
-        /// claim the panel's contrast is off, which is a statement the app cannot make.
+        /// Contrast is seeded from what the panel reported, as a percentage of the panel's own
+        /// range.
+        ///
+        /// This test used to assert a hardcoded 50%, on the premise that contrast "cannot be
+        /// read back". The probe does read it - it was reading the value and throwing it away,
+        /// so the page invented one. A fabricated reading is the dishonest-UI rule broken.
         /// </summary>
         [Fact]
-        public void UnreadableContrastStartsInTheMiddleRatherThanAtZero()
+        public void ContrastIsSeededFromWhatThePanelReported()
         {
             var contrastOnly = new MonitorCapability("Test Monitor",
                 SupportsBrightness: false, SupportsContrast: true, SupportsRgbGain: false,
-                0, 0, 0, "");
+                0, 0, 0, "")
+            {
+                // Panel range 0-200, sitting at 150 - which is 75%, not 50.
+                Contrast = new PanelRange(0, 150, 200),
+            };
 
             using var page = Build(contrastOnly);
 
             var slider = Descendants(page).OfType<FlatSlider>().Single();
-            Assert.Equal(50, slider.Value);
+            Assert.Equal(75, slider.Value);
+        }
+
+        /// <summary>
+        /// A gain range of 0-255 must not be treated as 0-100.
+        ///
+        /// Writing an absolute "100" as neutral is 39% on a 0-255 panel - a heavy blue cut
+        /// applied by a slider the user had just set to zero, with no stored original to get
+        /// back to. Strength 0 has to mean "leave the panel's own gain exactly where it is".
+        /// </summary>
+        [Fact]
+        public void LowBlueLightAtZeroTargetsThePanelsExistingGain()
+        {
+            var gain = new PanelRange(0, 128, 255);
+
+            // The same arithmetic MonitorControl.SetLowBlueLight does.
+            int span = (gain.Current - gain.Min) / 2;
+            int atZero = gain.Current - span * 0 / 100;
+            int atFull = gain.Current - span * 100 / 100;
+
+            Assert.Equal(128, atZero);
+            Assert.Equal(64, atFull);
+            Assert.True(atFull >= gain.Min, "full strength must not take blue below the panel's floor");
         }
     }
 }

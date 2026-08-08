@@ -11,6 +11,28 @@ namespace VibranceHud.Monitors
     /// plain-English reason, because a monitor tab full of controls that quietly do nothing is
     /// worse than a tab that says the panel will not talk to us.
     /// </summary>
+    /// <summary>
+    /// A range the panel reported, in the panel's own units.
+    ///
+    /// MCCS does not fix these. Brightness is often 0-100 but need not be, and gain is a
+    /// one-byte value that is routinely 0-255. Assuming 0-100 and writing an absolute number
+    /// is how you turn somebody's screen orange: a "gain 100" meant as neutral is 39% on a
+    /// 0-255 panel, which is a heavy blue cut.
+    /// </summary>
+    public readonly record struct PanelRange(int Min, int Current, int Max)
+    {
+        public bool IsUsable => Max > Min && Current >= Min && Current <= Max;
+
+        /// <summary>Map a 0-100 slider onto the panel's own scale.</summary>
+        public int FromPercent(int percent) =>
+            Min + (int)Math.Round((Max - Min) * Math.Clamp(percent, 0, 100) / 100.0);
+
+        /// <summary>And back, so a slider can be seeded from what the panel reported.</summary>
+        public int ToPercent(int raw) => Max > Min
+            ? Math.Clamp((int)Math.Round((raw - Min) * 100.0 / (Max - Min)), 0, 100)
+            : 0;
+    }
+
     public sealed record MonitorCapability(
         string Description,
         bool SupportsBrightness,
@@ -19,7 +41,30 @@ namespace VibranceHud.Monitors
         int BrightnessMin,
         int BrightnessCurrent,
         int BrightnessMax,
-        string Refusal);
+        string Refusal)
+    {
+        /// <summary>The panel's real brightness range, as reported.</summary>
+        public PanelRange Brightness { get; init; } =
+            new(BrightnessMin, BrightnessCurrent, BrightnessMax);
+
+        /// <summary>The panel's real contrast range. Read by the probe rather than assumed -
+        /// it used to be read and thrown away, which is why the UI invented a value.</summary>
+        public PanelRange Contrast { get; init; }
+
+        /// <summary>The panel's real blue-gain range, and its current gain. The current value
+        /// is what "off" means for low blue light - not the literal number 100.</summary>
+        public PanelRange BlueGain { get; init; }
+
+        /// <summary>
+        /// Which physical monitor this is, so a write can be aimed at it.
+        ///
+        /// The enumeration index rather than a device path: DDC/CI has no stable identifier
+        /// Windows will hand back through this API, and the index is consistent for as long as
+        /// the display arrangement does not change - which is exactly as long as a card built
+        /// from this capability is on screen.
+        /// </summary>
+        public int Index { get; init; }
+    }
 
     /// <summary>
     /// Asks every attached monitor what it supports, over DDC/CI.
@@ -98,7 +143,10 @@ namespace VibranceHud.Monitors
                 EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, Collect, IntPtr.Zero);
 
                 foreach (var hMonitor in handles)
-                    found.AddRange(Describe(hMonitor));
+                    foreach (var cap in Describe(hMonitor))
+                        // Indexed in enumeration order, so a write can be aimed at the panel
+                        // whose card the user is actually looking at.
+                        found.Add(cap with { Index = found.Count });
             }
             catch (Exception ex)
             {
@@ -199,8 +247,15 @@ namespace VibranceHud.Monitors
                 : "This monitor is connected but will not accept DDC/CI control. "
                   + "That is usually a monitor setting - look for \"DDC/CI\" in its on-screen menu.";
 
+            // Every range is carried, not just brightness. The contrast and gain ranges used
+            // to be read here and discarded, which left the UI inventing a contrast value and
+            // the writer assuming 0-100 for a gain that is commonly 0-255.
             return new MonitorCapability(name, brightness, contrast, gain,
-                (int)bMin, (int)bCur, (int)bMax, refusal);
+                (int)bMin, (int)bCur, (int)bMax, refusal)
+            {
+                Contrast = contrast ? new PanelRange((int)cMin, (int)cCur, (int)cMax) : default,
+                BlueGain = gain ? new PanelRange((int)gMin, (int)gCur, (int)gMax) : default,
+            };
         }
 
         /// <summary>A refused call is the normal case, not an error worth propagating.</summary>

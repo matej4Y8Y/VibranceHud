@@ -54,51 +54,79 @@ namespace VibranceHud.Monitors
         [DllImport("dxva2.dll", SetLastError = true)]
         private static extern bool SetMonitorRedGreenOrBlueGain(IntPtr h, uint gainType, uint value);
 
-        private const uint Red = 0, Green = 1, Blue = 2;
-
-        public static bool SetBrightness(int value) =>
-            OnFirstMonitor(h => SetMonitorBrightness(h, (uint)Math.Clamp(value, 0, 100)));
-
-        public static bool SetContrast(int value) =>
-            OnFirstMonitor(h => SetMonitorContrast(h, (uint)Math.Clamp(value, 0, 100)));
+        private const uint Blue = 2;
 
         /// <summary>
-        /// Reduce the blue channel's gain.
+        /// Set brightness on one panel, as a percentage of the range that panel reported.
+        ///
+        /// The percentage matters. Brightness ranges are panel-defined, and writing an
+        /// absolute 0-100 into a panel that reports 20-80 makes the top and bottom quarters of
+        /// the slider dead - the user drags and nothing happens.
         /// </summary>
-        /// <param name="strength">0 = off, 100 = as far down as the panel allows.</param>
+        public static bool SetBrightnessPercent(int monitorIndex, PanelRange range, int percent) =>
+            OnMonitor(monitorIndex, h => SetMonitorBrightness(h, (uint)range.FromPercent(percent)));
+
+        public static bool SetContrastPercent(int monitorIndex, PanelRange range, int percent) =>
+            OnMonitor(monitorIndex, h => SetMonitorContrast(h, (uint)range.FromPercent(percent)));
+
+        /// <summary>
+        /// Reduce the blue channel's gain, relative to where the panel already had it.
+        /// </summary>
+        /// <param name="strength">0 = leave the panel's own gain alone, 100 = as far down as
+        /// this implementation is willing to go.</param>
         /// <remarks>
-        /// Implemented as a blue-gain reduction rather than a vendor "reader mode" VCP code,
-        /// because gain is standard MCCS and works across manufacturers while the reader-mode
-        /// codes differ per vendor and would half-work. The floor is 50 rather than 0: taking
-        /// blue all the way out leaves a monitor somebody cannot read, and a control whose far
-        /// end is unusable is a control with a broken range.
+        /// Blue gain rather than a vendor "reader mode" VCP code, because gain is standard
+        /// MCCS and works across manufacturers while reader-mode codes differ per vendor and
+        /// would half-work.
+        ///
+        /// Relative to the panel's CURRENT gain, not to an absolute number. The first version
+        /// wrote "100" for off, which is neutral only if the panel's range happens to be
+        /// 0-100; on a 0-255 panel - which is common, since MCCS gain is a byte - that is 39%,
+        /// a heavy blue cut applied by a slider the user had just set to zero.
+        ///
+        /// The floor is half the panel's own range below its current gain: taking blue all the
+        /// way out leaves a monitor nobody can read, and a control whose far end is unusable is
+        /// a control with a broken range.
         /// </remarks>
-        public static bool SetLowBlueLight(int strength)
+        public static bool SetLowBlueLight(int monitorIndex, PanelRange gain, int strength)
         {
-            int gain = 100 - Math.Clamp(strength, 0, 100) / 2;
-            return OnFirstMonitor(h => SetMonitorRedGreenOrBlueGain(h, Blue, (uint)gain));
+            int span = (gain.Current - gain.Min) / 2;
+            int target = gain.Current - span * Math.Clamp(strength, 0, 100) / 100;
+
+            return OnMonitor(monitorIndex,
+                h => SetMonitorRedGreenOrBlueGain(h, Blue, (uint)Math.Clamp(target, gain.Min, gain.Max)));
         }
+
+        /// <summary>Put one panel back exactly where it was, in its own units.</summary>
+        public static bool RestoreBrightness(int monitorIndex, int raw) =>
+            OnMonitor(monitorIndex, h => SetMonitorBrightness(h, (uint)raw));
+
+        public static bool RestoreContrast(int monitorIndex, int raw) =>
+            OnMonitor(monitorIndex, h => SetMonitorContrast(h, (uint)raw));
+
+        public static bool RestoreBlueGain(int monitorIndex, int raw) =>
+            OnMonitor(monitorIndex, h => SetMonitorRedGreenOrBlueGain(h, Blue, (uint)raw));
 
         /// <summary>
         /// Read brightness twice and only believe a bottom-of-range answer if it repeats.
         ///
-        /// The dev machine's panel reports current = 0 on first contact while plainly lit, so
-        /// a "remember the original" that trusted one read would store 0 and later restore the
+        /// This machine's panel reports current = 0 on first contact while plainly lit, so a
+        /// "remember the original" that trusted one read would store 0 and later restore the
         /// screen to black. A second read is cheap next to that.
         /// </summary>
-        public static int? ReadTrustedBrightness()
+        public static int? ReadTrustedBrightness(int monitorIndex)
         {
-            int? first = ReadBrightness();
+            int? first = ReadBrightness(monitorIndex);
             if (first is not 0) return first;
 
-            int? second = ReadBrightness();
+            int? second = ReadBrightness(monitorIndex);
             return second is 0 ? null : second;
         }
 
-        private static int? ReadBrightness()
+        private static int? ReadBrightness(int monitorIndex)
         {
             int? result = null;
-            OnFirstMonitor(h =>
+            OnMonitor(monitorIndex, h =>
             {
                 uint min = 0, cur = 0, max = 0;
                 if (!GetMonitorBrightness(h, ref min, ref cur, ref max)) return false;
@@ -110,15 +138,18 @@ namespace VibranceHud.Monitors
         }
 
         /// <summary>
-        /// Run one operation against the first monitor that opens.
+        /// Run one operation against the panel at <paramref name="monitorIndex"/>, counted in
+        /// the same enumeration order the probe used.
         ///
-        /// Single-monitor for now, deliberately: applying to every panel would change a second
-        /// screen the user never asked about, and choosing between them needs UI that does not
-        /// exist yet.
+        /// Targeted rather than "the first one that opens". The first version applied every
+        /// card's slider to the first monitor, so on a two-screen desk dragging the second
+        /// card's brightness dimmed the first one - the exact thing this method's own comment
+        /// said it was avoiding.
         /// </summary>
-        private static bool OnFirstMonitor(Func<IntPtr, bool> action)
+        private static bool OnMonitor(int monitorIndex, Func<IntPtr, bool> action)
         {
             bool done = false;
+            int seen = 0;
 
             try
             {
@@ -145,9 +176,11 @@ namespace VibranceHud.Monitors
                     {
                         foreach (var m in monitors)
                         {
-                            try { if (action(m.hPhysicalMonitor)) { done = true; } }
+                            if (seen++ != monitorIndex) continue;
+
+                            try { done = action(m.hPhysicalMonitor); }
                             catch { }
-                            if (done) break;
+                            break;
                         }
                     }
                     finally
@@ -157,7 +190,7 @@ namespace VibranceHud.Monitors
                             try { DestroyPhysicalMonitor(m.hPhysicalMonitor); } catch { }
                     }
 
-                    if (done) break;
+                    if (seen > monitorIndex) break;
                 }
             }
             catch { /* the panel refusing is the expected case, not an error */ }

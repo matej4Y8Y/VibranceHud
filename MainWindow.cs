@@ -160,6 +160,10 @@ namespace VibranceHud
             _accountPage.LicenseChanged += (_, _) => ApplyLicenseVisibility();
             _crosshairPage = new CrosshairPage(_settings, _store, _crosshair);
             _monitorPage = new MonitorPage(_settings, _store, _selection);
+            // Built empty and filled in when the probe answers. Probing is three DDC/CI reads
+            // per panel at up to hundreds of milliseconds each, and doing it here would block
+            // the window opening - and block it again on every theme change, which rebuilds
+            // this whole window.
             _panelPage = new MonitorHardwarePage(_settings, _store);
             foreach (var page in new GlowPage[] { _vibrancePage, _settingsPage, _accountPage, _crosshairPage, _monitorPage, _panelPage })
                 AttachField(page);
